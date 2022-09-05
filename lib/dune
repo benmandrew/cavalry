@@ -1,0 +1,7 @@
+(library
+ (name cavalry))
+
+(ocamllex lexer)
+
+(menhir
+ (modules parser))
