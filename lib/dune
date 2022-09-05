@@ -1,5 +1,6 @@
 (library
- (name cavalry))
+ (name cavalry)
+ (libraries core))
 
 (ocamllex lexer)
 
