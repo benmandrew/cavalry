@@ -1,14 +1,15 @@
 
 %token <int> INT
+%token <bool> BOOL
 %token <string> VAR
-%token PLUS MUL
-%token EQ
-%token LET IN
+%token PLUS MUL EQ
+%token LET IN IF THEN ELSE
 %token EOF
 %left PLUS
 %left MUL
 %start main
-%type <Ast.ast> main
+%type <Ast.ut_expr> main
+// %type <Ast.ut_expr> expr
 %%
 main:
   expr EOF
@@ -16,13 +17,17 @@ main:
 ;
 expr:
   | INT
-      { Int ($1) }
+      { UInt ($1) }
+  | BOOL
+      { UBool ($1) }
   | expr PLUS expr
-      { Plus ($1, $3) }
+      { UPlus ($1, $3) }
   | expr MUL expr
-      { Mul ($1, $3) }
+      { UMul ($1, $3) }
   | LET VAR EQ expr IN expr
-      { Let ($2, $4, $6) }
+      { ULet ($2, $4, $6) }
+  | IF expr THEN expr ELSE expr
+      { UIf ($2, $4, $6) }
   | VAR
-      { Var ($1) }
+      { UVar ($1) }
 ;
