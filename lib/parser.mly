@@ -9,7 +9,6 @@
 %left MUL
 %start main
 %type <Ast.ut_expr> main
-// %type <Ast.ut_expr> expr
 %%
 main:
   expr EOF

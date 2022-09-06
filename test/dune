@@ -1,2 +1,6 @@
-(test
- (name cavalry))
+(library
+ (name tests)
+ (libraries cavalry)
+ (inline_tests)
+ (preprocess
+  (pps ppx_jane ppx_inline_test ppx_assert)))
