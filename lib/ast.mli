@@ -15,9 +15,6 @@ type _ expr =
   | Mul : int expr * int expr -> int expr
 [@@deriving sexp_of]
 
-(* val equal_expr : 'a expr -> 'b expr -> bool
-   val compare_expr : 'a expr -> 'b expr -> int *)
-
 (* Untyped AST to play nice with the Menhir parser generator *)
 type ut_expr =
   | UInt of int
