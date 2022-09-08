@@ -48,7 +48,7 @@ let%test_unit "Ast.type_expr" =
   let result = type_expr ut in
   test_ast_eq ~expected result
 
-let%test_unit "Ast.exec" =
+let%test_unit "Ast.exec - let" =
   let t =
     Let
       ( "x",
@@ -56,9 +56,27 @@ let%test_unit "Ast.exec" =
         Mul (Value (VarInst "x"), Value (Int 5)) )
   in
   let result = exec t in
-  [%test_result: int] result ~expect:15;
+  [%test_result: int] result ~expect:15
+
+let%test_unit "Ast.exec - if" =
   let t =
     If (Eq (Value (Int 1), Value (Int 2)), Value (Int 5), Value (Int 7))
   in
   let result = exec t in
   [%test_result: int] result ~expect:7
+
+let%test_unit "Ast.exec - var-var-let" =
+  let t =
+    Let
+      ( "x",
+        Value (Int 1),
+        Let ("y", Plus (Value (VarInst "x"), Value (Int 2)), Value (VarInst "y"))
+      )
+  in
+  let result = exec t in
+  [%test_result: int] result ~expect:3
+
+let%test_unit "Ast.exec - unbound" =
+  let t = Plus (Value (VarInst "x"), Value (Int 2)) in
+  let result = Exn.does_raise (fun () -> exec t) in
+  [%test_result: bool] result ~expect:true

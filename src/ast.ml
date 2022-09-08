@@ -49,8 +49,16 @@ and type_bool_expr = function
 let type_expr = type_int_expr
 let add_var vars x v = VarMap.add_exn vars ~key:x ~data:v
 
+exception UnboundVarError of string
+
 let exec_value (vars : int VarMap.t) (type a) (v : a value) : a =
-  match v with Int i -> i | Bool b -> b | VarInst x -> VarMap.find_exn vars x
+  match v with
+  | Int i -> i
+  | Bool b -> b
+  | VarInst x -> (
+      match VarMap.find vars x with
+      | None -> raise (UnboundVarError x)
+      | Some v -> v)
 
 let rec exec_aux : type a. int VarMap.t -> a expr -> a =
  fun vars v ->

@@ -1,7 +1,3 @@
-(* open Cavalry
-
-   let _ = Printf.printf "%d\n" (Main.exec "test.cvl") *)
-
 open Why3
 
 let fmla_true = Term.t_true
@@ -23,10 +19,6 @@ let task2 = Task.add_prop_decl task2 Decl.Pgoal goal_id2 fmla2
 
 open Format
 
-let () =
-  printf "@[task 1 is:@\n%a@]@." Pretty.print_task task1;
-  printf "@[task 2 is:@\n%a@]@." Pretty.print_task task2
-
 let config = Whyconf.init_config None
 let main = Whyconf.get_main config
 let libdir = Whyconf.libdir main
@@ -39,11 +31,11 @@ let alt_ergo =
   if Whyconf.Mprover.is_empty provers then (
     eprintf "Prover Alt-Ergo not installed or not configured@.";
     exit 1)
-  else (
-    printf "Versions of Alt-Ergo found:";
-    Whyconf.(Mprover.iter (fun k _ -> printf "%s" k.prover_version) provers);
-    printf "@.";
-    snd (Whyconf.Mprover.max_binding provers))
+  else
+    (* printf "Versions of Alt-Ergo found:";
+       Whyconf.(Mprover.iter (fun k _ -> printf "%s" k.prover_version) provers);
+       printf "@."; *)
+    snd (Whyconf.Mprover.max_binding provers)
 
 let env = Env.create_env (Whyconf.loadpath main)
 

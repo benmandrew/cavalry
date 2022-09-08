@@ -1,4 +1,4 @@
 (executable
  (public_name cavalry)
  (name main)
- (libraries cavalry))
+ (libraries cavalry why3))
