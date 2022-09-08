@@ -4,6 +4,7 @@ module VarMap = Map.Make (String)
 type var_map = int VarMap.t
 
 type _ value =
+  (* | Unit : unit -> unit value *)
   | Int : int -> int value
   | Bool : bool -> bool value
   | VarInst : string -> int value
@@ -11,7 +12,8 @@ type _ value =
 
 type _ expr =
   | Value : 'a value -> 'a expr
-  | Let : string * int expr * int expr -> int expr
+  | Seq : 'a expr * 'a expr -> 'a expr
+  | Assgn : string * int expr -> int expr
   | If : bool expr * 'a expr * 'a expr -> 'a expr
   | Eq : int expr * int expr -> bool expr
   | Plus : int expr * int expr -> int expr
@@ -23,7 +25,8 @@ type ut_expr =
   | UInt of int
   | UBool of bool
   | UVar of string
-  | ULet of string * ut_expr * ut_expr
+  | USeq of ut_expr * ut_expr
+  | UAssgn of string * ut_expr
   | UIf of ut_expr * ut_expr * ut_expr
   | UEq of ut_expr * ut_expr
   | UPlus of ut_expr * ut_expr
@@ -34,7 +37,8 @@ exception TypeError
 let rec type_int_expr = function
   | UInt v -> Value (Int v)
   | UVar v -> Value (VarInst v)
-  | ULet (s, e, e') -> Let (s, type_int_expr e, type_int_expr e')
+  | USeq (e, e') -> Seq (type_int_expr e, type_int_expr e')
+  | UAssgn (s, e) -> Assgn (s, type_int_expr e)
   | UIf (e, e', e'') ->
       If (type_bool_expr e, type_int_expr e', type_int_expr e'')
   | UPlus (a, b) -> Plus (type_int_expr a, type_int_expr b)
@@ -60,19 +64,33 @@ let exec_value (vars : int VarMap.t) (type a) (v : a value) : a =
       | None -> raise (UnboundVarError x)
       | Some v -> v)
 
-let rec exec_aux : type a. int VarMap.t -> a expr -> a =
+let rec exec_aux : type a. int VarMap.t -> a expr -> a * int VarMap.t =
  fun vars v ->
   match v with
-  | Value v -> exec_value vars v
-  | Let (x, e, e') ->
-      let v = exec_aux vars e in
-      let new_vars = add_var vars x v in
-      exec_aux new_vars e'
+  | Value v -> (exec_value vars v, vars)
+  | Seq (e, e') ->
+      let _, vars' = exec_aux vars e in
+      exec_aux vars' e'
+  | Assgn (x, e) ->
+      let v, vars' = exec_aux vars e in
+      let vars'' = add_var vars' x v in
+      (v, vars'')
   | If (e, e', e'') ->
-      let b = exec_aux vars e in
-      if b then exec_aux vars e' else exec_aux vars e''
-  | Plus (a, b) -> exec_aux vars a + exec_aux vars b
-  | Mul (a, b) -> exec_aux vars a * exec_aux vars b
-  | Eq (a, b) -> exec_aux vars a = exec_aux vars b
+      let b, vars' = exec_aux vars e in
+      if b then exec_aux vars' e' else exec_aux vars' e''
+  | Plus (a, b) ->
+      let v1, vars' = exec_aux vars a in
+      let v2, vars'' = exec_aux vars' b in
+      (v1 + v2, vars'')
+  | Mul (a, b) ->
+      let v1, vars' = exec_aux vars a in
+      let v2, vars'' = exec_aux vars' b in
+      (v1 * v2, vars'')
+  | Eq (a, b) ->
+      let v1, vars' = exec_aux vars a in
+      let v2, vars'' = exec_aux vars' b in
+      (v1 = v2, vars'')
 
-let exec t = exec_aux VarMap.empty t
+let exec t =
+  let v, _ = exec_aux VarMap.empty t in
+  v

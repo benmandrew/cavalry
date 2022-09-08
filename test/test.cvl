@@ -1,5 +1,5 @@
-let x = 2 in
-let y = 60 in
+x <- 2;
+y <- 60;
 if x + 3 = 5 then
   x + y * 3
 else

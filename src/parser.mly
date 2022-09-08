@@ -2,25 +2,35 @@
 %token <int> INT
 %token <bool> BOOL
 %token <string> VAR
-%token PLUS MUL EQ
-%token LET IN IF THEN ELSE
+%token SEMICOLON
+%token PLUS MUL EQ ASSGN
+%token IF THEN ELSE
 %token LPAREN RPAREN
 %token EOF
+%left SEMICOLON
 %left EQ
 %left PLUS
 %left MUL
 %start main
 %type <Ast.ut_expr> main
+%type <Ast.ut_expr> seq_expr
 %type <Ast.ut_expr> control_expr
 %type <Ast.ut_expr> expr
+%type <Ast.ut_expr> paren_expr
 %%
 main:
-  control_expr EOF
+  seq_expr EOF
     { $1 }
 ;
+seq_expr:
+  | seq_expr SEMICOLON seq_expr
+      { USeq ($1, $3) }
+  | control_expr
+      { $1 }
+;
 control_expr:
-  | LET VAR EQ control_expr IN control_expr
-      { ULet ($2, $4, $6) }
+  | VAR ASSGN control_expr
+      { UAssgn ($1, $3) }
   | IF control_expr THEN control_expr ELSE control_expr
       { UIf ($2, $4, $6) }
   | expr
@@ -43,6 +53,6 @@ expr:
       { $1 }
 ;
 paren_expr:
-  | LPAREN control_expr RPAREN
+  | LPAREN seq_expr RPAREN
       { ( $2 ) }
 ;

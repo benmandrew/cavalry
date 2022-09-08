@@ -15,12 +15,16 @@ rule main = parse
       { PLUS }
   | '*'
       { MUL }
-  | "let"
-      { LET }
   | '='
       { EQ }
-  | "in"
-      { IN }
+  | ';'
+      { SEMICOLON }
+  | "<-"
+      { ASSGN }
+  | '('
+      { LPAREN }
+  | ')'
+      { RPAREN }
   | "if"
       { IF }
   | "then"
