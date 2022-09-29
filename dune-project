@@ -17,9 +17,9 @@
 
 (package
  (name cavalry)
- (synopsis "")
- (description "")
- (depends ocaml dune)
+ (synopsis "Toy language for program verification experiments using Hoare logic")
+ (description "Toy language for program verification experiments using Hoare logic")
+ (depends ocaml dune core menhir why3)
  (tags
   ()))
 
