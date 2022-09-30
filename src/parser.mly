@@ -13,25 +13,24 @@
 %left MUL
 %start main
 %type <Ast.ut_expr> main
-%type <Ast.ut_expr> seq_expr
-%type <Ast.ut_expr> control_expr
+%type <Ast.ut_expr> command
 %type <Ast.ut_expr> expr
 %type <Ast.ut_expr> paren_expr
 %%
 main:
-  seq_expr EOF
+  seq_command EOF
     { $1 }
 ;
-seq_expr:
-  | seq_expr SEMICOLON seq_expr
+seq_command:
+  | seq_command SEMICOLON seq_command
       { USeq ($1, $3) }
-  | control_expr
-      { $1 }
+  | command
+      {$1}
 ;
-control_expr:
-  | VAR ASSGN control_expr
+command:
+  | VAR ASSGN expr
       { UAssgn ($1, $3) }
-  | IF control_expr THEN control_expr ELSE control_expr
+  | IF expr THEN command ELSE command
       { UIf ($2, $4, $6) }
   | expr
       { $1 }
@@ -53,6 +52,6 @@ expr:
       { $1 }
 ;
 paren_expr:
-  | LPAREN seq_expr RPAREN
+  | LPAREN expr RPAREN
       { ( $2 ) }
 ;

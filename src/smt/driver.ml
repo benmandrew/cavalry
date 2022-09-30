@@ -1,5 +1,26 @@
 open Why3
 
+open Cavalry.Ast
+
+let rec join_term : type a. a expr -> Term.term -> Term.term -> bool =
+  fun v p q ->
+   match v with
+   | Value _ | Plus _ | Mul _ | Eq _ ->
+       true
+   | Seq (e, e') ->
+       let q' = join_term e p in
+       join_term e' q'
+   | Assgn (x, e) ->
+       
+   | If (e, e', e'') ->
+       let q_e' = propagate_term e' (Term.t_and p Term.t_true) in
+       let q_e'' = propagate_term e'' (Term.t_and p Term.t_false) in
+       p (* expression [e] must be converted to a Why3 term,
+          made either true or false then the resulting [q]
+          for each branch has to be unified to continue *)
+
+
+
 let fmla_true = Term.t_true
 let fmla_false = Term.t_false
 let fmla1 = Term.t_or fmla_true fmla_false

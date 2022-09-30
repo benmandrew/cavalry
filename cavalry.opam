@@ -11,10 +11,11 @@ homepage: "https://github.com/benmandrew/cavalry"
 bug-reports: "https://github.com/benmandrew/cavalry/issues"
 depends: [
   "ocaml" { >= "4.08"}
-  "dune" {>= "3.4"}
+  "dune" {>= "2.9"}
   "core"
   "menhir"
   "why3"
+  "alt-ergo" { = "2.4.1"}
   "odoc" {with-doc}
 ]
 build: [
@@ -26,9 +27,11 @@ build: [
     name
     "-j"
     jobs
+    "--promote-install-files=false"
     "@install"
     "@runtest" {with-test}
     "@doc" {with-doc}
   ]
+  ["dune" "install" "-p" name "--create-install-files" name]
 ]
 dev-repo: "git+https://github.com/benmandrew/cavalry.git"
