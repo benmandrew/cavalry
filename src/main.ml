@@ -4,7 +4,7 @@ let get_ast path =
   let lexbuf = Lexing.from_channel file in
   let ut_ast = Parser.main Lexer.main lexbuf in
   In_channel.close file;
-  Ast.type_expr ut_ast
+  Ast.translate_cmd ut_ast
 
 let exec path =
   let ast = get_ast path in

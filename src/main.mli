@@ -1,2 +1,2 @@
-val get_ast : string -> int Ast.expr
+val get_ast : string -> Ast.cmd
 val exec : string -> int

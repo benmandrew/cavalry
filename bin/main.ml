@@ -1,6 +1,6 @@
 (* open Cavalry
 
-let _ = Printf.printf "%d\n" (Main.exec "a.cvl") *)
+   let _ = Printf.printf "%d\n" (Main.exec "a.cvl") *)
 
 open Why3
 

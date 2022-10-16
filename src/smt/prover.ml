@@ -1,27 +1,6 @@
 open Why3
 
-open Cavalry.Ast
-
-let rec join_term : type a. a expr -> Term.term -> Term.term -> bool =
-  fun v p q ->
-   match v with
-   | Value _ | Plus _ | Mul _ | Eq _ ->
-       true
-   | Seq (e, e') ->
-       let q' = join_term e p in
-       join_term e' q'
-   | Assgn (x, e) ->
-       
-   | If (e, e', e'') ->
-       let q_e' = propagate_term e' (Term.t_and p Term.t_true) in
-       let q_e'' = propagate_term e'' (Term.t_and p Term.t_false) in
-       p (* expression [e] must be converted to a Why3 term,
-          made either true or false then the resulting [q]
-          for each branch has to be unified to continue *)
-
-
-
-let fmla_true = Term.t_true
+(* let fmla_true = Term.t_true
 let fmla_false = Term.t_false
 let fmla1 = Term.t_or fmla_true fmla_false
 let prop_var_A = Term.create_psymbol (Ident.id_fresh "A") []
@@ -36,7 +15,7 @@ let task2 : Task.task = None
 let task2 = Task.add_param_decl task2 prop_var_A
 let task2 = Task.add_param_decl task2 prop_var_B
 let goal_id2 = Decl.create_prsymbol (Ident.id_fresh "goal2")
-let task2 = Task.add_prop_decl task2 Decl.Pgoal goal_id2 fmla2
+let task2 = Task.add_prop_decl task2 Decl.Pgoal goal_id2 fmla2 *)
 
 open Format
 
@@ -54,13 +33,13 @@ let alt_ergo =
     exit 1)
   else
     (* printf "Versions of Alt-Ergo found:";
-       Whyconf.(Mprover.iter (fun k _ -> printf "%s" k.prover_version) provers);
-       printf "@."; *)
+      Whyconf.(Mprover.iter (fun k _ -> printf "%s" k.prover_version) provers);
+      printf "@."; *)
     snd (Whyconf.Mprover.max_binding provers)
 
 let env = Env.create_env (Whyconf.loadpath main)
 
-let alt_ergo_driver =
+(* let alt_ergo_driver =
   try Whyconf.load_driver main env alt_ergo
   with e ->
     eprintf "Failed to load driver for alt-ergo: %a@." Exn_printer.exn_printer e;
@@ -69,9 +48,9 @@ let alt_ergo_driver =
 let result2 =
   Call_provers.wait_on_call
     (Driver.prove_task ~limit:Call_provers.empty_limit ~libdir ~datadir
-       ~command:alt_ergo.Whyconf.command alt_ergo_driver task2)
+      ~command:alt_ergo.Whyconf.command alt_ergo_driver task2)
 
 let () =
   printf "@[On task 2, Alt-Ergo answers %a@."
     (Call_provers.print_prover_result ?json:None)
-    result2
+    result2 *)
