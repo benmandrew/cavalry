@@ -1,6 +1,6 @@
 (library
  (name cavalry)
- (libraries core)
+ (libraries core why3)
  (preprocess
   (pps ppx_jane)))
 
