@@ -71,14 +71,12 @@ let rec wlp vars c q =
       let wp' = wlp vars c' q in
       T.(t_and (t_implies t wp) (t_implies (t_not t) wp'))
 
-let list_of_vars (vm : var_map) =
+let list_of_var_map (vm : var_map) =
   VarMap.bindings vm |> List.map (fun (_, x) -> x)
 
-let verify vars c q =
-  let p = wlp vars c q in
-  Format.printf "@[p =@ %a@]@." Pretty.print_term p;
-  Format.printf "@[q =@ %a@]@." Pretty.print_term q;
-  let vars = list_of_vars vars in
-  if Prover.prove_implies Arith.int_task vars p q then Some p else None
+let verify vars c p q =
+  let p_gen = wlp vars c q in
+  let vars = list_of_var_map vars in
+  Prover.prove_implies Arith.int_task vars p p_gen
 
 let get_var (vm : var_map) x = VarMap.find x vm

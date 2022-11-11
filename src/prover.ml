@@ -36,12 +36,13 @@ let prove base_task term =
     |> Call_provers.wait_on_call
   in
   let open Call_provers in
-  Printf.printf "output: %s\n" result.pr_output;
+  (* Format.printf "@[term =@ %a@]@." Pretty.print_term term; *)
   match result.pr_answer with
   | Valid -> true
   | Invalid -> false
   | Timeout | OutOfMemory | StepLimitExceeded | HighFailure | Unknown _
   | Failure _ ->
+      Printf.printf "output: %s\n" result.pr_output;
       false
 
 let prove_implies base_task vars t t' =

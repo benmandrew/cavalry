@@ -6,10 +6,13 @@ let get_ast path =
   In_channel.close file;
   Ast.translate_cmd ut_ast
 
-let verify vars c q =
-  match Hoare.verify vars c q with
-  | None -> Printf.printf "Verification unsuccessful\n"
-  | Some _ -> Printf.printf "Verification successful\n"
+let verify vars c p q =
+  (* Format.printf "generated wlp: %a\n" Why3.Pretty.print_term
+     (Hoare.wlp vars c q); *)
+  if Hoare.verify vars c p q then Printf.printf "verification successful\n"
+  else
+    Printf.printf
+      "verification unsuccessful: precondition does not imply postcondition\n"
 
 let exec path =
   let ast = get_ast path in
