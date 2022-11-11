@@ -8,8 +8,8 @@ let get_ast path =
 
 let verify vars c q =
   match Hoare.verify vars c q with
-  | None -> Printf.printf "\nVerification did not succeed\n"
-  | Some _ -> Printf.printf "\nVerification succeeded\n"
+  | None -> Printf.printf "Verification unsuccessful\n"
+  | Some _ -> Printf.printf "Verification successful\n"
 
 let exec path =
   let ast = get_ast path in

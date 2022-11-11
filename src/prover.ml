@@ -11,11 +11,11 @@ let alt_ergo =
   let fp = Whyconf.parse_filter_prover "Alt-Ergo" in
   let provers = Whyconf.filter_provers config fp in
   if Whyconf.Mprover.is_empty provers then (
-    eprintf "Prover Alt-Ergo not installed or not configured@.";
+    eprintf "Prover Alt-Ergo not installed or not configured\n";
     exit 1)
-  else printf "Versions of Alt-Ergo found:";
-  Whyconf.(Mprover.iter (fun k _ -> printf "%s" k.prover_version) provers);
-  printf "@.";
+  else printf "Versions of Alt-Ergo found:\n";
+  Whyconf.(Mprover.iter (fun k _ -> printf "- %s\n" k.prover_version) provers);
+  printf "\n";
   snd (Whyconf.Mprover.max_binding provers)
 
 let env = Env.create_env (Whyconf.loadpath main)
@@ -24,7 +24,7 @@ let alt_ergo_driver =
   let open Format in
   try Whyconf.load_driver main env alt_ergo
   with e ->
-    eprintf "Failed to load driver for alt-ergo: %a@." Exn_printer.exn_printer e;
+    eprintf "Failed to load driver for alt-ergo: %a\n" Exn_printer.exn_printer e;
     exit 1
 
 let prove base_task term =
@@ -36,6 +36,7 @@ let prove base_task term =
     |> Call_provers.wait_on_call
   in
   let open Call_provers in
+  Printf.printf "output: %s\n" result.pr_output;
   match result.pr_answer with
   | Valid -> true
   | Invalid -> false

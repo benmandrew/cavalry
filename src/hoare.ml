@@ -1,23 +1,24 @@
 open Why3
 open Ast
+module T = Term
 module VarMap = Map.Make (String)
 
-type var_map = Term.vsymbol VarMap.t
+type var_map = T.vsymbol VarMap.t
 
-let val_to_term : type a. var_map -> a value -> Term.term =
+let val_to_term : type a. var_map -> a value -> T.term =
  fun vars v ->
   match v with
-  | Int v -> Term.t_nat_const v
-  | Bool b -> if b then Term.t_bool_true else Term.t_bool_false
+  | Int v -> T.t_nat_const v
+  | Bool b -> if b then T.t_bool_true else T.t_bool_false
   | VarInst x ->
       let symbol = VarMap.find x vars in
-      Term.t_var symbol
+      T.t_var symbol
 
-let rec expr_to_term : type a. var_map -> a expr -> Term.term =
+let rec expr_to_term : type a. var_map -> a expr -> T.term =
  fun vars e ->
   match e with
   | Value v -> val_to_term vars v
-  | Eq (e, e') -> Term.t_equ (expr_to_term vars e) (expr_to_term vars e')
+  | Eq (e, e') -> T.t_equ (expr_to_term vars e) (expr_to_term vars e')
   | Plus (e, e') -> Arith.plus (expr_to_term vars e) (expr_to_term vars e')
   | Mul (e, e') -> Arith.mul (expr_to_term vars e) (expr_to_term vars e')
 
@@ -49,7 +50,7 @@ let collect_variables c =
   let vars = collect_cmd c in
   List.fold_left
     (fun vm x ->
-      let symbol = Term.create_vsymbol (Ident.id_fresh x) Ty.ty_int in
+      let symbol = T.create_vsymbol (Ident.id_fresh x) Ty.ty_int in
       VarMap.add x symbol vm)
     VarMap.empty (StrSet.elements vars)
 
@@ -62,19 +63,21 @@ let rec wlp vars c q =
       (* q[ x <- e ] *)
       let t = expr_to_term vars e in
       let symbol = VarMap.find x vars in
-      Term.t_subst_single symbol t q
+      T.t_subst_single symbol t q
   | If (b, c, c') ->
       (* ( b -> wlp(c, q) ) /\ ( ~b -> wlp(c', q) ) *)
       let t = expr_to_term vars b in
       let wp = wlp vars c q in
       let wp' = wlp vars c' q in
-      Term.(t_and (t_implies t wp) (t_implies (t_not t) wp'))
+      T.(t_and (t_implies t wp) (t_implies (t_not t) wp'))
 
 let list_of_vars (vm : var_map) =
   VarMap.bindings vm |> List.map (fun (_, x) -> x)
 
 let verify vars c q =
   let p = wlp vars c q in
+  Format.printf "@[p =@ %a@]@." Pretty.print_term p;
+  Format.printf "@[q =@ %a@]@." Pretty.print_term q;
   let vars = list_of_vars vars in
   if Prover.prove_implies Arith.int_task vars p q then Some p else None
 
