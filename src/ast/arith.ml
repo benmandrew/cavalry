@@ -1,7 +1,7 @@
 open Why3
 module T = Term
 
-let int_theory : Theory.theory = Env.read_theory Prover.env [ "int" ] "Int"
+let int_theory : Theory.theory = Env.read_theory Smt.Prover.env [ "int" ] "Int"
 
 let plus_symbol : T.lsymbol =
   Theory.ns_find_ls int_theory.Theory.th_export [ "infix +" ]

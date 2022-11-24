@@ -1,5 +1,5 @@
 {
-open Parser
+open Tokens
 }
 
 rule main = parse
@@ -17,6 +17,24 @@ rule main = parse
       { MUL }
   | '='
       { EQ }
+  | '<'
+      { LT }
+  (* | "<="
+      { LEQ }
+  | ">"
+      { GT }
+  | ">="
+      { GEQ }
+  | "!="
+      { NEQ } *)
+  | '!'
+      { NOT }
+  | "&&"
+      { AND }
+  | "||"
+      { OR }
+  | "->"
+      { IMPL }
   | ';'
       { SEMICOLON }
   | "<-"
@@ -25,6 +43,10 @@ rule main = parse
       { LPAREN }
   | ')'
       { RPAREN }
+  | '{'
+      { LBRACE }
+  | '}'
+      { RBRACE }
   | "if"
       { IF }
   | "then"

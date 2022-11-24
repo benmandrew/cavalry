@@ -1,5 +1,5 @@
 open Why3
-open Ast
+open Ast.Program
 module T = Term
 module VarMap = Map.Make (String)
 
@@ -16,11 +16,12 @@ let val_to_term : type a. var_map -> a value -> T.term =
 
 let rec expr_to_term : type a. var_map -> a expr -> T.term =
  fun vars e ->
+  let f = expr_to_term vars in
   match e with
   | Value v -> val_to_term vars v
-  | Eq (e, e') -> T.t_equ (expr_to_term vars e) (expr_to_term vars e')
-  | Plus (e, e') -> Arith.plus (expr_to_term vars e) (expr_to_term vars e')
-  | Mul (e, e') -> Arith.mul (expr_to_term vars e) (expr_to_term vars e')
+  | Eq (e, e') -> T.t_equ (f e) (f e')
+  | Plus (e, e') -> Ast.Arith.plus (f e) (f e')
+  | Mul (e, e') -> Ast.Arith.mul (f e) (f e')
 
 module StrSet = Set.Make (String)
 
@@ -77,6 +78,6 @@ let list_of_var_map (vm : var_map) =
 let verify vars c p q =
   let p_gen = wlp vars c q in
   let vars = list_of_var_map vars in
-  Prover.prove_implies Arith.int_task vars p p_gen
+  Smt.Prover.prove_implies Ast.Arith.int_task vars p p_gen
 
 let get_var (vm : var_map) x = VarMap.find x vm

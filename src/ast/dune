@@ -1,5 +1,5 @@
 (library
- (name smt)
- (libraries core why3)
+ (name ast)
+ (libraries core why3 smt)
  (preprocess
   (pps ppx_jane)))

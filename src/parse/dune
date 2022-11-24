@@ -1,0 +1,15 @@
+(library
+ (name parse)
+ (libraries ast))
+
+(ocamllex
+ (modules lexer))
+
+(menhir
+ (modules tokens)
+ (flags --only-tokens))
+
+(menhir
+ (modules tokens logic program)
+ (merge_into parser)
+ (flags --external-tokens Tokens))

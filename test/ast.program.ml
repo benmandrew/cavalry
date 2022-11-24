@@ -1,5 +1,5 @@
 open Core
-open Cavalry.Ast
+open Cavalry.Ast.Program
 
 let rec equal_expr : type a. a expr -> a expr -> bool =
  fun e0 e1 ->
@@ -35,7 +35,7 @@ let test_ast_eq ~expected actual =
   if not (equal_cmd expected actual) then
     raise (E ("AST not equal", format_exn_sexp ~expected actual))
 
-let%test_unit "Ast.type_expr" =
+let%test_unit "Ast.Program.type_expr" =
   let expected =
     Seq
       ( Assgn ("x", Plus (Value (Int 1), Value (Int 2))),
@@ -52,7 +52,7 @@ let%test_unit "Ast.type_expr" =
   let result = translate_cmd ut in
   test_ast_eq ~expected result
 
-let%test_unit "Ast.exec - assgn" =
+let%test_unit "Ast.Program.exec - assgn" =
   let t =
     Seq
       ( Assgn ("x", Plus (Value (Int 1), Value (Int 2))),
@@ -61,7 +61,7 @@ let%test_unit "Ast.exec - assgn" =
   let result = exec t in
   [%test_result: int] result ~expect:15
 
-let%test_unit "Ast.exec - if" =
+let%test_unit "Ast.Program.exec - if" =
   let t =
     If
       ( Eq (Value (Int 1), Value (Int 2)),
@@ -71,7 +71,7 @@ let%test_unit "Ast.exec - if" =
   let result = exec t in
   [%test_result: int] result ~expect:7
 
-let%test_unit "Ast.exec - var-var-assgn" =
+let%test_unit "Ast.Program.exec - var-var-assgn" =
   let t =
     Seq
       ( Assgn ("x", Value (Int 1)),
@@ -82,7 +82,7 @@ let%test_unit "Ast.exec - var-var-assgn" =
   let result = exec t in
   [%test_result: int] result ~expect:3
 
-let%test_unit "Ast.exec - unbound" =
+let%test_unit "Ast.Program.exec - unbound" =
   let t = IntExpr (Plus (Value (VarInst "x"), Value (Int 2))) in
   let result = Exn.does_raise (fun () -> exec t) in
   [%test_result: bool] result ~expect:true
