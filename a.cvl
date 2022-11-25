@@ -1,6 +1,4 @@
-{ true }
-x <- 2;
-y <- 60;
+{ x = 2 && y = 60 }
 if x + 3 = 5 then
   x <- x + y * 3
 else
