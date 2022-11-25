@@ -5,4 +5,4 @@ if x + 3 = 5 then
   x <- x + y * 3
 else
   x <- 9
-{ x < 80 }
+{ x >= 200 }

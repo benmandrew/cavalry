@@ -40,7 +40,9 @@ let rec translate_term vars e =
   | And (e0, e1) -> T.t_and (f_t e0) (f_t e1)
   | Or (e0, e1) -> T.t_or (f_t e0) (f_t e1)
   | Impl (e0, e1) -> T.t_implies (f_t e0) (f_t e1)
-  | Eq (e0, e1) -> T.t_equ (f_a e0) (f_a e1)
-  | Neq _ -> failwith "Not Implemented"
+  | Eq (e0, e1) -> Arith.eq (f_a e0) (f_a e1)
+  | Neq (e0, e1) -> Arith.neq (f_a e0) (f_a e1)
   | Lt (e0, e1) -> Arith.lt (f_a e0) (f_a e1)
-  | Leq _ | Gt _ | Geq _ -> failwith "Not Implemented"
+  | Leq (e0, e1) -> Arith.leq (f_a e0) (f_a e1)
+  | Gt (e0, e1) -> Arith.gt (f_a e0) (f_a e1)
+  | Geq (e0, e1) -> Arith.geq (f_a e0) (f_a e1)

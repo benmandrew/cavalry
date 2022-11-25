@@ -19,14 +19,14 @@ rule main = parse
       { EQ }
   | '<'
       { LT }
-  (* | "<="
+  | "<="
       { LEQ }
   | ">"
       { GT }
   | ">="
       { GEQ }
   | "!="
-      { NEQ } *)
+      { NEQ }
   | '!'
       { NOT }
   | "&&"
