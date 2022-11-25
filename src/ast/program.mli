@@ -33,5 +33,8 @@ type ut_expr =
   | UPlus of ut_expr * ut_expr
   | UMul of ut_expr * ut_expr
 
+type ut_program = { p : Logic.expr; u : ut_expr; q : Logic.expr }
+type program = { p : Logic.expr; c : cmd; q : Logic.expr }
+
 val translate_cmd : ut_expr -> cmd
 val exec : cmd -> int

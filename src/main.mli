@@ -1,8 +1,3 @@
-module Ast = Ast
-
-val get_ast : string -> Ast.Program.cmd
-
-val verify :
-  Hoare.var_map -> Ast.Program.cmd -> Why3.Term.term -> Why3.Term.term -> bool
-
+val get_ast : string -> Ast.Program.program
+val verify : Ast.Vars.t -> Ast.Program.program -> bool
 val exec : string -> int

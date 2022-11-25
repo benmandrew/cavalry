@@ -8,10 +8,10 @@ let get_ast path =
   let lexbuf = Lexing.from_channel file in
   let ut_ast = Parser.main Lexer.main lexbuf in
   In_channel.close file;
-  Ast.Program.translate_cmd ut_ast
+  match ut_ast with { p; u; q } -> Ast.Program.{ p; c = translate_cmd u; q }
 
 let verify = Hoare.verify
 
 let exec path =
   let ast = get_ast path in
-  Ast.Program.exec ast
+  Ast.Program.exec ast.c

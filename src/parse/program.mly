@@ -1,14 +1,14 @@
 
 %start main
-%type <Ast.Program.ut_expr> main
+%type <Ast.Program.ut_program> main
 %type <Ast.Program.ut_expr> command
 %type <Ast.Program.ut_expr> expr
 
 %%
 
 main:
-  LBRACE le0 = logic_expr RBRACE c = seq_command LBRACE le1 = logic_expr RBRACE EOF
-    { ignore le0; ignore le1; c }
+  LBRACE p = logic_expr RBRACE u = seq_command LBRACE q = logic_expr RBRACE EOF
+    { {Ast.Program.p; u; q } }
 ;
 seq_command:
   | c0 = seq_command SEMICOLON c1 = seq_command
