@@ -1,20 +1,25 @@
 module T = Why3.Term
 
-type expr =
+(* Untyped AST to play nice with the Menhir parser generator *)
+type arith_expr =
   | Int of int
-  | Bool of bool
   | Var of string
-  | Not of expr
-  | And of expr * expr
-  | Or of expr * expr
-  | Impl of expr * expr
-  | Eq of expr * expr
-  | Neq of expr * expr
-  | Lt of expr * expr
-  | Leq of expr * expr
-  | Gt of expr * expr
-  | Geq of expr * expr
-  | Plus of expr * expr
-  | Mul of expr * expr
+  | Plus of arith_expr * arith_expr
+  | Mul of arith_expr * arith_expr
+
+type logic_expr =
+  | Bool of bool
+  | Not of logic_expr
+  | And of logic_expr * logic_expr
+  | Or of logic_expr * logic_expr
+  | Impl of logic_expr * logic_expr
+  | Eq of arith_expr * arith_expr
+  | Neq of arith_expr * arith_expr
+  | Lt of arith_expr * arith_expr
+  | Leq of arith_expr * arith_expr
+  | Gt of arith_expr * arith_expr
+  | Geq of arith_expr * arith_expr
+
+type expr = logic_expr
 
 val translate_term : Vars.t -> expr -> T.term

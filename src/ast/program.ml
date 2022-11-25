@@ -24,7 +24,6 @@ type cmd =
   | If of bool expr * cmd * cmd
 [@@deriving sexp_of]
 
-(* Untyped AST to play nice with the Menhir parser generator *)
 type ut_expr =
   | UInt of int
   | UBool of bool

@@ -7,8 +7,7 @@
 %token IF THEN ELSE
 %token EOF
 %token PLUS MUL
-// %token EQ NEQ LT LEQ GT GEQ
-%token EQ LT
+%token EQ NEQ LT LEQ GT GEQ
 %token AND OR IMPL NOT
 %token LPAREN RPAREN
 
@@ -18,8 +17,7 @@
 %left OR
 %left AND
 %nonassoc NOT
-%left EQ
-%left LT
+%left EQ NEQ LT LEQ GT GEQ
 %left PLUS
 %left MUL
 

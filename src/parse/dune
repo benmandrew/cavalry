@@ -12,4 +12,6 @@
 (menhir
  (modules tokens logic program)
  (merge_into parser)
- (flags --external-tokens Tokens))
+ (flags
+  (--external-tokens Tokens
+   --unused-precedence-levels)))

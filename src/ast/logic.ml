@@ -1,39 +1,46 @@
-open Why3
-module T = Term
+module T = Why3.Term
 
-(* Untyped AST to play nice with the Menhir parser generator *)
-type expr =
+type arith_expr =
   | Int of int
-  | Bool of bool
   | Var of string
-  | Not of expr
-  | And of expr * expr
-  | Or of expr * expr
-  | Impl of expr * expr
-  | Eq of expr * expr
-  | Neq of expr * expr
-  | Lt of expr * expr
-  | Leq of expr * expr
-  | Gt of expr * expr
-  | Geq of expr * expr
-  | Plus of expr * expr
-  | Mul of expr * expr
+  | Plus of arith_expr * arith_expr
+  | Mul of arith_expr * arith_expr
 
-let rec translate_term vars e =
-  let f = translate_term vars in
+type logic_expr =
+  | Bool of bool
+  | Not of logic_expr
+  | And of logic_expr * logic_expr
+  | Or of logic_expr * logic_expr
+  | Impl of logic_expr * logic_expr
+  | Eq of arith_expr * arith_expr
+  | Neq of arith_expr * arith_expr
+  | Lt of arith_expr * arith_expr
+  | Leq of arith_expr * arith_expr
+  | Gt of arith_expr * arith_expr
+  | Geq of arith_expr * arith_expr
+
+type expr = logic_expr
+
+let rec translate_arith_term vars e =
+  let f = translate_arith_term vars in
   e |> function
   | Int v -> T.t_nat_const v
-  | Bool b -> if b then T.t_true else T.t_false
   | Var x ->
       let symbol = Vars.find x vars in
       T.t_var symbol
-  | Not e -> T.t_not (f e)
-  | And (e0, e1) -> T.t_and (f e0) (f e1)
-  | Or (e0, e1) -> T.t_or (f e0) (f e1)
-  | Impl (e0, e1) -> T.t_implies (f e0) (f e1)
-  | Eq (e0, e1) -> T.t_equ (f e0) (f e1)
-  | Neq _ -> failwith "Not Implemented"
-  | Lt (e0, e1) -> Arith.lt (f e0) (f e1)
-  | Leq _ | Gt _ | Geq _ -> failwith "Not Implemented"
   | Plus (e0, e1) -> Arith.plus (f e0) (f e1)
   | Mul (e0, e1) -> Arith.mul (f e0) (f e1)
+
+let rec translate_term vars e =
+  let f_t = translate_term vars in
+  let f_a = translate_arith_term vars in
+  e |> function
+  | Bool b -> if b then T.t_true else T.t_false
+  | Not e -> T.t_not (f_t e)
+  | And (e0, e1) -> T.t_and (f_t e0) (f_t e1)
+  | Or (e0, e1) -> T.t_or (f_t e0) (f_t e1)
+  | Impl (e0, e1) -> T.t_implies (f_t e0) (f_t e1)
+  | Eq (e0, e1) -> T.t_equ (f_a e0) (f_a e1)
+  | Neq _ -> failwith "Not Implemented"
+  | Lt (e0, e1) -> Arith.lt (f_a e0) (f_a e1)
+  | Leq _ | Gt _ | Geq _ -> failwith "Not Implemented"
