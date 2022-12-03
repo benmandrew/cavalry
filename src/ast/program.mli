@@ -19,6 +19,7 @@ type cmd =
   | Seq of cmd * cmd
   | Assgn of string * int expr
   | If of bool expr * cmd * cmd
+  | While of Logic.expr * bool expr * cmd
 [@@deriving sexp_of]
 
 (* Untyped AST to play nice with the Menhir parser generator *)
@@ -37,4 +38,5 @@ type ut_program = { p : Logic.expr; u : ut_expr; q : Logic.expr }
 type program = { p : Logic.expr; c : cmd; q : Logic.expr }
 
 val translate_cmd : ut_expr -> cmd
+val collect_vars : cmd -> Vars.t
 val exec : cmd -> int

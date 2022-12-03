@@ -22,6 +22,7 @@ type cmd =
   | Seq of cmd * cmd
   | Assgn of string * int expr
   | If of bool expr * cmd * cmd
+  | While of Logic.expr * bool expr * cmd
 [@@deriving sexp_of]
 
 type ut_expr =
@@ -57,8 +58,6 @@ and expr_to_cmd = function
   | UVar v -> IntExpr (translate_int_expr (UVar v))
   | UPlus (a, b) -> IntExpr (translate_int_expr (UPlus (a, b)))
   | UMul (a, b) -> IntExpr (translate_int_expr (UMul (a, b)))
-  (* | UBool v -> BoolExpr (translate_bool_expr (UBool v))
-     | UEq (a, b) -> BoolExpr (translate_bool_expr (UEq (a, b))) *)
   | _ -> raise TypeError
 
 and translate_cmd = function
@@ -69,6 +68,37 @@ and translate_cmd = function
   | v -> expr_to_cmd v
 
 let add_var vars x v = VarMap.add_exn vars ~key:x ~data:v
+
+module StrSet = Set.Make (String)
+
+let collect_vars c =
+  let collect_value : type a. a value -> StrSet.t =
+   fun v ->
+    match v with
+    | Int _ -> StrSet.empty
+    | Bool _ -> StrSet.empty
+    | VarInst str -> StrSet.singleton str
+  in
+  let rec collect_expr : type a. a expr -> StrSet.t =
+   fun e ->
+    match e with
+    | Value v -> collect_value v
+    | Eq (e, e') | Plus (e, e') | Mul (e, e') ->
+        StrSet.union (collect_expr e) (collect_expr e')
+  in
+  let rec collect_cmd = function
+    | IntExpr e -> collect_expr e
+    | Seq (c, c') -> StrSet.union (collect_cmd c) (collect_cmd c')
+    | Assgn (_, e) -> collect_expr e
+    | If (b, e, e') ->
+        StrSet.union (collect_expr b)
+          (StrSet.union (collect_cmd e) (collect_cmd e'))
+    | While (_, b, c) -> StrSet.union (collect_expr b) (collect_cmd c)
+  in
+  let vars = collect_cmd c in
+  List.fold_left (StrSet.elements vars) ~init:Vars.empty ~f:(fun vm x ->
+      let symbol = Why3.(Term.create_vsymbol (Ident.id_fresh x) Ty.ty_int) in
+      Vars.add x symbol vm)
 
 exception UnboundVarError of string
 
@@ -109,8 +139,12 @@ let rec exec_cmd vars = function
   | If (e, c, c') ->
       let b, vars' = exec_expr vars e in
       if b then exec_cmd vars' c else exec_cmd vars' c'
+  | While (inv, b, c) ->
+      ignore inv;
+      ignore b;
+      ignore c;
+      (0, vars)
   | IntExpr v -> exec_expr vars v
-(* | BoolExpr v -> exec_aux vars v *)
 
 let exec t =
   let v, _ = exec_cmd VarMap.empty t in

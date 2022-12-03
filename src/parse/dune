@@ -13,5 +13,4 @@
  (modules tokens logic program)
  (merge_into parser)
  (flags
-  (--external-tokens Tokens
-   --unused-precedence-levels)))
+  (--external-tokens Tokens --unused-precedence-levels)))

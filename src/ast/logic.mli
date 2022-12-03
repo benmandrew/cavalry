@@ -6,6 +6,7 @@ type arith_expr =
   | Var of string
   | Plus of arith_expr * arith_expr
   | Mul of arith_expr * arith_expr
+[@@deriving sexp_of]
 
 type logic_expr =
   | Bool of bool
@@ -19,7 +20,8 @@ type logic_expr =
   | Leq of arith_expr * arith_expr
   | Gt of arith_expr * arith_expr
   | Geq of arith_expr * arith_expr
+[@@deriving sexp_of]
 
-type expr = logic_expr
+type expr = logic_expr [@@deriving sexp_of]
 
 val translate_term : Vars.t -> expr -> T.term

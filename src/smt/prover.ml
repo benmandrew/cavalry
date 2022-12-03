@@ -2,7 +2,7 @@ open Why3
 
 let config = Whyconf.init_config None
 let main = Whyconf.get_main config
-let libdir =  Whyconf.libdir main
+let libdir = Whyconf.libdir main
 let datadir = Whyconf.datadir main
 
 let alt_ergo =

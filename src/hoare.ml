@@ -20,54 +20,49 @@ let rec expr_to_term : type a. Ast.Vars.t -> a expr -> T.term =
   | Plus (e, e') -> Ast.Arith.plus (f e) (f e')
   | Mul (e, e') -> Ast.Arith.mul (f e) (f e')
 
-module StrSet = Set.Make (String)
-
-let collect_variables c =
-  let collect_value : type a. a value -> StrSet.t =
-   fun v ->
-    match v with
-    | Int _ -> StrSet.empty
-    | Bool _ -> StrSet.empty
-    | VarInst str -> StrSet.singleton str
+(** [forall y_i. t\[x_i <- y_i\]] *)
+let forall_over_term t =
+  let term_vars = T.t_v_fold (fun l x -> x :: l) [] t in
+  let quant_vars = List.map (fun _ -> Ast.Vars.create_fresh "y") term_vars in
+  let m =
+    List.fold_left2
+      (fun m y x -> T.Mvs.add x (T.t_var y) m)
+      T.Mvs.empty quant_vars term_vars
   in
-  let rec collect_expr : type a. a expr -> StrSet.t =
-   fun e ->
-    match e with
-    | Value v -> collect_value v
-    | Eq (e, e') | Plus (e, e') | Mul (e, e') ->
-        StrSet.union (collect_expr e) (collect_expr e')
-  in
-  let rec collect_cmd = function
-    | IntExpr e -> collect_expr e
-    | Seq (c, c') -> StrSet.union (collect_cmd c) (collect_cmd c')
-    | Assgn (_, e) -> collect_expr e
-    | If (b, e, e') ->
-        StrSet.union (collect_expr b)
-          (StrSet.union (collect_cmd e) (collect_cmd e'))
-  in
-  let vars = collect_cmd c in
-  List.fold_left
-    (fun vm x ->
-      let symbol = T.create_vsymbol (Ident.id_fresh x) Ty.ty_int in
-      Ast.Vars.add x symbol vm)
-    Ast.Vars.empty (StrSet.elements vars)
+  T.t_subst m t |> T.t_forall_close quant_vars []
 
 (* https://en.wikipedia.org/wiki/Predicate_transformer_semantics *)
 let rec wlp vars c q =
+  let wlp = wlp vars in
   match c with
   | IntExpr _ -> q
-  | Seq (c, c') -> wlp vars c (wlp vars c' q)
+  | Seq (c, c') -> wlp c (wlp c' q)
   | Assgn (x, e) ->
-      (* q[ x <- e ] *)
-      let t = expr_to_term vars e in
-      let symbol = Ast.Vars.find x vars in
-      T.t_subst_single symbol t q
+      (* forall y. y = e -> q[ x <- y ] *)
+      let e_t = expr_to_term vars e in
+      let x = Ast.Vars.find x vars in
+      let y = Ast.Vars.create_fresh "y" in
+      let y_t = T.t_var y in
+      let q_sub = T.t_subst_single x y_t q in
+      T.t_forall_close [ y ] [] (T.t_and (T.t_equ y_t e_t) q_sub)
   | If (b, c, c') ->
       (* ( b -> wlp(c, q) ) /\ ( ~b -> wlp(c', q) ) *)
       let t = expr_to_term vars b in
-      let wp = wlp vars c q in
-      let wp' = wlp vars c' q in
+      let wp = wlp c q in
+      let wp' = wlp c' q in
       T.(t_and (t_implies t wp) (t_implies (t_not t) wp'))
+  | While (inv, b, c) ->
+      (* inv
+         /\ forall y_i.
+          ((b /\ inv) -> wlp(c, inv)
+          /\ (~b /\ inv) -> q)[x_i <- y_i] *)
+      let guard = expr_to_term vars b in
+      let inv = Ast.Logic.translate_term vars inv in
+      let s = wlp c inv in
+      let iterate = T.(t_implies (t_and guard inv) s) in
+      let postcond = T.(t_implies (t_and (t_not guard) inv) q) in
+      let quant = forall_over_term (T.t_and iterate postcond) in
+      T.(t_and inv quant)
 
 let list_of_var_map (vm : Ast.Vars.t) =
   Ast.Vars.bindings vm |> List.map (fun (_, x) -> x)

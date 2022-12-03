@@ -2,9 +2,7 @@ open Why3
 module T = Term
 
 let int_theory : Theory.theory = Env.read_theory Smt.Prover.env [ "int" ] "Int"
-
 let find_symbol s = Theory.ns_find_ls int_theory.Theory.th_export [ s ]
-
 let plus_symbol = find_symbol "infix +"
 let mul_symbol = find_symbol "infix *"
 let eq_symbol = find_symbol "infix ="
@@ -12,7 +10,6 @@ let lt_symbol = find_symbol "infix <"
 let leq_symbol = find_symbol "infix <="
 let gt_symbol = find_symbol "infix >"
 let geq_symbol = find_symbol "infix >="
-
 let plus a b = T.t_app plus_symbol [ a; b ] (Some Ty.ty_int)
 let mul a b = T.t_app mul_symbol [ a; b ] (Some Ty.ty_int)
 let eq a b = T.ps_app eq_symbol [ a; b ]
