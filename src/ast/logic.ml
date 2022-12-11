@@ -1,5 +1,5 @@
+open Core
 module T = Why3.Term
-open Sexplib.Conv
 
 type arith_expr =
   | Int of int
@@ -49,3 +49,10 @@ let rec translate_term vars e =
   | Leq (e0, e1) -> Arith.leq (f_a e0) (f_a e1)
   | Gt (e0, e1) -> Arith.gt (f_a e0) (f_a e1)
   | Geq (e0, e1) -> Arith.geq (f_a e0) (f_a e1)
+
+let print_expr p =
+  let formatter = Format.formatter_of_out_channel stdout in
+  Core.Sexp.pp_hum formatter (sexp_of_logic_expr p);
+  Format.pp_print_flush formatter ()
+
+let print_term = Why3.Pretty.print_term (Format.formatter_of_out_channel stdout)

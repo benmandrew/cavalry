@@ -1,5 +1,3 @@
-type var_map
-
 type _ value =
   (* | Unit : unit -> unit value *)
   | Int : int -> int value
@@ -18,8 +16,7 @@ type cmd =
   | IntExpr of int expr
   | Seq of cmd * cmd
   | Assgn of string * int expr
-  | If of bool expr * cmd * cmd
-  | While of Logic.expr * bool expr * cmd
+  | If of bool expr * cmd * cmd (* | While of Logic.expr * bool expr * cmd *)
 [@@deriving sexp_of]
 
 (* Untyped AST to play nice with the Menhir parser generator *)
@@ -34,9 +31,4 @@ type ut_expr =
   | UPlus of ut_expr * ut_expr
   | UMul of ut_expr * ut_expr
 
-type ut_program = { p : Logic.expr; u : ut_expr; q : Logic.expr }
-type program = { p : Logic.expr; c : cmd; q : Logic.expr }
-
 val translate_cmd : ut_expr -> cmd
-val collect_vars : cmd -> Vars.t
-val exec : cmd -> int

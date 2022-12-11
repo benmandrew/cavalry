@@ -1,6 +1,5 @@
-open Why3
 open Ast.Program
-module T = Term
+module T = Why3.Term
 
 let val_to_term : type a. Ast.Vars.t -> a value -> T.term =
  fun vars v ->
@@ -21,15 +20,15 @@ let rec expr_to_term : type a. Ast.Vars.t -> a expr -> T.term =
   | Mul (e, e') -> Ast.Arith.mul (f e) (f e')
 
 (** [forall y_i. t\[x_i <- y_i\]] *)
-let forall_over_term t =
-  let term_vars = T.t_v_fold (fun l x -> x :: l) [] t in
-  let quant_vars = List.map (fun _ -> Ast.Vars.create_fresh "y") term_vars in
-  let m =
-    List.fold_left2
-      (fun m y x -> T.Mvs.add x (T.t_var y) m)
-      T.Mvs.empty quant_vars term_vars
-  in
-  T.t_subst m t |> T.t_forall_close quant_vars []
+(* let forall_over_term t =
+   let term_vars = T.t_v_fold (fun l x -> x :: l) [] t in
+   let quant_vars = List.map (fun _ -> Ast.Vars.create_fresh "y") term_vars in
+   let m =
+     List.fold_left2
+       (fun m y x -> T.Mvs.add x (T.t_var y) m)
+       T.Mvs.empty quant_vars term_vars
+   in
+   T.t_subst m t |> T.t_forall_close quant_vars [] *)
 
 (* https://en.wikipedia.org/wiki/Predicate_transformer_semantics *)
 let rec wlp vars c q =
@@ -44,33 +43,32 @@ let rec wlp vars c q =
       let y = Ast.Vars.create_fresh "y" in
       let y_t = T.t_var y in
       let q_sub = T.t_subst_single x y_t q in
-      T.t_forall_close [ y ] [] (T.t_and (T.t_equ y_t e_t) q_sub)
+      T.(t_forall_close [ y ] [] (t_implies (t_equ y_t e_t) q_sub))
   | If (b, c, c') ->
       (* ( b -> wlp(c, q) ) /\ ( ~b -> wlp(c', q) ) *)
       let t = expr_to_term vars b in
       let wp = wlp c q in
       let wp' = wlp c' q in
       T.(t_and (t_implies t wp) (t_implies (t_not t) wp'))
-  | While (inv, b, c) ->
-      (* inv
-         /\ forall y_i.
+(* | While (inv, b, c) ->
+    (* inv
+       /\ forall y_i.
           ((b /\ inv) -> wlp(c, inv)
           /\ (~b /\ inv) -> q)[x_i <- y_i] *)
-      let guard = expr_to_term vars b in
-      let inv = Ast.Logic.translate_term vars inv in
-      let s = wlp c inv in
-      let iterate = T.(t_implies (t_and guard inv) s) in
-      let postcond = T.(t_implies (t_and (t_not guard) inv) q) in
-      let quant = forall_over_term (T.t_and iterate postcond) in
-      T.(t_and inv quant)
+    let guard = expr_to_term vars b in
+    let inv = Ast.Logic.translate_term vars inv in
+    let s = wlp c inv in
+    let iterate = T.(t_implies (t_and guard inv) s) in
+    let postcond = T.(t_implies (t_and (t_not guard) inv) q) in
+    let quant = forall_over_term (T.t_and iterate postcond) in
+    T.(t_and inv quant) *)
 
-let list_of_var_map (vm : Ast.Vars.t) =
-  Ast.Vars.bindings vm |> List.map (fun (_, x) -> x)
+let list_of_var_map (vm : Ast.Vars.t) = Ast.Vars.bindings vm |> List.map snd
 
-let verify vars program =
-  let p = Ast.Logic.translate_term vars program.p in
-  let q = Ast.Logic.translate_term vars program.q in
-  let p_gen = wlp vars program.c q in
+let verify vars Ast.Triple.{ p; c; q } =
+  let p = Ast.Logic.translate_term vars p in
+  let q = Ast.Logic.translate_term vars q in
+  let p_gen = wlp vars c q in
   let vars = list_of_var_map vars in
   Smt.Prover.prove_implies Ast.Arith.int_task vars p p_gen
 

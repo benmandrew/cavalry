@@ -1,6 +1,6 @@
 
 %start main
-%type <Ast.Program.ut_program> main
+%type <Ast.Triple.ut_t> main
 %type <Ast.Program.ut_expr> command
 %type <Ast.Program.ut_expr> expr
 
@@ -8,7 +8,7 @@
 
 main:
   LBRACE p = logic_expr RBRACE u = seq_command LBRACE q = logic_expr RBRACE EOF
-    { {Ast.Program.p; u; q } }
+    { Ast.Triple.{p; u; q } }
 ;
 seq_command:
   | c0 = seq_command SEMICOLON c1 = seq_command
