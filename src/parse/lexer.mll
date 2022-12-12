@@ -53,6 +53,12 @@ rule main = parse
       { THEN }
   | "else"
       { ELSE }
+  | "while"
+      { WHILE }
+  | "do"
+      { DO }
+  | "end"
+      { END }
   | (['a'-'z']) (['a'-'z']['A'-'Z'])*
       { VAR (Lexing.lexeme lexbuf) }
   | eof

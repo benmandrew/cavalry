@@ -2,6 +2,10 @@
  (name tests)
  (libraries cavalry)
  (inline_tests
-  (deps test_exec.cvl test_verify_true.cvl test_verify_false.cvl))
+  (deps
+   test_exec_if.cvl
+   test_exec_while.cvl
+   test_verify_true.cvl
+   test_verify_false.cvl))
  (preprocess
   (pps ppx_jane ppx_inline_test ppx_assert)))

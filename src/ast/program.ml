@@ -35,6 +35,7 @@ type ut_expr =
   | USeq of ut_expr * ut_expr
   | UAssgn of string * ut_expr
   | UIf of ut_expr * ut_expr * ut_expr
+  | UWhile of ut_expr * ut_expr
   | UEq of ut_expr * ut_expr
   | UNeq of ut_expr * ut_expr
   | ULt of ut_expr * ut_expr
@@ -56,6 +57,11 @@ let rec translate_int_expr = function
 and translate_bool_expr = function
   | UBool v -> Value (Bool v)
   | UEq (a, b) -> Eq (translate_int_expr a, translate_int_expr b)
+  | UNeq (a, b) -> Neq (translate_int_expr a, translate_int_expr b)
+  | ULt (a, b) -> Lt (translate_int_expr a, translate_int_expr b)
+  | ULeq (a, b) -> Leq (translate_int_expr a, translate_int_expr b)
+  | UGt (a, b) -> Gt (translate_int_expr a, translate_int_expr b)
+  | UGeq (a, b) -> Geq (translate_int_expr a, translate_int_expr b)
   | _ -> raise TypeError
 
 and expr_to_cmd = function
@@ -66,8 +72,10 @@ and expr_to_cmd = function
   | _ -> raise TypeError
 
 and translate_cmd = function
-  | USeq (e, e') -> Seq (translate_cmd e, translate_cmd e')
+  | USeq (c, c') -> Seq (translate_cmd c, translate_cmd c')
   | UAssgn (s, e) -> Assgn (s, translate_int_expr e)
-  | UIf (e, e', e'') ->
-      If (translate_bool_expr e, translate_cmd e', translate_cmd e'')
+  | UIf (e, c, c') ->
+      If (translate_bool_expr e, translate_cmd c, translate_cmd c')
+  | UWhile (e, c) ->
+      While (Logic.(Eq (Int 1, Int 2)), translate_bool_expr e, translate_cmd c)
   | v -> expr_to_cmd v

@@ -5,6 +5,7 @@
 %token SEMICOLON
 %token ASSGN
 %token IF THEN ELSE
+%token WHILE DO END
 %token EOF
 %token PLUS MUL
 %token EQ NEQ LT LEQ GT GEQ

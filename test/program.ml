@@ -94,7 +94,7 @@ let%test_unit "Ast.Runtime.exec - while" =
     Seq
       ( Assgn ("x", Value (Int 0)),
         Seq
-          ( Assgn ("i", Value (Int 1)),
+          ( Assgn ("i", Value (Int 0)),
             Seq
               ( While
                   ( dummy_invariant,

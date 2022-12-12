@@ -34,6 +34,7 @@ type ut_expr =
   | USeq of ut_expr * ut_expr
   | UAssgn of string * ut_expr
   | UIf of ut_expr * ut_expr * ut_expr
+  | UWhile of ut_expr * ut_expr
   | UEq of ut_expr * ut_expr
   | UNeq of ut_expr * ut_expr
   | ULt of ut_expr * ut_expr

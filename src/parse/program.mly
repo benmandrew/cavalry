@@ -7,20 +7,18 @@
 %%
 
 main:
-  LBRACE p = logic_expr RBRACE u = seq_command LBRACE q = logic_expr RBRACE EOF
+  LBRACE p = logic_expr RBRACE u = command LBRACE q = logic_expr RBRACE EOF
     { Ast.Triple.{p; u; q } }
-;
-seq_command:
-  | c0 = seq_command SEMICOLON c1 = seq_command
-      { USeq (c0, c1) }
-  | c = command
-      { c }
 ;
 command:
   | v = VAR ASSGN e = expr
       { UAssgn (v, e) }
-  | IF e = expr THEN c0 = command ELSE c1 = command
+  | c0 = command SEMICOLON c1 = command
+      { USeq (c0, c1) }
+  | IF e = expr THEN c0 = command ELSE c1 = command END
       { UIf (e, c0, c1) }
+  | WHILE e = expr DO c = command END
+      { UWhile (e, c) }
   | e = expr
       { e }
 ;
