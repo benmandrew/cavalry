@@ -29,7 +29,14 @@ let collect_program c =
   in
   let rec collect_expr : type a. a expr -> StrSet.t = function
     | Value v -> collect_value v
-    | Eq (e, e') | Plus (e, e') | Mul (e, e') ->
+    | Plus (e, e')
+    | Mul (e, e')
+    | Eq (e, e')
+    | Neq (e, e')
+    | Lt (e, e')
+    | Leq (e, e')
+    | Gt (e, e')
+    | Geq (e, e') ->
         StrSet.union (collect_expr e) (collect_expr e')
   in
   let rec collect_cmd = function
@@ -40,6 +47,7 @@ let collect_program c =
         StrSet.union (collect_expr b)
           (StrSet.union (collect_cmd e) (collect_cmd e'))
     | While (_, b, c) -> StrSet.union (collect_expr b) (collect_cmd c)
+    | Print e -> collect_expr e
   in
   collect_cmd c
 

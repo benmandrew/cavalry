@@ -37,6 +37,16 @@ expr:
       { UMul (e0, e1) }
   | e0 = expr EQ e1 = expr
       { UEq (e0, e1) }
+  | e0 = expr NEQ e1 = expr
+      { UNeq (e0, e1) }
+  | e0 = expr LT e1 = expr
+      { ULt (e0, e1) }
+  | e0 = expr LEQ e1 = expr
+      { ULeq (e0, e1) }
+  | e0 = expr GT e1 = expr
+      { UGt (e0, e1) }
+  | e0 = expr GEQ e1 = expr
+      { UGeq (e0, e1) }
   | LPAREN e = expr RPAREN
       { ( e ) }
 ;

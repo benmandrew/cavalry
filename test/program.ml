@@ -11,7 +11,7 @@ let rec equal_expr : type a. a expr -> a expr -> bool =
   | Eq (e0, e0'), Eq (e1, e1') -> equal_expr e0 e1 && equal_expr e0' e1'
   | Plus (e0, e0'), Plus (e1, e1') -> equal_expr e0 e1 && equal_expr e0' e1'
   | Mul (e0, e0'), Mul (e1, e1') -> equal_expr e0 e1 && equal_expr e0' e1'
-  | _ -> false
+  | _, _ -> false
 
 let rec equal_cmd : cmd -> cmd -> bool =
  fun e0 e1 ->
@@ -21,7 +21,7 @@ let rec equal_cmd : cmd -> cmd -> bool =
   | Assgn (s0, e0), Assgn (s1, e1) -> String.equal s0 s1 && equal_expr e0 e1
   | If (e0, e0', e0''), If (e1, e1', e1'') ->
       equal_expr e0 e1 && equal_cmd e0' e1' && equal_cmd e0'' e1''
-  | _ -> false
+  | _, _ -> false
 
 exception E of string * Sexp.t [@@deriving sexp]
 
@@ -53,7 +53,7 @@ let%test_unit "Ast.Program.type_expr" =
   let result = translate_cmd ut in
   test_ast_eq ~expected result
 
-let%test_unit "Ast.Program.exec - assgn" =
+let%test_unit "Ast.Runtime.exec - assgn" =
   let t =
     Seq
       ( Assgn ("x", Plus (Value (Int 1), Value (Int 2))),
@@ -62,7 +62,7 @@ let%test_unit "Ast.Program.exec - assgn" =
   let result = exec t in
   [%test_result: int] result ~expect:15
 
-let%test_unit "Ast.Program.exec - if" =
+let%test_unit "Ast.Runtime.exec - if" =
   let t =
     If
       ( Eq (Value (Int 1), Value (Int 2)),
@@ -72,7 +72,7 @@ let%test_unit "Ast.Program.exec - if" =
   let result = exec t in
   [%test_result: int] result ~expect:7
 
-let%test_unit "Ast.Program.exec - var-var-assgn" =
+let%test_unit "Ast.Runtime.exec - var-var-assgn" =
   let t =
     Seq
       ( Assgn ("x", Value (Int 1)),
@@ -83,7 +83,28 @@ let%test_unit "Ast.Program.exec - var-var-assgn" =
   let result = exec t in
   [%test_result: int] result ~expect:3
 
-let%test_unit "Ast.Program.exec - unbound" =
+let%test_unit "Ast.Runtime.exec - unbound" =
   let t = IntExpr (Plus (Value (VarInst "x"), Value (Int 2))) in
   let result = Exn.does_raise (fun () -> exec t) in
   [%test_result: bool] result ~expect:true
+
+let%test_unit "Ast.Runtime.exec - while" =
+  let dummy_invariant = Cavalry.Main.Ast.Logic.(Eq (Int 1, Int 2)) in
+  let t =
+    Seq
+      ( Assgn ("x", Value (Int 0)),
+        Seq
+          ( Assgn ("i", Value (Int 1)),
+            Seq
+              ( While
+                  ( dummy_invariant,
+                    Lt (Value (VarInst "i"), Value (Int 10)),
+                    Seq
+                      ( Assgn
+                          ("x", Plus (Value (VarInst "x"), Value (VarInst "i"))),
+                        Assgn ("i", Plus (Value (VarInst "i"), Value (Int 1)))
+                      ) ),
+                IntExpr (Value (VarInst "x")) ) ) )
+  in
+  let result = exec t in
+  [%test_result: int] result ~expect:45

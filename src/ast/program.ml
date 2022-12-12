@@ -10,6 +10,11 @@ type _ value =
 type _ expr =
   | Value : 'a value -> 'a expr
   | Eq : int expr * int expr -> bool expr
+  | Neq : int expr * int expr -> bool expr
+  | Lt : int expr * int expr -> bool expr
+  | Leq : int expr * int expr -> bool expr
+  | Gt : int expr * int expr -> bool expr
+  | Geq : int expr * int expr -> bool expr
   | Plus : int expr * int expr -> int expr
   | Mul : int expr * int expr -> int expr
 [@@deriving sexp_of]
@@ -20,6 +25,7 @@ type cmd =
   | Assgn of string * int expr
   | If of bool expr * cmd * cmd
   | While of Logic.expr * bool expr * cmd
+  | Print of int expr
 [@@deriving sexp_of]
 
 type ut_expr =
@@ -30,6 +36,11 @@ type ut_expr =
   | UAssgn of string * ut_expr
   | UIf of ut_expr * ut_expr * ut_expr
   | UEq of ut_expr * ut_expr
+  | UNeq of ut_expr * ut_expr
+  | ULt of ut_expr * ut_expr
+  | ULeq of ut_expr * ut_expr
+  | UGt of ut_expr * ut_expr
+  | UGeq of ut_expr * ut_expr
   | UPlus of ut_expr * ut_expr
   | UMul of ut_expr * ut_expr
 

@@ -1,57 +1,89 @@
-open Core
+(* open Core *)
 open Program
-module RuntimeVarMap = Map.Make (String)
 
-type var_map = int RuntimeVarMap.t
+(* type var_map = int RuntimeVarMap.t *)
 
-let add_var vars x v = RuntimeVarMap.add_exn vars ~key:x ~data:v
+module Runtime = struct
+  module BoundVars = Set.Make (String)
 
-exception UnboundVarError of string
+  exception UnboundVarError of string
 
-let exec_value (vars : var_map) (type a) (v : a value) : a =
+  type t = { vars : BoundVars.t; var_map : (string, int) Hashtbl.t }
+
+  let add_var { vars; var_map } x v =
+    Hashtbl.add var_map x v;
+    { vars = BoundVars.add x vars; var_map }
+
+  let find_var { vars; var_map } x =
+    match BoundVars.find_opt x vars with
+    | None -> raise (UnboundVarError x)
+    | Some _ -> Hashtbl.find var_map x
+
+  let empty = { vars = BoundVars.empty; var_map = Hashtbl.create 32 }
+end
+
+let exec_value r (type a) (v : a value) : a =
   match v with
   | Unit () -> ()
   | Int i -> i
   | Bool b -> b
-  | VarInst x -> (
-      match RuntimeVarMap.find vars x with
-      | None -> raise (UnboundVarError x)
-      | Some v -> v)
+  | VarInst x -> Runtime.find_var r x
 
-let rec exec_expr : type a. var_map -> a expr -> a * var_map =
- fun vars v ->
+let rec exec_expr : type a. Runtime.t -> a expr -> a * Runtime.t =
+ fun r v ->
+  let binary_app r a b =
+    let v1, r' = exec_expr r a in
+    let v2, r'' = exec_expr r' b in
+    (v1, v2, r'')
+  in
+
   match v with
-  | Value v -> (exec_value vars v, vars)
+  | Value v -> (exec_value r v, r)
   | Plus (a, b) ->
-      let v1, vars' = exec_expr vars a in
-      let v2, vars'' = exec_expr vars' b in
-      (v1 + v2, vars'')
+      let v1, v2, r' = binary_app r a b in
+      (v1 + v2, r')
   | Mul (a, b) ->
-      let v1, vars' = exec_expr vars a in
-      let v2, vars'' = exec_expr vars' b in
-      (v1 * v2, vars'')
+      let v1, v2, r' = binary_app r a b in
+      (v1 * v2, r')
   | Eq (a, b) ->
-      let v1, vars' = exec_expr vars a in
-      let v2, vars'' = exec_expr vars' b in
-      (v1 = v2, vars'')
+      let v1, v2, r' = binary_app r a b in
+      (v1 = v2, r')
+  | Neq (a, b) ->
+      let v1, v2, r' = binary_app r a b in
+      (v1 != v2, r')
+  | Lt (a, b) ->
+      let v1, v2, r' = binary_app r a b in
+      (v1 < v2, r')
+  | Leq (a, b) ->
+      let v1, v2, r' = binary_app r a b in
+      (v1 <= v2, r')
+  | Gt (a, b) ->
+      let v1, v2, r' = binary_app r a b in
+      (v1 > v2, r')
+  | Geq (a, b) ->
+      let v1, v2, r' = binary_app r a b in
+      (v1 >= v2, r')
 
-let rec exec_cmd vars = function
+let rec exec_cmd r = function
   | Seq (c, c') ->
-      let _, vars' = exec_cmd vars c in
-      exec_cmd vars' c'
+      let _, r' = exec_cmd r c in
+      exec_cmd r' c'
   | Assgn (x, e) ->
-      let v, vars' = exec_expr vars e in
-      let vars'' = add_var vars' x v in
-      (v, vars'')
+      let v, r' = exec_expr r e in
+      let r'' = Runtime.add_var r' x v in
+      (v, r'')
   | If (e, c, c') ->
-      let b, vars' = exec_expr vars e in
-      if b then exec_cmd vars' c else exec_cmd vars' c'
+      let b, r' = exec_expr r e in
+      if b then exec_cmd r' c else exec_cmd r' c'
   | While (_, e, c) as loop ->
-      let b, vars' = exec_expr vars e in
+      let b, r' = exec_expr r e in
       if b then
-        let _, vars'' = exec_cmd vars' c in
-        exec_cmd vars'' loop
-      else (0, vars')
-  | IntExpr v -> exec_expr vars v
+        let _, r'' = exec_cmd r' c in
+        exec_cmd r'' loop
+      else (0, r')
+  | Print e ->
+      Printf.printf "%d\n" (fst @@ exec_expr r e);
+      (0, r)
+  | IntExpr v -> exec_expr r v
 
-let exec t = fst @@ exec_cmd RuntimeVarMap.empty t
+let exec t = fst @@ exec_cmd Runtime.empty t

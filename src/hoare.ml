@@ -17,11 +17,17 @@ let val_to_term : type a. Ast.Vars.t -> a value -> T.term =
 let rec expr_to_term : type a. Ast.Vars.t -> a expr -> T.term =
  fun vars e ->
   let f = expr_to_term vars in
+  let open Ast.Arith in
   match e with
   | Value v -> val_to_term vars v
-  | Eq (e, e') -> T.t_equ (f e) (f e')
-  | Plus (e, e') -> Ast.Arith.plus (f e) (f e')
-  | Mul (e, e') -> Ast.Arith.mul (f e) (f e')
+  | Eq (e, e') -> eq (f e) (f e')
+  | Neq (e, e') -> neq (f e) (f e')
+  | Lt (e, e') -> lt (f e) (f e')
+  | Leq (e, e') -> leq (f e) (f e')
+  | Gt (e, e') -> gt (f e) (f e')
+  | Geq (e, e') -> geq (f e) (f e')
+  | Plus (e, e') -> plus (f e) (f e')
+  | Mul (e, e') -> mul (f e) (f e')
 
 (** [forall y_i. t\[x_i <- y_i\]] *)
 let forall_over_term t =
@@ -38,7 +44,7 @@ let forall_over_term t =
 let rec wlp vars c q =
   let wlp = wlp vars in
   match c with
-  | IntExpr _ -> q
+  | IntExpr _ | Print _ -> q
   | Seq (c, c') -> wlp c (wlp c' q)
   | Assgn (x, e) ->
       (* forall y. y = e -> q[ x <- y ] *)
