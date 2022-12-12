@@ -1,5 +1,6 @@
-(* open Core *)
-open Cavalry.Ast.Program
+open Core
+open Cavalry.Main.Ast.Program
+open Cavalry.Main.Ast.Runtime
 
 let rec equal_expr : type a. a expr -> a expr -> bool =
  fun e0 e1 ->

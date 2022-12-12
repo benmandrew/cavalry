@@ -25,7 +25,7 @@ let collect_program c =
   let open Program in
   let collect_value : type a. a value -> StrSet.t = function
     | VarInst str -> StrSet.singleton str
-    | Int _ | Bool _ -> StrSet.empty
+    | Int _ | Bool _ | Unit () -> StrSet.empty
   in
   let rec collect_expr : type a. a expr -> StrSet.t = function
     | Value v -> collect_value v
@@ -39,7 +39,7 @@ let collect_program c =
     | If (b, e, e') ->
         StrSet.union (collect_expr b)
           (StrSet.union (collect_cmd e) (collect_cmd e'))
-    (* | While (_, b, c) -> StrSet.union (collect_expr b) (collect_cmd c) *)
+    | While (_, b, c) -> StrSet.union (collect_expr b) (collect_cmd c)
   in
   collect_cmd c
 

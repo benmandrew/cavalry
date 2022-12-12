@@ -1,7 +1,7 @@
 open Core
 
 type _ value =
-  (* | Unit : unit -> unit value *)
+  | Unit : unit -> unit value
   | Int : int -> int value
   | Bool : bool -> bool value
   | VarInst : string -> int value
@@ -18,7 +18,8 @@ type cmd =
   | IntExpr of int expr
   | Seq of cmd * cmd
   | Assgn of string * int expr
-  | If of bool expr * cmd * cmd (* | While of Logic.expr * bool expr * cmd *)
+  | If of bool expr * cmd * cmd
+  | While of Logic.expr * bool expr * cmd
 [@@deriving sexp_of]
 
 type ut_expr =
