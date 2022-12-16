@@ -16,7 +16,9 @@ type _ expr =
   | Gt : int expr * int expr -> bool expr
   | Geq : int expr * int expr -> bool expr
   | Plus : int expr * int expr -> int expr
+  | Sub : int expr * int expr -> int expr
   | Mul : int expr * int expr -> int expr
+  | Div : int expr * int expr -> int expr
 [@@deriving sexp_of]
 
 type cmd =
@@ -35,7 +37,7 @@ type ut_expr =
   | USeq of ut_expr * ut_expr
   | UAssgn of string * ut_expr
   | UIf of ut_expr * ut_expr * ut_expr
-  | UWhile of ut_expr * ut_expr
+  | UWhile of Logic.expr * ut_expr * ut_expr
   | UEq of ut_expr * ut_expr
   | UNeq of ut_expr * ut_expr
   | ULt of ut_expr * ut_expr
@@ -43,7 +45,9 @@ type ut_expr =
   | UGt of ut_expr * ut_expr
   | UGeq of ut_expr * ut_expr
   | UPlus of ut_expr * ut_expr
+  | USub of ut_expr * ut_expr
   | UMul of ut_expr * ut_expr
+  | UDiv of ut_expr * ut_expr
 
 exception TypeError
 
@@ -51,7 +55,9 @@ let rec translate_int_expr = function
   | UInt v -> Value (Int v)
   | UVar v -> Value (VarInst v)
   | UPlus (a, b) -> Plus (translate_int_expr a, translate_int_expr b)
+  | USub (a, b) -> Sub (translate_int_expr a, translate_int_expr b)
   | UMul (a, b) -> Mul (translate_int_expr a, translate_int_expr b)
+  | UDiv (a, b) -> Div (translate_int_expr a, translate_int_expr b)
   | _ -> raise TypeError
 
 and translate_bool_expr = function
@@ -76,6 +82,5 @@ and translate_cmd = function
   | UAssgn (s, e) -> Assgn (s, translate_int_expr e)
   | UIf (e, c, c') ->
       If (translate_bool_expr e, translate_cmd c, translate_cmd c')
-  | UWhile (e, c) ->
-      While (Logic.(Eq (Int 1, Int 2)), translate_bool_expr e, translate_cmd c)
+  | UWhile (inv, e, c) -> While (inv, translate_bool_expr e, translate_cmd c)
   | v -> expr_to_cmd v

@@ -2,6 +2,7 @@
 x <- 0;
 i <- 0;
 while i < 10 do
+  { true }
   x <- x + i;
   i <- i + 1
 end;

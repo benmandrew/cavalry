@@ -1,6 +1,8 @@
-{ x = 2 && y = 60 }
-if x + 3 = 5 then
-  x <- x + y * 3
-else
-  x <- 9
-{ x < 190 }
+{ x = 0 && i = 0 }
+while i < 10 do
+  { x = ((i * (i - 1)) / 2) }
+  x <- x + i;
+  i <- i + 1
+end;
+x
+{ x = 45 }

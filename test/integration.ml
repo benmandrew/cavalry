@@ -9,8 +9,14 @@ let%test_unit "Main.exec while" =
   let result = Main.exec "test_exec_while.cvl" in
   [%test_result: int] result ~expect:45
 
-let%test_unit "Main.verify true" =
-  let ast = Main.get_ast "test_verify_true.cvl" in
+let%test_unit "Main.verify true if" =
+  let ast = Main.get_ast "test_verify_true_if.cvl" in
+  let vars = Ast.Var_collection.collect ast in
+  let result = Main.verify vars ast in
+  [%test_result: bool] result ~expect:true
+
+let%test_unit "Main.verify true while" =
+  let ast = Main.get_ast "test_verify_true_while.cvl" in
   let vars = Ast.Var_collection.collect ast in
   let result = Main.verify vars ast in
   [%test_result: bool] result ~expect:true

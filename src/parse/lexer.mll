@@ -1,5 +1,9 @@
 {
 open Tokens
+
+type error = Illegal_character of char
+
+exception Error of error
 }
 
 rule main = parse
@@ -13,8 +17,12 @@ rule main = parse
       { BOOL false }
   | '+'
       { PLUS }
+  | '-'
+      { SUB }
   | '*'
       { MUL }
+  | '/'
+      { DIV }
   | '='
       { EQ }
   | '<'
@@ -63,3 +71,7 @@ rule main = parse
       { VAR (Lexing.lexeme lexbuf) }
   | eof
       { EOF }
+  | (_ as illegal_char)
+    { raise
+        (Error
+          (Illegal_character illegal_char)) }

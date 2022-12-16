@@ -17,8 +17,8 @@ command:
       { USeq (c0, c1) }
   | IF e = expr THEN c0 = command ELSE c1 = command END
       { UIf (e, c0, c1) }
-  | WHILE e = expr DO c = command END
-      { UWhile (e, c) }
+  | WHILE e = expr DO LBRACE inv = logic_expr RBRACE c = command END
+      { UWhile (inv, e, c) }
   | e = expr
       { e }
 ;
@@ -31,8 +31,12 @@ expr:
       { UVar (v) }
   | e0 = expr PLUS e1 = expr
       { UPlus (e0, e1) }
+  | e0 = expr SUB e1 = expr
+      { USub (e0, e1) }
   | e0 = expr MUL e1 = expr
       { UMul (e0, e1) }
+  | e0 = expr DIV e1 = expr
+      { UDiv (e0, e1) }
   | e0 = expr EQ e1 = expr
       { UEq (e0, e1) }
   | e0 = expr NEQ e1 = expr

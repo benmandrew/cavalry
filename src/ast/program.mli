@@ -14,7 +14,9 @@ type _ expr =
   | Gt : int expr * int expr -> bool expr
   | Geq : int expr * int expr -> bool expr
   | Plus : int expr * int expr -> int expr
+  | Sub : int expr * int expr -> int expr
   | Mul : int expr * int expr -> int expr
+  | Div : int expr * int expr -> int expr
 [@@deriving sexp_of]
 
 type cmd =
@@ -34,7 +36,7 @@ type ut_expr =
   | USeq of ut_expr * ut_expr
   | UAssgn of string * ut_expr
   | UIf of ut_expr * ut_expr * ut_expr
-  | UWhile of ut_expr * ut_expr
+  | UWhile of Logic.expr * ut_expr * ut_expr
   | UEq of ut_expr * ut_expr
   | UNeq of ut_expr * ut_expr
   | ULt of ut_expr * ut_expr
@@ -42,6 +44,8 @@ type ut_expr =
   | UGt of ut_expr * ut_expr
   | UGeq of ut_expr * ut_expr
   | UPlus of ut_expr * ut_expr
+  | USub of ut_expr * ut_expr
   | UMul of ut_expr * ut_expr
+  | UDiv of ut_expr * ut_expr
 
 val translate_cmd : ut_expr -> cmd
