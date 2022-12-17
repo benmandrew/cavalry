@@ -2,6 +2,7 @@
 %token <bool> BOOL
 %token <string> VAR
 %token LBRACE RBRACE
+%token FUN COMMA REQUIRES ENSURES
 %token SEMICOLON
 %token ASSGN
 %token IF THEN ELSE
@@ -23,6 +24,6 @@
 %left PLUS
 %left SUB
 %left MUL
-%left DIV
+// %left DIV
 
 %%

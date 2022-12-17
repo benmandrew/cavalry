@@ -1,14 +1,30 @@
 
-%start main
+%start top
+%type <Ast.Triple.ut_t list> top
 %type <Ast.Triple.ut_t> main
+%type <Ast.Triple.ut_t> func
 %type <Ast.Program.ut_expr> command
 %type <Ast.Program.ut_expr> expr
 
 %%
 
+top:
+  | f = func t = top
+      { f :: t }
+  | m = main EOF
+      { [ m ] }
+;
+func:
+  | FUN f = VAR LPAREN ps = formal_params RPAREN EQ REQUIRES LBRACE p = logic_expr RBRACE ENSURES LBRACE q = logic_expr RBRACE c = command END
+      { Ast.Triple.{p; u = UFun (f, ps, c); q} }
+formal_params:
+  | p = VAR COMMA ps = formal_params
+      { p :: ps }
+  | p = VAR
+      { [ p ] }
 main:
-  LBRACE p = logic_expr RBRACE u = command LBRACE q = logic_expr RBRACE EOF
-    { Ast.Triple.{p; u; q } }
+  | LBRACE p = logic_expr RBRACE u = command LBRACE q = logic_expr RBRACE
+      { Ast.Triple.{p; u; q } }
 ;
 command:
   | v = VAR ASSGN e = expr
@@ -29,6 +45,8 @@ expr:
       { UBool (b) }
   | v = VAR
       { UVar (v) }
+  | f = VAR LPAREN ps = params RPAREN
+      { UApp (f, ps) }
   | e0 = expr PLUS e1 = expr
       { UPlus (e0, e1) }
   | e0 = expr SUB e1 = expr
@@ -52,3 +70,8 @@ expr:
   | LPAREN e = expr RPAREN
       { ( e ) }
 ;
+params:
+  | p = expr COMMA ps = params
+      { p :: ps }
+  | p = expr
+      { [ p ] }

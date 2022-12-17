@@ -1,8 +1,9 @@
-{ x = 2 && y = 60 }
-if x + 3 = 5 then
-  x <- x + y * 3
-else
-  x <- 9
-end;
-x
-{ x >= 200 }
+fun f (x) =
+  requires { x = _x }
+  ensures { x = _x + 1 }
+  x + 1
+end
+
+{ x = 2 }
+x <- f(x)
+{ x = 3 }

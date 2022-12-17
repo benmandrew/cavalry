@@ -16,6 +16,7 @@ depends: [
   "menhir"
   "why3"
   "alt-ergo" { = "2.4.1"}
+  "ppx_deriving"
   "odoc" {with-doc}
 ]
 build: [

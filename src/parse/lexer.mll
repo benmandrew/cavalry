@@ -67,7 +67,13 @@ rule main = parse
       { DO }
   | "end"
       { END }
-  | (['a'-'z']) (['a'-'z']['A'-'Z'])*
+  | "fun"
+      { FUN }
+  | "requires"
+      { REQUIRES }
+  | "ensures"
+      { ENSURES }
+  | (['a'-'z']|['A'-'Z']|'_')+
       { VAR (Lexing.lexeme lexbuf) }
   | eof
       { EOF }

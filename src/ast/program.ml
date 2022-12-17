@@ -30,6 +30,8 @@ type cmd =
   | Print of int expr
 [@@deriving sexp_of]
 
+(* type program = | [@@deriving sexp_of] *)
+
 type ut_expr =
   | UInt of int
   | UBool of bool
@@ -47,9 +49,12 @@ type ut_expr =
   | UPlus of ut_expr * ut_expr
   | USub of ut_expr * ut_expr
   | UMul of ut_expr * ut_expr
-(* | UDiv of ut_expr * ut_expr *)
+  (* | UDiv of ut_expr * ut_expr *)
+  | UFun of string * string list * ut_expr
+  | UApp of string * ut_expr list
+[@@deriving show]
 
-exception TypeError
+exception TypeError of string
 
 let rec translate_int_expr = function
   | UInt v -> Value (Int v)
@@ -58,7 +63,8 @@ let rec translate_int_expr = function
   | USub (a, b) -> Sub (translate_int_expr a, translate_int_expr b)
   | UMul (a, b) -> Mul (translate_int_expr a, translate_int_expr b)
   (* | UDiv (a, b) -> Div (translate_int_expr a, translate_int_expr b) *)
-  | _ -> raise TypeError
+  | UApp (_s, _ps) -> Value (Int 0)
+  | e -> raise (TypeError (show_ut_expr e))
 
 and translate_bool_expr = function
   | UBool v -> Value (Bool v)
@@ -68,14 +74,14 @@ and translate_bool_expr = function
   | ULeq (a, b) -> Leq (translate_int_expr a, translate_int_expr b)
   | UGt (a, b) -> Gt (translate_int_expr a, translate_int_expr b)
   | UGeq (a, b) -> Geq (translate_int_expr a, translate_int_expr b)
-  | _ -> raise TypeError
+  | e -> raise (TypeError (show_ut_expr e))
 
 and expr_to_cmd = function
   | UInt v -> IntExpr (translate_int_expr (UInt v))
   | UVar v -> IntExpr (translate_int_expr (UVar v))
   | UPlus (a, b) -> IntExpr (translate_int_expr (UPlus (a, b)))
   | UMul (a, b) -> IntExpr (translate_int_expr (UMul (a, b)))
-  | _ -> raise TypeError
+  | e -> raise (TypeError (show_ut_expr e))
 
 and translate_cmd = function
   | USeq (c, c') -> Seq (translate_cmd c, translate_cmd c')
@@ -84,3 +90,6 @@ and translate_cmd = function
       If (translate_bool_expr e, translate_cmd c, translate_cmd c')
   | UWhile (inv, e, c) -> While (inv, translate_bool_expr e, translate_cmd c)
   | v -> expr_to_cmd v
+
+(* and translate_program = function
+  | UFun  *)

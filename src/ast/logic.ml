@@ -7,7 +7,7 @@ type arith_expr =
   | Plus of arith_expr * arith_expr
   | Sub of arith_expr * arith_expr
   | Mul of arith_expr * arith_expr (* | Div of arith_expr * arith_expr *)
-[@@deriving sexp_of]
+[@@deriving sexp_of, show]
 
 type logic_expr =
   | Bool of bool
@@ -21,9 +21,9 @@ type logic_expr =
   | Leq of arith_expr * arith_expr
   | Gt of arith_expr * arith_expr
   | Geq of arith_expr * arith_expr
-[@@deriving sexp_of]
+[@@deriving sexp_of, show]
 
-type expr = logic_expr [@@deriving sexp_of]
+type expr = logic_expr [@@deriving sexp_of, show]
 
 let rec translate_arith_term vars e =
   let f = translate_arith_term vars in
