@@ -3,5 +3,6 @@ if x + 3 = 5 then
   x <- x + y * 3
 else
   x <- 9
-end
+end;
+x
 { x >= 200 }

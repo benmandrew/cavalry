@@ -2,4 +2,4 @@
  (name smt)
  (libraries core why3)
  (preprocess
-  (pps ppx_jane)))
+  (pps ppx_jane ppx_deriving.ord)))

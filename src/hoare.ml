@@ -29,7 +29,7 @@ let rec expr_to_term : type a. Ast.Vars.t -> a expr -> T.term =
   | Plus (e, e') -> plus (f e) (f e')
   | Sub (e, e') -> sub (f e) (f e')
   | Mul (e, e') -> mul (f e) (f e')
-  | Div (e, e') -> div (f e) (f e')
+(* | Div (e, e') -> div (f e) (f e') *)
 
 (** [forall y_i. t\[x_i <- y_i\]] *)
 let forall_over_term t =
@@ -79,14 +79,15 @@ let rec wlp vars c q =
 
 let list_of_var_map (vm : Ast.Vars.t) = Ast.Vars.bindings vm |> List.map snd
 
-let verify vars Ast.Triple.{ p; c; q } =
+let verify ?timeout vars Ast.Triple.{ p; c; q } =
   let p = Ast.Logic.translate_term vars p in
   let q = Ast.Logic.translate_term vars q in
   let p_gen = wlp vars c q in
-  Printf.printf "\n\n";
-  Ast.Logic.print_term p_gen;
-  Printf.printf "\n\n";
   let vars = list_of_var_map vars in
-  Smt.Prover.prove_implies Ast.Arith.base_task vars p p_gen
+  (* Printf.printf "\n\n";
+     Ast.Logic.print_term (T.t_forall_close vars [] (T.t_implies p p_gen));
+     Printf.printf "\n\n";
+     flush stdout; *)
+  Smt.Prover.prove_implies timeout Ast.Arith.base_task vars p p_gen
 
 let get_var (vm : Ast.Vars.t) x = Ast.Vars.find x vm

@@ -6,8 +6,7 @@ type arith_expr =
   | Var of string
   | Plus of arith_expr * arith_expr
   | Sub of arith_expr * arith_expr
-  | Mul of arith_expr * arith_expr
-  | Div of arith_expr * arith_expr
+  | Mul of arith_expr * arith_expr (* | Div of arith_expr * arith_expr *)
 [@@deriving sexp_of]
 
 type logic_expr =

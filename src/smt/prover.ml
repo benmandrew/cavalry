@@ -1,3 +1,4 @@
+open Core
 open Why3
 
 let config = Whyconf.init_config None
@@ -23,21 +24,27 @@ let alt_ergo_driver =
     eprintf "Failed to load driver for alt-ergo: %a\n" Exn_printer.exn_printer e;
     exit 1
 
-let prove base_task term =
+type result = Valid | Invalid | Failed of string [@@deriving sexp_of, ord]
+
+let prove timeout base_task term =
   let goal_id = Decl.create_prsymbol (Ident.id_fresh "goal") in
   let task = Task.add_prop_decl base_task Decl.Pgoal goal_id term in
+  let limit =
+    match timeout with
+    | None -> Call_provers.empty_limit
+    | Some limit_time ->
+        Call_provers.{ limit_time; limit_mem = -1; limit_steps = -1 }
+  in
   let result =
-    Driver.prove_task ~limit:Call_provers.empty_limit ~libdir ~datadir
-      ~command:alt_ergo.Whyconf.command alt_ergo_driver task
+    Driver.prove_task ~limit ~libdir ~datadir ~command:alt_ergo.Whyconf.command
+      alt_ergo_driver task
     |> Call_provers.wait_on_call
   in
   match (result.pr_answer : Call_provers.prover_answer) with
-  | Valid -> true
-  | Invalid -> false
-  | Timeout | OutOfMemory | StepLimitExceeded | HighFailure | Unknown _
-  | Failure _ ->
-      (* Printf.printf "output: %s\n" result.pr_output; *)
-      false
+  | Valid -> Valid
+  | Invalid | Unknown _ -> Invalid
+  | Timeout | OutOfMemory | StepLimitExceeded | HighFailure | Failure _ ->
+      Failed result.pr_output
 
-let prove_implies base_task vars t t' =
-  Term.t_forall_close vars [] (Term.t_implies t t') |> prove base_task
+let prove_implies timeout base_task vars t t' =
+  Term.t_forall_close vars [] (Term.t_implies t t') |> prove timeout base_task

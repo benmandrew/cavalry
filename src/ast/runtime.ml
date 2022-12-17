@@ -1,8 +1,6 @@
 (* open Core *)
 open Program
 
-(* type var_map = int RuntimeVarMap.t *)
-
 module Runtime = struct
   module BoundVars = Set.Make (String)
 
@@ -47,9 +45,9 @@ let rec exec_expr : type a. Runtime.t -> a expr -> a * Runtime.t =
   | Mul (a, b) ->
       let v1, v2, r' = binary_app r a b in
       (v1 * v2, r')
-  | Div (a, b) ->
+  (* | Div (a, b) ->
       let v1, v2, r' = binary_app r a b in
-      (v1 / v2, r')
+      (v1 / v2, r') *)
   | Eq (a, b) ->
       let v1, v2, r' = binary_app r a b in
       (v1 = v2, r')

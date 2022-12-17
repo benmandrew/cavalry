@@ -35,8 +35,8 @@ expr:
       { USub (e0, e1) }
   | e0 = expr MUL e1 = expr
       { UMul (e0, e1) }
-  | e0 = expr DIV e1 = expr
-      { UDiv (e0, e1) }
+  // | e0 = expr DIV e1 = expr
+  //     { UDiv (e0, e1) }
   | e0 = expr EQ e1 = expr
       { UEq (e0, e1) }
   | e0 = expr NEQ e1 = expr

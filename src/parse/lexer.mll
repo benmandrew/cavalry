@@ -21,8 +21,8 @@ rule main = parse
       { SUB }
   | '*'
       { MUL }
-  | '/'
-      { DIV }
+  (* | '/'
+      { DIV } *)
   | '='
       { EQ }
   | '<'
