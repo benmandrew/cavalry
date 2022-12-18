@@ -3,21 +3,42 @@ open Program
 
 module Runtime = struct
   module BoundVars = Set.Make (String)
+  module BoundFuncs = Set.Make (String)
 
-  exception UnboundVarError of string
+  exception UnboundError of string
 
-  type t = { vars : BoundVars.t; var_map : (string, int) Hashtbl.t }
+  type t = {
+    vars : BoundVars.t;
+    var_map : (string, int) Hashtbl.t;
+    funcs : BoundFuncs.t;
+    func_map : (string, cmd) Hashtbl.t;
+  }
 
-  let add_var { vars; var_map } x v =
+  let add_var { vars; var_map; funcs; func_map } x v =
     Hashtbl.add var_map x v;
-    { vars = BoundVars.add x vars; var_map }
+    { vars = BoundVars.add x vars; var_map; funcs; func_map }
 
-  let find_var { vars; var_map } x =
+  let find_var { vars; var_map; _ } x =
     match BoundVars.find_opt x vars with
-    | None -> raise (UnboundVarError x)
+    | None -> raise (UnboundError x)
     | Some _ -> Hashtbl.find var_map x
 
-  let empty = { vars = BoundVars.empty; var_map = Hashtbl.create 32 }
+  let add_func { vars; var_map; funcs; func_map } f c =
+    Hashtbl.add func_map f c;
+    { vars; var_map; funcs = BoundVars.add f funcs; func_map }
+
+  let find_func { funcs; func_map; _ } f =
+    match BoundFuncs.find_opt f funcs with
+    | None -> raise (UnboundError f)
+    | Some _ -> Hashtbl.find func_map f
+
+  let empty =
+    {
+      vars = BoundVars.empty;
+      var_map = Hashtbl.create 32;
+      funcs = BoundFuncs.empty;
+      func_map = Hashtbl.create 32;
+    }
 end
 
 let exec_value r (type a) (v : a value) : a =
@@ -66,8 +87,23 @@ let rec exec_expr : type a. Runtime.t -> a expr -> a * Runtime.t =
   | Geq (a, b) ->
       let v1, v2, r' = binary_app r a b in
       (v1 >= v2, r')
+  | App (f, ps) -> (
+      let ps, r' =
+        List.fold_left
+          (fun (ps, r) p ->
+            let p', r' = exec_expr r p in
+            (p' :: ps, r'))
+          ([], r) ps
+      in
+      match Runtime.find_func r' f with
+      | Func (_, fps, c) ->
+          let r_fun = List.fold_left2 Runtime.add_var r' fps ps in
+          exec_cmd r_fun c
+      | _ -> raise (Program.TypeError "Tried to apply a non-function"))
 
-let rec exec_cmd r = function
+and exec_cmd r c : int * Runtime.t =
+  match c with
+  | Func (f, _, _) as f' -> (0, Runtime.add_func r f f')
   | Seq (c, c') ->
       let _, r' = exec_cmd r c in
       exec_cmd r' c'

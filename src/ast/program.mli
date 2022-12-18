@@ -17,6 +17,7 @@ type _ expr =
   | Sub : int expr * int expr -> int expr
   | Mul : int expr * int expr -> int expr
     (* | Div : int expr * int expr -> int expr *)
+  | App : string * int expr list -> int expr
 [@@deriving sexp_of]
 
 type cmd =
@@ -26,6 +27,7 @@ type cmd =
   | If of bool expr * cmd * cmd
   | While of Logic.expr * bool expr * cmd
   | Print of int expr
+  | Func of string * string list * cmd
 [@@deriving sexp_of]
 
 (* Untyped AST to play nice with the Menhir parser generator *)
@@ -49,6 +51,8 @@ type ut_expr =
   (* | UDiv of ut_expr * ut_expr *)
   | UFun of string * string list * ut_expr
   | UApp of string * ut_expr list
-[@@deriving show]
+[@@deriving sexp_of, show]
+
+exception TypeError of string
 
 val translate_cmd : ut_expr -> cmd

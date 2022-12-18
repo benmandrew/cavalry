@@ -40,6 +40,10 @@ let collect_program c =
     | Gt (e, e')
     | Geq (e, e') ->
         StrSet.union (collect_expr e) (collect_expr e')
+    | App (_f, ps) ->
+        List.fold_left
+          (fun s e -> collect_expr e |> StrSet.union s)
+          StrSet.empty ps
   in
   let rec collect_cmd = function
     | IntExpr e -> collect_expr e
@@ -50,6 +54,7 @@ let collect_program c =
           (StrSet.union (collect_cmd e) (collect_cmd e'))
     | While (_, b, c) -> StrSet.union (collect_expr b) (collect_cmd c)
     | Print e -> collect_expr e
+    | Func (_f, _ps, c) -> collect_cmd c
   in
   collect_cmd c
 

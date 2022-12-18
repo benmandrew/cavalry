@@ -29,7 +29,8 @@ let rec expr_to_term : type a. Ast.Vars.t -> a expr -> T.term =
   | Plus (e, e') -> plus (f e) (f e')
   | Sub (e, e') -> sub (f e) (f e')
   | Mul (e, e') -> mul (f e) (f e')
-(* | Div (e, e') -> div (f e) (f e') *)
+  (* | Div (e, e') -> div (f e) (f e') *)
+  | App (_f, _ps) -> unit_term
 
 (** [forall y_i. t\[x_i <- y_i\]] *)
 let forall_over_term t =
@@ -76,6 +77,7 @@ let rec wlp vars c q =
       ignore forall_over_term;
       (* let quant = forall_over_term (T.t_and iterate postcond) in *)
       T.(t_and inv (T.t_and iterate postcond))
+  | Func (_f, _ps, _c) -> q
 
 let list_of_var_map (vm : Ast.Vars.t) = Ast.Vars.bindings vm |> List.map snd
 
