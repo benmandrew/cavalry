@@ -16,7 +16,7 @@ top:
 ;
 func:
   | FUN f = VAR LPAREN ps = formal_params RPAREN EQ REQUIRES LBRACE p = logic_expr RBRACE ENSURES LBRACE q = logic_expr RBRACE c = command END
-      { Ast.Triple.{p; u = UFun (f, ps, c); q} }
+      { Ast.Triple.{p; u = UFunc (f, ps, c); q} }
 formal_params:
   | p = VAR COMMA ps = formal_params
       { p :: ps }

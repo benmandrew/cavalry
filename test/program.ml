@@ -59,7 +59,7 @@ let%test_unit "Ast.Runtime.exec - assgn" =
       ( Assgn ("x", Plus (Value (Int 1), Value (Int 2))),
         IntExpr (Mul (Value (VarInst "x"), Value (Int 5))) )
   in
-  let result = exec t in
+  let result = exec [ t ] in
   [%test_result: int] result ~expect:15
 
 let%test_unit "Ast.Runtime.exec - if" =
@@ -69,7 +69,7 @@ let%test_unit "Ast.Runtime.exec - if" =
         IntExpr (Value (Int 5)),
         IntExpr (Value (Int 7)) )
   in
-  let result = exec t in
+  let result = exec [ t ] in
   [%test_result: int] result ~expect:7
 
 let%test_unit "Ast.Runtime.exec - var-var-assgn" =
@@ -80,12 +80,12 @@ let%test_unit "Ast.Runtime.exec - var-var-assgn" =
           ( Assgn ("y", Plus (Value (VarInst "x"), Value (Int 2))),
             IntExpr (Value (VarInst "y")) ) )
   in
-  let result = exec t in
+  let result = exec [ t ] in
   [%test_result: int] result ~expect:3
 
 let%test_unit "Ast.Runtime.exec - unbound" =
   let t = IntExpr (Plus (Value (VarInst "x"), Value (Int 2))) in
-  let result = Exn.does_raise (fun () -> exec t) in
+  let result = Exn.does_raise (fun () -> exec [ t ]) in
   [%test_result: bool] result ~expect:true
 
 let%test_unit "Ast.Runtime.exec - while" =
@@ -106,5 +106,18 @@ let%test_unit "Ast.Runtime.exec - while" =
                       ) ),
                 IntExpr (Value (VarInst "x")) ) ) )
   in
-  let result = exec t in
+  let result = exec [ t ] in
   [%test_result: int] result ~expect:45
+
+let%test_unit "Ast.Runtime.exec - function" =
+  let ut =
+    [
+      UFunc ("f", [ "x" ], UPlus (UVar "x", UInt 1));
+      USeq
+        ( UAssgn ("x", UInt 2),
+          USeq (UAssgn ("x", UApp ("f", [ UVar "x" ])), UVar "x") );
+    ]
+  in
+  let t = List.map ut ~f:translate_cmd in
+  let result = exec t in
+  [%test_result: int] result ~expect:3

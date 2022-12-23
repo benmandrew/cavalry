@@ -2,30 +2,28 @@
 open Program
 
 module Runtime = struct
-  module BoundVars = Set.Make (String)
+  module BoundVars = Map.Make (String)
   module BoundFuncs = Set.Make (String)
 
   exception UnboundError of string
 
   type t = {
-    vars : BoundVars.t;
-    var_map : (string, int) Hashtbl.t;
+    vars : int BoundVars.t;
     funcs : BoundFuncs.t;
     func_map : (string, cmd) Hashtbl.t;
   }
 
-  let add_var { vars; var_map; funcs; func_map } x v =
-    Hashtbl.add var_map x v;
-    { vars = BoundVars.add x vars; var_map; funcs; func_map }
+  let add_var { vars; funcs; func_map } x v =
+    { vars = BoundVars.add x v vars; funcs; func_map }
 
-  let find_var { vars; var_map; _ } x =
+  let find_var { vars; _ } x =
     match BoundVars.find_opt x vars with
     | None -> raise (UnboundError x)
-    | Some _ -> Hashtbl.find var_map x
+    | Some v -> v
 
-  let add_func { vars; var_map; funcs; func_map } f c =
+  let add_func { vars; funcs; func_map } f c =
     Hashtbl.add func_map f c;
-    { vars; var_map; funcs = BoundVars.add f funcs; func_map }
+    { vars; funcs = BoundFuncs.add f funcs; func_map }
 
   let find_func { funcs; func_map; _ } f =
     match BoundFuncs.find_opt f funcs with
@@ -35,7 +33,6 @@ module Runtime = struct
   let empty =
     {
       vars = BoundVars.empty;
-      var_map = Hashtbl.create 32;
       funcs = BoundFuncs.empty;
       func_map = Hashtbl.create 32;
     }
@@ -125,4 +122,12 @@ and exec_cmd r c : int * Runtime.t =
       (0, r)
   | IntExpr v -> exec_expr r v
 
-let exec t = fst @@ exec_cmd Runtime.empty t
+let exec ast =
+  let main, functions =
+    let rev = List.rev ast in
+    (List.hd rev, List.tl rev |> List.rev)
+  in
+  let r =
+    List.fold_left (fun r t -> snd @@ exec_cmd r t) Runtime.empty functions
+  in
+  fst @@ exec_cmd r main

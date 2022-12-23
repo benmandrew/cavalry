@@ -50,7 +50,7 @@ type ut_expr =
   | USub of ut_expr * ut_expr
   | UMul of ut_expr * ut_expr
   (* | UDiv of ut_expr * ut_expr *)
-  | UFun of string * string list * ut_expr
+  | UFunc of string * string list * ut_expr
   | UApp of string * ut_expr list
 [@@deriving sexp_of, show]
 
@@ -63,7 +63,7 @@ let rec translate_int_expr = function
   | USub (a, b) -> Sub (translate_int_expr a, translate_int_expr b)
   | UMul (a, b) -> Mul (translate_int_expr a, translate_int_expr b)
   (* | UDiv (a, b) -> Div (translate_int_expr a, translate_int_expr b) *)
-  | UApp (_s, _ps) -> Value (Int 0)
+  | UApp (f, ps) -> App (f, List.map ps ~f:translate_int_expr)
   | e -> raise (TypeError (show_ut_expr e))
 
 and translate_bool_expr = function
@@ -89,4 +89,5 @@ and translate_cmd = function
   | UIf (e, c, c') ->
       If (translate_bool_expr e, translate_cmd c, translate_cmd c')
   | UWhile (inv, e, c) -> While (inv, translate_bool_expr e, translate_cmd c)
+  | UFunc (f, ps, c) -> Func (f, ps, translate_cmd c)
   | v -> expr_to_cmd v

@@ -10,19 +10,19 @@ let%test_unit "Main.exec while" =
   [%test_result: int] result ~expect:45
 
 let%test_unit "Main.verify true if" =
-  let ast = Main.get_ast "test_verify_true_if.cvl" in
+  let ast = List.hd_exn @@ Main.get_ast "test_verify_true_if.cvl" in
   let vars = Ast.Var_collection.collect ast in
   let result = Main.verify ?timeout:(Some 5) vars ast in
   [%test_result: Smt.Prover.result] result ~expect:Smt.Prover.Valid
 
 let%test_unit "Main.verify true while" =
-  let ast = Main.get_ast "test_verify_true_while.cvl" in
+  let ast = List.hd_exn @@ Main.get_ast "test_verify_true_while.cvl" in
   let vars = Ast.Var_collection.collect ast in
   let result = Main.verify ?timeout:(Some 5) vars ast in
   [%test_result: Smt.Prover.result] result ~expect:Smt.Prover.Valid
 
 let%test_unit "Main.verify false" =
-  let ast = Main.get_ast "test_verify_false.cvl" in
+  let ast = List.hd_exn @@ Main.get_ast "test_verify_false.cvl" in
   let vars = Ast.Var_collection.collect ast in
   let result = Main.verify ?timeout:(Some 5) vars ast in
   [%test_result: Smt.Prover.result] result ~expect:Smt.Prover.Invalid

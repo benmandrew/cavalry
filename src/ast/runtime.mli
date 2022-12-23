@@ -1,1 +1,1 @@
-val exec : Program.cmd -> int
+val exec : Program.cmd list -> int
