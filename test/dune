@@ -5,8 +5,9 @@
   (deps
    test_exec_if.cvl
    test_exec_while.cvl
+   test_verify_false.cvl
    test_verify_true_if.cvl
-   test_verify_true_while.cvl
-   test_verify_false.cvl))
+   test_verify_true_succ.cvl
+   test_verify_true_while.cvl))
  (preprocess
   (pps ppx_jane ppx_inline_test ppx_assert)))

@@ -8,6 +8,8 @@
 *.cmxs
 *.cmxa
 
+*.cache
+
 # ocamlbuild working directory
 _build/
 
@@ -27,3 +29,5 @@ setup.log
 
 # Local OPAM switch
 _opam/
+
+.vscode

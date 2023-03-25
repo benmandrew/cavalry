@@ -1,10 +1,9 @@
 open Core
 open Why3
 
-let config = Whyconf.init_config None
+let config = Whyconf.init_config (Some "/Users/benmandrew/.opam/cavalry/share/why3/provers-detection-data.conf")
 let main = Whyconf.get_main config
-let libdir = Whyconf.libdir main
-let datadir = Whyconf.datadir main
+(* let provers = Whyconf.get_provers config *)
 
 let alt_ergo =
   let open Printf in
@@ -19,7 +18,7 @@ let env = Env.create_env (Whyconf.loadpath main)
 
 let alt_ergo_driver =
   let open Format in
-  try Whyconf.load_driver main env alt_ergo
+  try Driver.load_driver_for_prover main env alt_ergo
   with e ->
     eprintf "Failed to load driver for alt-ergo: %a\n" Exn_printer.exn_printer e;
     exit 1
@@ -36,7 +35,7 @@ let prove timeout base_task term =
         Call_provers.{ limit_time; limit_mem = -1; limit_steps = -1 }
   in
   let result =
-    Driver.prove_task ~limit ~libdir ~datadir ~command:alt_ergo.Whyconf.command
+    Driver.prove_task ~limit ~config:main ~command:alt_ergo.Whyconf.command
       alt_ergo_driver task
     |> Call_provers.wait_on_call
   in

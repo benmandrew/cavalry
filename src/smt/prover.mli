@@ -5,7 +5,7 @@ val env : Env.env
 type result = Valid | Invalid | Failed of string [@@deriving sexp_of, ord]
 
 val prove_implies :
-  int option ->
+  float option ->
   Task.task ->
   Term.vsymbol list ->
   Term.term ->
