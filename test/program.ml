@@ -47,7 +47,7 @@ let%test_unit "Ast.Program.type_expr" =
   in
   let ut =
     USeq
-      ( UAssgn ("x", UPlus (UInt 1, UInt 2)),
+      ( UEAssgn ("x", UPlus (UInt 1, UInt 2)),
         UIf (UEq (UInt 1, UInt 2), UInt 5, UMul (UVar "x", UInt 5)) )
   in
   let result = translate_cmd ut in
@@ -114,8 +114,8 @@ let%test_unit "Ast.Runtime.exec - function" =
     [
       UFunc ("f", [ "x" ], UPlus (UVar "x", UInt 1));
       USeq
-        ( UAssgn ("x", UInt 2),
-          USeq (UAssgn ("x", UApp ("f", [ UVar "x" ])), UVar "x") );
+        ( UEAssgn ("x", UInt 2),
+          USeq (UFAssgn ("x", "f", [ UVar "x" ]), UVar "x") );
     ]
   in
   let t = List.map ut ~f:translate_cmd in

@@ -3,9 +3,10 @@
 %type <Ast.Triple.ut_t list> top
 %type <Ast.Triple.ut_t> main
 %type <Ast.Triple.ut_t> func
+%type <string list> formal_params
 %type <Ast.Program.ut_expr> command
 %type <Ast.Program.ut_expr> expr
-%type <Ast.Program.ut_expr> func_app
+%type <Ast.Program.ut_expr list> params
 
 %%
 
@@ -29,7 +30,9 @@ main:
 ;
 command:
   | v = VAR ASSGN e = expr
-      { UAssgn (v, e) }
+      { UEAssgn (v, e) }
+  | v = VAR ASSGN f = VAR LPAREN ps = params RPAREN
+      { UFAssgn (v, f, ps) }
   | c0 = command SEMICOLON c1 = command
       { USeq (c0, c1) }
   | IF e = expr THEN c0 = command ELSE c1 = command END
@@ -67,11 +70,9 @@ expr:
   | LPAREN e = expr RPAREN
       { ( e ) }
 ;
-func_app:
-  | f = VAR LPAREN ps = params RPAREN
-      { UApp (f, ps) }
 params:
   | p = expr COMMA ps = params
       { p :: ps }
   | p = expr
       { [ p ] }
+;

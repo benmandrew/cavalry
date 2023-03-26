@@ -35,7 +35,8 @@ type ut_expr =
   | UBool of bool
   | UVar of string
   | USeq of ut_expr * ut_expr
-  | UAssgn of string * ut_expr
+  | UEAssgn of string * ut_expr
+  | UFAssgn of string * string * ut_expr list
   | UIf of ut_expr * ut_expr * ut_expr
   | UWhile of Logic.expr * ut_expr * ut_expr
   | UEq of ut_expr * ut_expr
@@ -48,7 +49,6 @@ type ut_expr =
   | USub of ut_expr * ut_expr
   | UMul of ut_expr * ut_expr
   | UFunc of string * string list * ut_expr
-  | UApp of string * ut_expr list
 [@@deriving sexp_of, show]
 
 exception TypeError of string
