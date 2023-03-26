@@ -28,7 +28,7 @@ type cmd =
   | If of bool expr * cmd * cmd
   | While of Logic.expr * bool expr * cmd
   | Print of int expr
-  | Func of string * string list * cmd
+  | Proc of string * string list * cmd
 [@@deriving sexp_of]
 
 type ut_expr =
@@ -37,7 +37,7 @@ type ut_expr =
   | UVar of string
   | USeq of ut_expr * ut_expr
   | UEAssgn of string * ut_expr
-  | UFAssgn of string * string * ut_expr list
+  | UPAssgn of string * string * ut_expr list
   | UIf of ut_expr * ut_expr * ut_expr
   | UWhile of Logic.expr * ut_expr * ut_expr
   | UEq of ut_expr * ut_expr
@@ -49,7 +49,7 @@ type ut_expr =
   | UPlus of ut_expr * ut_expr
   | USub of ut_expr * ut_expr
   | UMul of ut_expr * ut_expr
-  | UFunc of string * string list * ut_expr
+  | UProc of string * string list * ut_expr
 [@@deriving sexp_of, show]
 
 exception TypeError of string
@@ -82,9 +82,9 @@ and expr_to_cmd = function
 and translate_cmd = function
   | USeq (c, c') -> Seq (translate_cmd c, translate_cmd c')
   | UEAssgn (s, e) -> Assgn (s, translate_int_expr e)
-  | UFAssgn (s, f, ps) -> Assgn (s, App (f, List.map ps ~f:translate_int_expr))
+  | UPAssgn (s, f, ps) -> Assgn (s, App (f, List.map ps ~f:translate_int_expr))
   | UIf (e, c, c') ->
       If (translate_bool_expr e, translate_cmd c, translate_cmd c')
   | UWhile (inv, e, c) -> While (inv, translate_bool_expr e, translate_cmd c)
-  | UFunc (f, ps, c) -> Func (f, ps, translate_cmd c)
+  | UProc (f, ps, c) -> Proc (f, ps, translate_cmd c)
   | v -> expr_to_cmd v

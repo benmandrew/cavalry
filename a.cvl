@@ -1,4 +1,4 @@
-fun f (x) =
+procedure f (x) =
   requires { x = _x }
   ensures { x = _x + 1 }
   x + 1

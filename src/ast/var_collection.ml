@@ -53,7 +53,7 @@ let collect_program c =
           (StrSet.union (collect_cmd e) (collect_cmd e'))
     | While (_, b, c) -> StrSet.union (collect_expr b) (collect_cmd c)
     | Print e -> collect_expr e
-    | Func (_f, _ps, c) -> collect_cmd c
+    | Proc (_f, _ps, c) -> collect_cmd c
   in
   collect_cmd c
 

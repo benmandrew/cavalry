@@ -3,13 +3,13 @@ open Program
 
 module Runtime = struct
   module BoundVars = Map.Make (String)
-  module BoundFuncs = Set.Make (String)
+  module BoundProcs = Set.Make (String)
 
   exception UnboundError of string
 
   type t = {
     vars : int BoundVars.t;
-    funcs : BoundFuncs.t;
+    funcs : BoundProcs.t;
     func_map : (string, cmd) Hashtbl.t;
   }
 
@@ -23,17 +23,17 @@ module Runtime = struct
 
   let add_func { vars; funcs; func_map } f c =
     Hashtbl.add func_map f c;
-    { vars; funcs = BoundFuncs.add f funcs; func_map }
+    { vars; funcs = BoundProcs.add f funcs; func_map }
 
   let find_func { funcs; func_map; _ } f =
-    match BoundFuncs.find_opt f funcs with
+    match BoundProcs.find_opt f funcs with
     | None -> raise (UnboundError f)
     | Some _ -> Hashtbl.find func_map f
 
   let empty =
     {
       vars = BoundVars.empty;
-      funcs = BoundFuncs.empty;
+      funcs = BoundProcs.empty;
       func_map = Hashtbl.create 32;
     }
 end
@@ -90,14 +90,14 @@ let rec exec_expr : type a. Runtime.t -> a expr -> a * Runtime.t =
           ([], r) ps
       in
       match Runtime.find_func r' f with
-      | Func (_, fps, c) ->
+      | Proc (_, fps, c) ->
           let r_fun = List.fold_left2 Runtime.add_var r' fps ps in
           exec_cmd r_fun c
       | _ -> raise (Program.TypeError "Tried to apply a non-function"))
 
 and exec_cmd r c : int * Runtime.t =
   match c with
-  | Func (f, _, _) as f' -> (0, Runtime.add_func r f f')
+  | Proc (f, _, _) as f' -> (0, Runtime.add_func r f f')
   | Seq (c, c') ->
       let _, r' = exec_cmd r c in
       exec_cmd r' c'

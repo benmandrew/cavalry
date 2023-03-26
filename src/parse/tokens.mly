@@ -2,7 +2,7 @@
 %token <bool> BOOL
 %token <string> VAR
 %token LBRACE RBRACE
-%token FUN COMMA REQUIRES ENSURES
+%token PROCEDURE COMMA REQUIRES ENSURES
 %token SEMICOLON
 %token ASSGN
 %token IF THEN ELSE

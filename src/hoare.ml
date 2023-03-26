@@ -31,7 +31,7 @@ let rec expr_to_term : type a. Ast.Vars.t -> a expr -> T.term =
   | Mul (e, e') -> mul (f e) (f e')
   | App (_f, _ps) -> unit_term
 
-module FuncMap = Map.Make (String)
+module ProcMap = Map.Make (String)
 
 (* https://en.wikipedia.org/wiki/Predicate_transformer_semantics *)
 let rec wlp_int_expr funcs vars e q =
@@ -43,7 +43,7 @@ let rec wlp_int_expr funcs vars e q =
   | App (f, vs) ->
       (* ASSUMING f(x) = {p_f}c{q_f} HOLDS *)
       (* wlp (v_1, wlp(v_2, ... wlp(v_n, p_f) ... )) /\ q_f -> q *)
-      let f_triple = FuncMap.find f funcs in
+      let f_triple = ProcMap.find f funcs in
       let p =
         let p_f = Ast.(Logic.translate_term vars f_triple.Triple.p) in
         let vs_rev = List.rev vs in
@@ -93,7 +93,7 @@ and wlp_cmd funcs vars c q =
       let iterate = T.(t_implies (t_and guard inv) s) in
       let postcond = T.(t_implies (t_and (t_not guard) inv) q) in
       T.(t_and inv (T.t_and iterate postcond))
-  | Func (_f, ps, c) ->
+  | Proc (_f, ps, c) ->
       let quant_vars = List.map (fun x -> Ast.Vars.create_fresh x) ps in
       T.t_forall_close quant_vars [] (wlp_cmd c q)
 
@@ -103,7 +103,7 @@ let list_of_var_map (vm : Ast.Vars.t) = Ast.Vars.bindings vm |> List.map snd
 let verify ?timeout vars Ast.Triple.{ p; c; q } =
   let p = Ast.Logic.translate_term vars p in
   let q = Ast.Logic.translate_term vars q in
-  let p_gen = wlp_cmd FuncMap.empty vars c q in
+  let p_gen = wlp_cmd ProcMap.empty vars c q in
   let vars = list_of_var_map vars in
   (* Printf.printf "\n\n";
      Ast.Logic.print_term (T.t_forall_close vars [] (T.t_implies p p_gen));

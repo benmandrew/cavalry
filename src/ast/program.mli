@@ -26,7 +26,7 @@ type cmd =
   | If of bool expr * cmd * cmd
   | While of Logic.expr * bool expr * cmd
   | Print of int expr
-  | Func of string * string list * cmd
+  | Proc of string * string list * cmd
 [@@deriving sexp_of]
 
 (* Untyped AST to play nice with the Menhir parser generator *)
@@ -36,7 +36,7 @@ type ut_expr =
   | UVar of string
   | USeq of ut_expr * ut_expr
   | UEAssgn of string * ut_expr
-  | UFAssgn of string * string * ut_expr list
+  | UPAssgn of string * string * ut_expr list
   | UIf of ut_expr * ut_expr * ut_expr
   | UWhile of Logic.expr * ut_expr * ut_expr
   | UEq of ut_expr * ut_expr
@@ -48,7 +48,7 @@ type ut_expr =
   | UPlus of ut_expr * ut_expr
   | USub of ut_expr * ut_expr
   | UMul of ut_expr * ut_expr
-  | UFunc of string * string list * ut_expr
+  | UProc of string * string list * ut_expr
 [@@deriving sexp_of, show]
 
 exception TypeError of string

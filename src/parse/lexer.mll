@@ -65,8 +65,8 @@ rule main = parse
       { DO }
   | "end"
       { END }
-  | "fun"
-      { FUN }
+  | "procedure"
+      { PROCEDURE }
   | "requires"
       { REQUIRES }
   | "ensures"

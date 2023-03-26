@@ -112,10 +112,10 @@ let%test_unit "Ast.Runtime.exec - while" =
 let%test_unit "Ast.Runtime.exec - function" =
   let ut =
     [
-      UFunc ("f", [ "x" ], UPlus (UVar "x", UInt 1));
+      UProc ("f", [ "x" ], UPlus (UVar "x", UInt 1));
       USeq
         ( UEAssgn ("x", UInt 2),
-          USeq (UFAssgn ("x", "f", [ UVar "x" ]), UVar "x") );
+          USeq (UPAssgn ("x", "f", [ UVar "x" ]), UVar "x") );
     ]
   in
   let t = List.map ut ~f:translate_cmd in

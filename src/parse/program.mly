@@ -2,7 +2,7 @@
 %start top
 %type <Ast.Triple.ut_t list> top
 %type <Ast.Triple.ut_t> main
-%type <Ast.Triple.ut_t> func
+%type <Ast.Triple.ut_t> procedure
 %type <string list> formal_params
 %type <Ast.Program.ut_expr> command
 %type <Ast.Program.ut_expr> expr
@@ -11,14 +11,14 @@
 %%
 
 top:
-  | f = func t = top
+  | f = procedure t = top
       { f :: t }
   | m = main EOF
       { [ m ] }
 ;
-func:
-  | FUN f = VAR LPAREN ps = formal_params RPAREN EQ REQUIRES LBRACE p = logic_expr RBRACE ENSURES LBRACE q = logic_expr RBRACE c = command END
-      { Ast.Triple.{p; u = UFunc (f, ps, c); q} }
+procedure:
+  | PROCEDURE f = VAR LPAREN ps = formal_params RPAREN EQ REQUIRES LBRACE p = logic_expr RBRACE ENSURES LBRACE q = logic_expr RBRACE c = command END
+      { Ast.Triple.{p; u = UProc (f, ps, c); q} }
 formal_params:
   | p = VAR COMMA ps = formal_params
       { p :: ps }
@@ -32,7 +32,7 @@ command:
   | v = VAR ASSGN e = expr
       { UEAssgn (v, e) }
   | v = VAR ASSGN f = VAR LPAREN ps = params RPAREN
-      { UFAssgn (v, f, ps) }
+      { UPAssgn (v, f, ps) }
   | c0 = command SEMICOLON c1 = command
       { USeq (c0, c1) }
   | IF e = expr THEN c0 = command ELSE c1 = command END
