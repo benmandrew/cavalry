@@ -18,7 +18,6 @@ type _ expr =
   | Plus : int expr * int expr -> int expr
   | Sub : int expr * int expr -> int expr
   | Mul : int expr * int expr -> int expr
-    (* | Div : int expr * int expr -> int expr *)
   | App : string * int expr list -> int expr
 [@@deriving sexp_of]
 
@@ -49,7 +48,6 @@ type ut_expr =
   | UPlus of ut_expr * ut_expr
   | USub of ut_expr * ut_expr
   | UMul of ut_expr * ut_expr
-  (* | UDiv of ut_expr * ut_expr *)
   | UFunc of string * string list * ut_expr
   | UApp of string * ut_expr list
 [@@deriving sexp_of, show]
@@ -62,7 +60,6 @@ let rec translate_int_expr = function
   | UPlus (a, b) -> Plus (translate_int_expr a, translate_int_expr b)
   | USub (a, b) -> Sub (translate_int_expr a, translate_int_expr b)
   | UMul (a, b) -> Mul (translate_int_expr a, translate_int_expr b)
-  (* | UDiv (a, b) -> Div (translate_int_expr a, translate_int_expr b) *)
   | UApp (f, ps) -> App (f, List.map ps ~f:translate_int_expr)
   | e -> raise (TypeError (show_ut_expr e))
 

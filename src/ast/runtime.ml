@@ -63,9 +63,6 @@ let rec exec_expr : type a. Runtime.t -> a expr -> a * Runtime.t =
   | Mul (a, b) ->
       let v1, v2, r' = binary_app r a b in
       (v1 * v2, r')
-  (* | Div (a, b) ->
-      let v1, v2, r' = binary_app r a b in
-      (v1 / v2, r') *)
   | Eq (a, b) ->
       let v1, v2, r' = binary_app r a b in
       (v1 = v2, r')

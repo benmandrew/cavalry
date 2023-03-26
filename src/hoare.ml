@@ -29,7 +29,6 @@ let rec expr_to_term : type a. Ast.Vars.t -> a expr -> T.term =
   | Plus (e, e') -> plus (f e) (f e')
   | Sub (e, e') -> sub (f e) (f e')
   | Mul (e, e') -> mul (f e) (f e')
-  (* | Div (e, e') -> div (f e) (f e') *)
   | App (_f, _ps) -> unit_term
 
 module FuncMap = Map.Make (String)

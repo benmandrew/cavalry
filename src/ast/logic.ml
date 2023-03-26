@@ -6,7 +6,7 @@ type arith_expr =
   | Var of string
   | Plus of arith_expr * arith_expr
   | Sub of arith_expr * arith_expr
-  | Mul of arith_expr * arith_expr (* | Div of arith_expr * arith_expr *)
+  | Mul of arith_expr * arith_expr
 [@@deriving sexp_of, show]
 
 type logic_expr =
@@ -35,7 +35,6 @@ let rec translate_arith_term vars e =
   | Plus (e0, e1) -> Arith.plus (f e0) (f e1)
   | Sub (e0, e1) -> Arith.sub (f e0) (f e1)
   | Mul (e0, e1) -> Arith.mul (f e0) (f e1)
-(* | Div (e0, e1) -> Arith.div (f e0) (f e1) *)
 
 let rec translate_term vars e =
   let f_t = translate_term vars in

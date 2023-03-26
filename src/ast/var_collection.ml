@@ -4,7 +4,7 @@ let collect_logic e =
   let open Logic in
   let collect_arith_expr = function
     | Var str -> StrSet.singleton str
-    | Int _ | Plus _ | Sub _ | Mul _ (* | Div _ *) -> StrSet.empty
+    | Int _ | Plus _ | Sub _ | Mul _ -> StrSet.empty
   in
   let rec collect_logic_expr = function
     | Bool _ -> StrSet.empty
@@ -32,7 +32,6 @@ let collect_program c =
     | Plus (e, e')
     | Sub (e, e')
     | Mul (e, e')
-    (* | Div (e, e') *)
     | Eq (e, e')
     | Neq (e, e')
     | Lt (e, e')

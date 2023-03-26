@@ -5,6 +5,7 @@
 %type <Ast.Triple.ut_t> func
 %type <Ast.Program.ut_expr> command
 %type <Ast.Program.ut_expr> expr
+%type <Ast.Program.ut_expr> func_app
 
 %%
 
@@ -45,16 +46,12 @@ expr:
       { UBool (b) }
   | v = VAR
       { UVar (v) }
-  | f = VAR LPAREN ps = params RPAREN
-      { UApp (f, ps) }
   | e0 = expr PLUS e1 = expr
       { UPlus (e0, e1) }
   | e0 = expr SUB e1 = expr
       { USub (e0, e1) }
   | e0 = expr MUL e1 = expr
       { UMul (e0, e1) }
-  // | e0 = expr DIV e1 = expr
-  //     { UDiv (e0, e1) }
   | e0 = expr EQ e1 = expr
       { UEq (e0, e1) }
   | e0 = expr NEQ e1 = expr
@@ -70,6 +67,9 @@ expr:
   | LPAREN e = expr RPAREN
       { ( e ) }
 ;
+func_app:
+  | f = VAR LPAREN ps = params RPAREN
+      { UApp (f, ps) }
 params:
   | p = expr COMMA ps = params
       { p :: ps }

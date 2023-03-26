@@ -39,8 +39,6 @@ arith_expr:
       { Sub (e0, e1) }
   | e0 = arith_expr MUL e1 = arith_expr
       { Mul (e0, e1) }
-  // | e0 = arith_expr DIV e1 = arith_expr
-  //     { Div (e0, e1) }
   | LPAREN e = arith_expr RPAREN
       { ( e ) }
 ;
