@@ -18,7 +18,7 @@ let rec equal_cmd : cmd -> cmd -> bool =
   match (e0, e1) with
   | IntExpr e0, IntExpr e1 -> equal_expr e0 e1
   | Seq (e0, e0'), Seq (e1, e1') -> equal_cmd e0 e1 && equal_cmd e0' e1'
-  | Assgn (s0, e0), Assgn (s1, e1) -> String.equal s0 s1 && equal_expr e0 e1
+  | EAssgn (s0, e0), EAssgn (s1, e1) -> String.equal s0 s1 && equal_expr e0 e1
   | If (e0, e0', e0''), If (e1, e1', e1'') ->
       equal_expr e0 e1 && equal_cmd e0' e1' && equal_cmd e0'' e1''
   | _, _ -> false
@@ -39,7 +39,7 @@ let test_ast_eq ~expected actual =
 let%test_unit "Ast.Program.type_expr" =
   let expected =
     Seq
-      ( Assgn ("x", Plus (Value (Int 1), Value (Int 2))),
+      ( EAssgn ("x", Plus (Value (Int 1), Value (Int 2))),
         If
           ( Eq (Value (Int 1), Value (Int 2)),
             IntExpr (Value (Int 5)),
@@ -56,7 +56,7 @@ let%test_unit "Ast.Program.type_expr" =
 let%test_unit "Ast.Runtime.exec - assgn" =
   let t =
     Seq
-      ( Assgn ("x", Plus (Value (Int 1), Value (Int 2))),
+      ( EAssgn ("x", Plus (Value (Int 1), Value (Int 2))),
         IntExpr (Mul (Value (VarInst "x"), Value (Int 5))) )
   in
   let result = exec [ t ] in
@@ -75,9 +75,9 @@ let%test_unit "Ast.Runtime.exec - if" =
 let%test_unit "Ast.Runtime.exec - var-var-assgn" =
   let t =
     Seq
-      ( Assgn ("x", Value (Int 1)),
+      ( EAssgn ("x", Value (Int 1)),
         Seq
-          ( Assgn ("y", Plus (Value (VarInst "x"), Value (Int 2))),
+          ( EAssgn ("y", Plus (Value (VarInst "x"), Value (Int 2))),
             IntExpr (Value (VarInst "y")) ) )
   in
   let result = exec [ t ] in
@@ -92,17 +92,17 @@ let%test_unit "Ast.Runtime.exec - while" =
   let dummy_invariant = Cavalry.Main.Ast.Logic.(Eq (Int 1, Int 2)) in
   let t =
     Seq
-      ( Assgn ("x", Value (Int 0)),
+      ( EAssgn ("x", Value (Int 0)),
         Seq
-          ( Assgn ("i", Value (Int 0)),
+          ( EAssgn ("i", Value (Int 0)),
             Seq
               ( While
                   ( dummy_invariant,
                     Lt (Value (VarInst "i"), Value (Int 10)),
                     Seq
-                      ( Assgn
+                      ( EAssgn
                           ("x", Plus (Value (VarInst "x"), Value (VarInst "i"))),
-                        Assgn ("i", Plus (Value (VarInst "i"), Value (Int 1)))
+                        EAssgn ("i", Plus (Value (VarInst "i"), Value (Int 1)))
                       ) ),
                 IntExpr (Value (VarInst "x")) ) ) )
   in

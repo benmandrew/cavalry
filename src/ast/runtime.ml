@@ -81,19 +81,6 @@ let rec exec_expr : type a. Runtime.t -> a expr -> a * Runtime.t =
   | Geq (a, b) ->
       let v1, v2, r' = binary_app r a b in
       (v1 >= v2, r')
-  | App (f, ps) -> (
-      let ps, r' =
-        List.fold_left
-          (fun (ps, r) p ->
-            let p', r' = exec_expr r p in
-            (p' :: ps, r'))
-          ([], r) ps
-      in
-      match Runtime.find_func r' f with
-      | Proc (_, fps, c) ->
-          let r_fun = List.fold_left2 Runtime.add_var r' fps ps in
-          exec_cmd r_fun c
-      | _ -> raise (Program.TypeError "Tried to apply a non-function"))
 
 and exec_cmd r c : int * Runtime.t =
   match c with
@@ -101,8 +88,26 @@ and exec_cmd r c : int * Runtime.t =
   | Seq (c, c') ->
       let _, r' = exec_cmd r c in
       exec_cmd r' c'
-  | Assgn (x, e) ->
+  | EAssgn (x, e) ->
       let v, r' = exec_expr r e in
+      let r'' = Runtime.add_var r' x v in
+      (v, r'')
+  | PAssgn (x, f, ps) -> 
+      let ps, r' =
+        List.fold_left
+          (fun (ps, r) p ->
+            let p', r' = exec_expr r p in
+            (p' :: ps, r'))
+          ([], r) ps
+      in
+      (* Ignore runtime returned by procedure *)
+      let v, _ =
+        match Runtime.find_func r' f with
+        | Proc (_, fps, c) ->
+            let r_fun = List.fold_left2 Runtime.add_var r' fps ps in
+            exec_cmd r_fun c
+        | _ -> raise (Program.TypeError "Tried to apply a non-function")
+      in
       let r'' = Runtime.add_var r' x v in
       (v, r'')
   | If (e, c, c') ->

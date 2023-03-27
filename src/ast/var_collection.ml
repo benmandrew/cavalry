@@ -39,15 +39,18 @@ let collect_program c =
     | Gt (e, e')
     | Geq (e, e') ->
         StrSet.union (collect_expr e) (collect_expr e')
-    | App (_f, ps) ->
-        List.fold_left
-          (fun s e -> collect_expr e |> StrSet.union s)
-          StrSet.empty ps
   in
   let rec collect_cmd = function
     | IntExpr e -> collect_expr e
     | Seq (c, c') -> StrSet.union (collect_cmd c) (collect_cmd c')
-    | Assgn (x, e) -> StrSet.union (StrSet.singleton x) (collect_expr e)
+    | EAssgn (x, e) -> StrSet.union (StrSet.singleton x) (collect_expr e)
+    | PAssgn (x, _f, ps) ->
+        let params =
+          List.fold_left
+            (fun s e -> collect_expr e |> StrSet.union s)
+            StrSet.empty ps
+        in
+        StrSet.union (StrSet.singleton x) params
     | If (b, e, e') ->
         StrSet.union (collect_expr b)
           (StrSet.union (collect_cmd e) (collect_cmd e'))

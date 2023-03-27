@@ -18,13 +18,13 @@ type _ expr =
   | Plus : int expr * int expr -> int expr
   | Sub : int expr * int expr -> int expr
   | Mul : int expr * int expr -> int expr
-  | App : string * int expr list -> int expr
 [@@deriving sexp_of]
 
 type cmd =
   | IntExpr of int expr
   | Seq of cmd * cmd
-  | Assgn of string * int expr
+  | EAssgn of string * int expr
+  | PAssgn of string * string * int expr list
   | If of bool expr * cmd * cmd
   | While of Logic.expr * bool expr * cmd
   | Print of int expr
@@ -81,8 +81,8 @@ and expr_to_cmd = function
 
 and translate_cmd = function
   | USeq (c, c') -> Seq (translate_cmd c, translate_cmd c')
-  | UEAssgn (s, e) -> Assgn (s, translate_int_expr e)
-  | UPAssgn (s, f, ps) -> Assgn (s, App (f, List.map ps ~f:translate_int_expr))
+  | UEAssgn (s, e) -> EAssgn (s, translate_int_expr e)
+  | UPAssgn (s, f, ps) -> PAssgn (s, f, List.map ps ~f:translate_int_expr)
   | UIf (e, c, c') ->
       If (translate_bool_expr e, translate_cmd c, translate_cmd c')
   | UWhile (inv, e, c) -> While (inv, translate_bool_expr e, translate_cmd c)

@@ -29,7 +29,6 @@ let rec expr_to_term : type a. Ast.Vars.t -> a expr -> T.term =
   | Plus (e, e') -> plus (f e) (f e')
   | Sub (e, e') -> sub (f e) (f e')
   | Mul (e, e') -> mul (f e) (f e')
-  | App (_f, _ps) -> unit_term
 
 module ProcMap = Map.Make (String)
 
@@ -40,20 +39,6 @@ let rec wlp_int_expr funcs vars e q =
   | Plus (a, b) | Sub (a, b) | Mul (a, b) ->
       let q' = wlp_int_expr funcs vars a q in
       wlp_int_expr funcs vars b q'
-  | App (f, vs) ->
-      (* ASSUMING f(x) = {p_f}c{q_f} HOLDS *)
-      (* wlp (v_1, wlp(v_2, ... wlp(v_n, p_f) ... )) /\ q_f -> q *)
-      let f_triple = ProcMap.find f funcs in
-      let p =
-        let p_f = Ast.(Logic.translate_term vars f_triple.Triple.p) in
-        let vs_rev = List.rev vs in
-        List.fold_left (fun t v -> wlp_int_expr funcs vars v t) p_f vs_rev
-      in
-      let q_f_impl_q =
-        let q_f = Ast.(Logic.translate_term vars f_triple.Triple.q) in
-        T.t_implies q_f q
-      in
-      T.t_and p q_f_impl_q
 
 (* and wlp_bool_expr funcs vars e q =
    match e with
@@ -68,7 +53,7 @@ and wlp_cmd funcs vars c q =
   | IntExpr e -> wlp_int_expr funcs vars e q
   | Print _ -> q
   | Seq (c, c') -> wlp_cmd c (wlp_cmd c' q)
-  | Assgn (x, e) ->
+  | EAssgn (x, e) ->
       (* forall y. y = e -> q[ x <- y ] *)
       let e_t = expr_to_term vars e in
       let x = Ast.Vars.find x vars in
@@ -76,6 +61,7 @@ and wlp_cmd funcs vars c q =
       let y_t = T.t_var y in
       let q_sub = T.t_subst_single x y_t q in
       T.(t_forall_close [ y ] [] (t_implies (t_equ y_t e_t) q_sub))
+  | PAssgn (_x, _f, _ps) -> q
   | If (b, c, c') ->
       (* ( b -> wlp(c, q) ) /\ ( ~b -> wlp(c', q) ) *)
       let t = expr_to_term vars b in

@@ -16,13 +16,13 @@ type _ expr =
   | Plus : int expr * int expr -> int expr
   | Sub : int expr * int expr -> int expr
   | Mul : int expr * int expr -> int expr
-  | App : string * int expr list -> int expr
 [@@deriving sexp_of]
 
 type cmd =
   | IntExpr of int expr
   | Seq of cmd * cmd
-  | Assgn of string * int expr
+  | EAssgn of string * int expr
+  | PAssgn of string * string * int expr list
   | If of bool expr * cmd * cmd
   | While of Logic.expr * bool expr * cmd
   | Print of int expr
