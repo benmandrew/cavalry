@@ -2,9 +2,9 @@ open Core
 open Why3
 
 let config =
-  Whyconf.init_config
-    (Some
-       "/Users/benmandrew/.opam/cavalry/share/why3/provers-detection-data.conf")
+  Whyconf.init_config None
+    (* (Some
+       "/Users/benmandrew/.opam/cavalry/share/why3/provers-detection-data.conf") *)
 
 let main = Whyconf.get_main config
 
@@ -35,7 +35,7 @@ let prove timeout base_task term =
     match timeout with
     | None -> Call_provers.empty_limit
     | Some limit_time ->
-        Call_provers.{ limit_time; limit_mem = -1; limit_steps = -1 }
+        { Call_provers.limit_time; limit_mem = -1; limit_steps = -1 }
   in
   let result =
     Driver.prove_task ~limit ~config:main ~command:alt_ergo.Whyconf.command
@@ -48,5 +48,5 @@ let prove timeout base_task term =
   | Timeout | OutOfMemory | StepLimitExceeded | HighFailure | Failure _ ->
       Failed result.pr_output
 
-let prove_implies timeout base_task vars t t' =
-  Term.t_forall_close vars [] (Term.t_implies t t') |> prove timeout base_task
+let prove timeout base_task vars t =
+  Term.t_forall_close vars [] t |> prove timeout base_task

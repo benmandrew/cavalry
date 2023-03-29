@@ -26,7 +26,6 @@ type cmd =
   | If of bool expr * cmd * cmd
   | While of Logic.expr * bool expr * cmd
   | Print of int expr
-  | Proc of string * string list * cmd
 [@@deriving sexp_of]
 
 (* Untyped AST to play nice with the Menhir parser generator *)
@@ -48,7 +47,6 @@ type ut_expr =
   | UPlus of ut_expr * ut_expr
   | USub of ut_expr * ut_expr
   | UMul of ut_expr * ut_expr
-  | UProc of string * string list * ut_expr
 [@@deriving sexp_of, show]
 
 exception TypeError of string

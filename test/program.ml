@@ -1,6 +1,7 @@
 open Core
-open Cavalry.Main.Ast.Program
-open Cavalry.Main.Ast.Runtime
+open Cavalry.Main
+open Ast.Program
+open Ast.Runtime
 
 let rec equal_expr : type a. a expr -> a expr -> bool =
  fun e0 e1 ->
@@ -26,11 +27,12 @@ let rec equal_cmd : cmd -> cmd -> bool =
 exception E of string * Sexp.t [@@deriving sexp]
 
 let format_exn_sexp ~expected actual =
-  Sexp.List
-    [
-      Sexp.List [ Sexp.Atom "Expected:"; sexp_of_cmd expected ];
-      Sexp.List [ Sexp.Atom "Actual:"; sexp_of_cmd actual ];
-    ]
+  Sexp.(
+    List
+      [
+        List [ Atom "Expected:"; sexp_of_cmd expected ];
+        List [ Atom "Actual:"; sexp_of_cmd actual ];
+      ])
 
 let test_ast_eq ~expected actual =
   if not (equal_cmd expected actual) then
@@ -54,43 +56,47 @@ let%test_unit "Ast.Program.type_expr" =
   test_ast_eq ~expected result
 
 let%test_unit "Ast.Runtime.exec - assgn" =
-  let t =
+  let c =
     Seq
       ( EAssgn ("x", Plus (Value (Int 1), Value (Int 2))),
         IntExpr (Mul (Value (VarInst "x"), Value (Int 5))) )
   in
-  let result = exec [ t ] in
+  let main = { f = ""; ps = []; c } in
+  let result = exec [ main ] in
   [%test_result: int] result ~expect:15
 
 let%test_unit "Ast.Runtime.exec - if" =
-  let t =
+  let c =
     If
       ( Eq (Value (Int 1), Value (Int 2)),
         IntExpr (Value (Int 5)),
         IntExpr (Value (Int 7)) )
   in
-  let result = exec [ t ] in
+  let main = { f = ""; ps = []; c } in
+  let result = exec [ main ] in
   [%test_result: int] result ~expect:7
 
 let%test_unit "Ast.Runtime.exec - var-var-assgn" =
-  let t =
+  let c =
     Seq
       ( EAssgn ("x", Value (Int 1)),
         Seq
           ( EAssgn ("y", Plus (Value (VarInst "x"), Value (Int 2))),
             IntExpr (Value (VarInst "y")) ) )
   in
-  let result = exec [ t ] in
+  let main = { f = ""; ps = []; c } in
+  let result = exec [ main ] in
   [%test_result: int] result ~expect:3
 
 let%test_unit "Ast.Runtime.exec - unbound" =
-  let t = IntExpr (Plus (Value (VarInst "x"), Value (Int 2))) in
-  let result = Exn.does_raise (fun () -> exec [ t ]) in
+  let c = IntExpr (Plus (Value (VarInst "x"), Value (Int 2))) in
+  let main = { f = ""; ps = []; c } in
+  let result = Exn.does_raise (fun () -> exec [ main ]) in
   [%test_result: bool] result ~expect:true
 
 let%test_unit "Ast.Runtime.exec - while" =
-  let dummy_invariant = Cavalry.Main.Ast.Logic.(Eq (Int 1, Int 2)) in
-  let t =
+  let dummy_invariant = Ast.Logic.(Eq (Int 1, Int 2)) in
+  let c =
     Seq
       ( EAssgn ("x", Value (Int 0)),
         Seq
@@ -106,18 +112,35 @@ let%test_unit "Ast.Runtime.exec - while" =
                       ) ),
                 IntExpr (Value (VarInst "x")) ) ) )
   in
-  let result = exec [ t ] in
+  let main = { f = ""; ps = []; c } in
+  let result = exec [ main ] in
   [%test_result: int] result ~expect:45
 
 let%test_unit "Ast.Runtime.exec - function" =
-  let ut =
-    [
-      UProc ("f", [ "x" ], UPlus (UVar "x", UInt 1));
-      USeq
-        ( UEAssgn ("x", UInt 2),
-          USeq (UPAssgn ("x", "f", [ UVar "x" ]), UVar "x") );
-    ]
+  let fn : Ast.Triple.ut_t =
+    {
+      f = "f";
+      ps = [ "x" ];
+      u = UPlus (UVar "x", UInt 1);
+      p = Ast.Logic.(Leq (Int 0, Int 0));
+      q = Ast.Logic.(Leq (Int 0, Int 0));
+    }
   in
-  let t = List.map ut ~f:translate_cmd in
-  let result = exec t in
+  let main : Ast.Triple.ut_t =
+    {
+      f = "";
+      ps = [];
+      u =
+        USeq
+          ( UEAssgn ("x", UInt 2),
+            USeq (UPAssgn ("x", "f", [ UVar "x" ]), UVar "x") );
+      p = Ast.Logic.(Leq (Int 0, Int 0));
+      q = Ast.Logic.(Leq (Int 0, Int 0));
+    }
+  in
+  let program =
+    List.map [ fn; main ] ~f:(fun ut ->
+        Ast.Triple.translate ut |> Ast.Runtime.to_proc_t)
+  in
+  let result = exec program in
   [%test_result: int] result ~expect:3

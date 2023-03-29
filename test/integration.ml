@@ -10,25 +10,26 @@ let%test_unit "Main.exec while" =
   [%test_result: int] result ~expect:45
 
 let%test_unit "Main.verify false" =
-  let ast = List.hd_exn @@ Main.get_ast "test_verify_false.cvl" in
-  let vars = Ast.Var_collection.collect ast in
-  let result = Main.verify ?timeout:(Some 5.) vars ast in
+  let program = Main.get_ast "test_verify_false.cvl" in
+  let result = Main.verify ?timeout:(Some 5.) program in
   [%test_result: Smt.Prover.result] result ~expect:Smt.Prover.Invalid
 
 let%test_unit "Main.verify true if" =
-  let ast = List.hd_exn @@ Main.get_ast "test_verify_true_if.cvl" in
-  let vars = Ast.Var_collection.collect ast in
-  let result = Main.verify ?timeout:(Some 5.) vars ast in
+  let program = Main.get_ast "test_verify_true_if.cvl" in
+  let result = Main.verify ?timeout:(Some 5.) program in
   [%test_result: Smt.Prover.result] result ~expect:Smt.Prover.Valid
 
 let%test_unit "Main.verify true while" =
-  let ast = List.hd_exn @@ Main.get_ast "test_verify_true_while.cvl" in
-  let vars = Ast.Var_collection.collect ast in
-  let result = Main.verify ?timeout:(Some 5.) vars ast in
+  let program = Main.get_ast "test_verify_true_while.cvl" in
+  let result = Main.verify ?timeout:(Some 5.) program in
   [%test_result: Smt.Prover.result] result ~expect:Smt.Prover.Valid
 
 let%test_unit "Main.verify true succ" =
-  let ast = List.hd_exn @@ Main.get_ast "test_verify_true_succ.cvl" in
-  let vars = Ast.Var_collection.collect ast in
-  let result = Main.verify ?timeout:(Some 5.) vars ast in
+  let program = Main.get_ast "test_verify_true_succ.cvl" in
+  let result = Main.verify ?timeout:(Some 5.) program in
+  [%test_result: Smt.Prover.result] result ~expect:Smt.Prover.Valid
+
+let%test_unit "Main.verify true succ procedure" =
+  let program = Main.get_ast "test_verify_true_succ_proc.cvl" in
+  let result = Main.verify ?timeout:(Some 5.) program in
   [%test_result: Smt.Prover.result] result ~expect:Smt.Prover.Valid

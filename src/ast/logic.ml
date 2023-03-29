@@ -52,9 +52,12 @@ let rec translate_term vars e =
   | Gt (e0, e1) -> Arith.gt (f_a e0) (f_a e1)
   | Geq (e0, e1) -> Arith.geq (f_a e0) (f_a e1)
 
-let print_expr p =
-  let formatter = Format.formatter_of_out_channel stdout in
-  Core.Sexp.pp_hum formatter (sexp_of_logic_expr p);
-  Format.pp_print_flush formatter ()
+let fmt = Format.formatter_of_out_channel stdout
 
-let print_term = Why3.Pretty.print_term (Format.formatter_of_out_channel stdout)
+let print_expr p =
+  Core.Sexp.pp_hum fmt (sexp_of_logic_expr p);
+  Format.pp_print_flush fmt ()
+
+let print_term t =
+  Why3.Pretty.print_term fmt t;
+  Format.pp_print_flush fmt ()

@@ -10,6 +10,8 @@ type t
 
 val empty : t
 val find : string -> t -> T.vsymbol
+val find_opt : string -> t -> T.vsymbol option
 val add : string -> T.vsymbol -> t -> t
 val bindings : t -> (string * T.vsymbol) list
 val create_fresh : string -> Why3.Term.vsymbol
+val filter_ghost_vars : t -> t

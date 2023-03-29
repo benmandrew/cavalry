@@ -17,8 +17,8 @@ top:
       { [ m ] }
 ;
 procedure:
-  | PROCEDURE f = VAR LPAREN ps = formal_params RPAREN EQ REQUIRES LBRACE p = logic_expr RBRACE ENSURES LBRACE q = logic_expr RBRACE c = command END
-      { Ast.Triple.{p; u = UProc (f, ps, c); q} }
+  | PROCEDURE f = VAR LPAREN ps = formal_params RPAREN EQ REQUIRES LBRACE p = logic_expr RBRACE ENSURES LBRACE q = logic_expr RBRACE u = command END
+      { {Ast.Triple.p; f; ps; u; q} }
 formal_params:
   | p = VAR COMMA ps = formal_params
       { p :: ps }
@@ -26,7 +26,7 @@ formal_params:
       { [ p ] }
 main:
   | LBRACE p = logic_expr RBRACE u = command LBRACE q = logic_expr RBRACE
-      { Ast.Triple.{p; u; q } }
+      { {Ast.Triple.p; f="main"; ps=[]; u; q } }
 ;
 command:
   | v = VAR ASSGN e = expr

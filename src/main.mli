@@ -1,5 +1,6 @@
 module Ast = Ast
+open Ast
 
-val get_ast : string -> Ast.Triple.t list
-val verify : ?timeout:float -> Ast.Vars.t -> Ast.Triple.t -> Smt.Prover.result
+val get_ast : string -> (Triple.t * Vars.t) list
+val verify : ?timeout:float -> (Triple.t * Vars.t) list -> Smt.Prover.result
 val exec : string -> int

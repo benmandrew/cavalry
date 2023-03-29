@@ -1,6 +1,10 @@
 (* open Core *)
 open Program
 
+type proc_t = { f : string; ps : string list; c : cmd }
+
+let to_proc_t { Triple.f; ps; c; _ } = { f; ps; c }
+
 module Runtime = struct
   module BoundVars = Map.Make (String)
   module BoundProcs = Set.Make (String)
@@ -9,32 +13,31 @@ module Runtime = struct
 
   type t = {
     vars : int BoundVars.t;
-    funcs : BoundProcs.t;
-    func_map : (string, cmd) Hashtbl.t;
+    procs : BoundProcs.t;
+    proc_map : (string, proc_t) Hashtbl.t;
   }
 
-  let add_var { vars; funcs; func_map } x v =
-    { vars = BoundVars.add x v vars; funcs; func_map }
+  let add_var ({ vars; _ } as t) x v = { t with vars = BoundVars.add x v vars }
 
   let find_var { vars; _ } x =
     match BoundVars.find_opt x vars with
     | None -> raise (UnboundError x)
     | Some v -> v
 
-  let add_func { vars; funcs; func_map } f c =
-    Hashtbl.add func_map f c;
-    { vars; funcs = BoundProcs.add f funcs; func_map }
+  let add_proc ({ procs; proc_map; _ } as t) ({ f; _ } as proc) =
+    Hashtbl.add proc_map f proc;
+    { t with procs = BoundProcs.add f procs }
 
-  let find_func { funcs; func_map; _ } f =
-    match BoundProcs.find_opt f funcs with
+  let find_proc { procs; proc_map; _ } f =
+    match BoundProcs.find_opt f procs with
     | None -> raise (UnboundError f)
-    | Some _ -> Hashtbl.find func_map f
+    | Some _ -> Hashtbl.find proc_map f
 
   let empty =
     {
       vars = BoundVars.empty;
-      funcs = BoundProcs.empty;
-      func_map = Hashtbl.create 32;
+      procs = BoundProcs.empty;
+      proc_map = Hashtbl.create 32;
     }
 end
 
@@ -84,7 +87,6 @@ let rec exec_expr : type a. Runtime.t -> a expr -> a * Runtime.t =
 
 and exec_cmd r c : int * Runtime.t =
   match c with
-  | Proc (f, _, _) as f' -> (0, Runtime.add_func r f f')
   | Seq (c, c') ->
       let _, r' = exec_cmd r c in
       exec_cmd r' c'
@@ -92,7 +94,7 @@ and exec_cmd r c : int * Runtime.t =
       let v, r' = exec_expr r e in
       let r'' = Runtime.add_var r' x v in
       (v, r'')
-  | PAssgn (x, f, ps) -> 
+  | PAssgn (x, f, ps) ->
       let ps, r' =
         List.fold_left
           (fun (ps, r) p ->
@@ -102,11 +104,10 @@ and exec_cmd r c : int * Runtime.t =
       in
       (* Ignore runtime returned by procedure *)
       let v, _ =
-        match Runtime.find_func r' f with
-        | Proc (_, fps, c) ->
+        match Runtime.find_proc r' f with
+        | { ps = fps; c; _ } ->
             let r_fun = List.fold_left2 Runtime.add_var r' fps ps in
             exec_cmd r_fun c
-        | _ -> raise (Program.TypeError "Tried to apply a non-function")
       in
       let r'' = Runtime.add_var r' x v in
       (v, r'')
@@ -124,12 +125,12 @@ and exec_cmd r c : int * Runtime.t =
       (0, r)
   | IntExpr v -> exec_expr r v
 
-let exec ast =
-  let main, functions =
+let exec (ast : proc_t list) =
+  let main, procs =
     let rev = List.rev ast in
     (List.hd rev, List.tl rev |> List.rev)
   in
   let r =
-    List.fold_left (fun r t -> snd @@ exec_cmd r t) Runtime.empty functions
+    List.fold_left (fun r proc -> Runtime.add_proc r proc) Runtime.empty procs
   in
-  fst @@ exec_cmd r main
+  match main with { c = entrypoint; _ } -> fst @@ exec_cmd r entrypoint
