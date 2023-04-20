@@ -30,9 +30,9 @@ main:
 ;
 command:
   | v = VAR ASSGN e = expr
-      { UEAssgn (v, e) }
-  | v = VAR ASSGN f = VAR LPAREN ps = params RPAREN
-      { UPAssgn (v, f, ps) }
+      { UAssgn (v, e) }
+  | f = VAR LPAREN ps = params RPAREN
+      { UProc (f, ps) }
   | c0 = command SEMICOLON c1 = command
       { USeq (c0, c1) }
   | IF e = expr THEN c0 = command ELSE c1 = command END

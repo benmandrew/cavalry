@@ -21,8 +21,9 @@ type _ expr =
 type cmd =
   | IntExpr of int expr
   | Seq of cmd * cmd
-  | EAssgn of string * int expr
-  | PAssgn of string * string * int expr list
+  | Assgn of string * int expr
+  | Let of string * int expr
+  | Proc of string * int expr list
   | If of bool expr * cmd * cmd
   | While of Logic.expr * bool expr * cmd
   | Print of int expr
@@ -34,8 +35,9 @@ type ut_expr =
   | UBool of bool
   | UVar of string
   | USeq of ut_expr * ut_expr
-  | UEAssgn of string * ut_expr
-  | UPAssgn of string * string * ut_expr list
+  | UAssgn of string * ut_expr
+  | ULet of string * ut_expr
+  | UProc of string * ut_expr list
   | UIf of ut_expr * ut_expr * ut_expr
   | UWhile of Logic.expr * ut_expr * ut_expr
   | UEq of ut_expr * ut_expr

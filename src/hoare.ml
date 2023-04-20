@@ -56,7 +56,7 @@ and wlp_cmd procs vars c q =
   | IntExpr e -> wlp_int_expr procs vars e q
   | Print _ -> q
   | Seq (c, c') -> wlp_cmd c (wlp_cmd c' q)
-  | EAssgn (x, e) ->
+  | Assgn (x, e) | Let (x, e) ->
       (* forall y. y = e -> q[ x <- y ] *)
       let e_t = expr_to_term vars e in
       let x = Vars.find x vars in
@@ -64,17 +64,13 @@ and wlp_cmd procs vars c q =
       let y_t = T.t_var y in
       let q_sub = T.t_subst_single x y_t q in
       T.(t_forall_close [ y ] [] (t_implies (t_equ y_t e_t) q_sub))
-  | PAssgn (x, f, ps) ->
+  | Proc (f, ps) ->
       (* p_f[x_i <- e_i] /\ forall y. (q_f[x_i <- e_i] -> q)[x <- y] *)
-      let x = Vars.find x vars in
       let { Triple.p = p_f; f = _f; ps = fps; c = _c; q = q_f }, p_vars =
         Proc_map.find f procs
       in
       let p_f = Logic.translate_term p_vars p_f in
       let q_f = Logic.translate_term p_vars q_f in
-      Printf.printf "q_f\n";
-      Logic.print_term q_f;
-      Printf.printf "\n";
       let substitute_params p =
         let params = List.map (expr_to_term vars) ps in
         let fn q fp p =
@@ -85,30 +81,17 @@ and wlp_cmd procs vars c q =
       in
       (* q_f[x_i <- e_i] *)
       let post = substitute_params q_f in
-      Printf.printf "q_f[x_i <- e_i]\n";
-      Logic.print_term post;
-      Printf.printf "\n\n";
       let y = Vars.create_fresh "y" in
-      let y_t = T.t_var y in
+      (* let y_t = T.t_var y in *)
       (* (q_f[x_i <- e_i] -> q)[x <- y] *)
-      let q_sub = T.(t_subst_single x y_t (t_implies post q)) in
-      Printf.printf "(q_f[x_i <- e_i] -> q)[x <- y]\n";
-      Logic.print_term q_sub;
-      Printf.printf "\n\n";
+      (* TODO: WRITTEN VARIABLES *)
+      let q_sub = T.t_implies post q in
+      (* let q_sub = T.(t_subst_single x y_t (t_implies post q)) in *)
       (* p_f[x_i <- e_i] /\ forall y. (q_f[x_i <- e_i] -> q)[x <- y] *)
       let pre = substitute_params p_f in
       let tm = T.(t_and pre (t_forall_close [ y ] [] q_sub)) in
-      Printf.printf
-        "p_f[x_i <- e_i] /\\ forall y. (q_f[x_i <- e_i] -> q)[x <- y]\n";
-      Logic.print_term tm;
-      Printf.printf "\n\n";
       let ghost_vars = Vars.filter_ghost_vars p_vars |> list_of_var_map in
-      let tm = T.t_forall_close ghost_vars [] tm in
-      Printf.printf "final\n";
-      Logic.print_term tm;
-      Printf.printf "\n\n";
-
-      tm
+      T.t_forall_close ghost_vars [] tm
   | If (b, c, c') ->
       (* ( b -> wlp(c, q) ) /\ ( ~b -> wlp(c', q) ) *)
       let t = expr_to_term vars b in
@@ -139,18 +122,18 @@ let verify_procedure ?timeout procs proc =
       let q = Logic.translate_term vars q in
       let p_gen = wlp_cmd procs vars c q in
       let vars = List.fold_left merge_in vars ps |> list_of_var_map in
-      Printf.printf "1\n";
-      Logic.print_term p;
-      Printf.printf "\n";
-      flush stdout;
-      Printf.printf "2\n";
-      Logic.print_term q;
-      Printf.printf "\n";
-      flush stdout;
-      Printf.printf "3\n";
-      Logic.print_term T.(t_forall_close vars [] (t_implies p p_gen));
-      Printf.printf "\n";
-      flush stdout;
+      (* Printf.printf "1\n";
+         Logic.print_term p;
+         Printf.printf "\n";
+         flush stdout;
+         Printf.printf "2\n";
+         Logic.print_term q;
+         Printf.printf "\n";
+         flush stdout;
+         Printf.printf "3\n";
+         Logic.print_term T.(t_forall_close vars [] (t_implies p p_gen));
+         Printf.printf "\n";
+         flush stdout; *)
       Smt.Prover.prove timeout Arith.base_task vars (T.t_implies p p_gen)
 
 exception Invalid_proc

@@ -23,8 +23,9 @@ type _ expr =
 type cmd =
   | IntExpr of int expr
   | Seq of cmd * cmd
-  | EAssgn of string * int expr
-  | PAssgn of string * string * int expr list
+  | Assgn of string * int expr
+  | Let of string * int expr
+  | Proc of string * int expr list
   | If of bool expr * cmd * cmd
   | While of Logic.expr * bool expr * cmd
   | Print of int expr
@@ -35,8 +36,9 @@ type ut_expr =
   | UBool of bool
   | UVar of string
   | USeq of ut_expr * ut_expr
-  | UEAssgn of string * ut_expr
-  | UPAssgn of string * string * ut_expr list
+  | UAssgn of string * ut_expr
+  | ULet of string * ut_expr
+  | UProc of string * ut_expr list
   | UIf of ut_expr * ut_expr * ut_expr
   | UWhile of Logic.expr * ut_expr * ut_expr
   | UEq of ut_expr * ut_expr
@@ -79,8 +81,9 @@ and expr_to_cmd = function
 
 and t_cmd = function
   | USeq (c, c') -> Seq (t_cmd c, t_cmd c')
-  | UEAssgn (s, e) -> EAssgn (s, t_int_expr e)
-  | UPAssgn (s, f, ps) -> PAssgn (s, f, List.map ps ~f:t_int_expr)
+  | UAssgn (s, e) -> Assgn (s, t_int_expr e)
+  | ULet (s, e) -> Let (s, t_int_expr e)
+  | UProc (f, ps) -> Proc (f, List.map ps ~f:t_int_expr)
   | UIf (e, c, c') -> If (t_bool_expr e, t_cmd c, t_cmd c')
   | UWhile (inv, e, c) -> While (inv, t_bool_expr e, t_cmd c)
   | v -> expr_to_cmd v

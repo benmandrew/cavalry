@@ -43,14 +43,12 @@ let collect_program c =
   let rec collect_cmd = function
     | IntExpr e -> collect_expr e
     | Seq (c, c') -> Str_set.union (collect_cmd c) (collect_cmd c')
-    | EAssgn (x, e) -> Str_set.union (Str_set.singleton x) (collect_expr e)
-    | PAssgn (x, _f, ps) ->
-        let params =
-          List.fold_left
-            (fun s e -> collect_expr e |> Str_set.union s)
-            Str_set.empty ps
-        in
-        Str_set.union (Str_set.singleton x) params
+    | Assgn (x, e) | Let (x, e) ->
+        Str_set.union (Str_set.singleton x) (collect_expr e)
+    | Proc (_f, ps) ->
+        List.fold_left
+          (fun s e -> collect_expr e |> Str_set.union s)
+          Str_set.empty ps
     | If (b, e, e') ->
         Str_set.union (collect_expr b)
           (Str_set.union (collect_cmd e) (collect_cmd e'))

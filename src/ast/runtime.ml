@@ -12,16 +12,24 @@ module Runtime = struct
   exception UnboundError of string
 
   type t = {
-    vars : int BoundVars.t;
+    global_vars : int BoundVars.t;
+    local_vars : int BoundVars.t;
     procs : BoundProcs.t;
     proc_map : (string, proc_t) Hashtbl.t;
   }
 
-  let add_var ({ vars; _ } as t) x v = { t with vars = BoundVars.add x v vars }
+  let add_global_var ({ global_vars; _ } as t) x v =
+    { t with global_vars = BoundVars.add x v global_vars }
 
-  let find_var { vars; _ } x =
-    match BoundVars.find_opt x vars with
-    | None -> raise (UnboundError x)
+  let add_local_var ({ local_vars; _ } as t) x v =
+    { t with local_vars = BoundVars.add x v local_vars }
+
+  let find_var { global_vars; local_vars; _ } x =
+    match BoundVars.find_opt x local_vars with
+    | None -> (
+        match BoundVars.find_opt x global_vars with
+        | None -> raise (UnboundError x)
+        | Some v -> v)
     | Some v -> v
 
   let add_proc ({ procs; proc_map; _ } as t) ({ f; _ } as proc) =
@@ -35,7 +43,8 @@ module Runtime = struct
 
   let empty =
     {
-      vars = BoundVars.empty;
+      global_vars = BoundVars.empty;
+      local_vars = BoundVars.empty;
       procs = BoundProcs.empty;
       proc_map = Hashtbl.create 32;
     }
@@ -48,82 +57,75 @@ let exec_value r (type a) (v : a value) : a =
   | Bool b -> b
   | VarInst x -> Runtime.find_var r x
 
-let rec exec_expr : type a. Runtime.t -> a expr -> a * Runtime.t =
+let rec exec_expr : type a. Runtime.t -> a expr -> a =
  fun r v ->
-  let binary_app r a b =
-    let v1, r' = exec_expr r a in
-    let v2, r'' = exec_expr r' b in
-    (v1, v2, r'')
-  in
+  let binary_app r a b = (exec_expr r a, exec_expr r b) in
   match v with
-  | Value v -> (exec_value r v, r)
+  | Value v -> exec_value r v
   | Plus (a, b) ->
-      let v1, v2, r' = binary_app r a b in
-      (v1 + v2, r')
+      let v1, v2 = binary_app r a b in
+      v1 + v2
   | Sub (a, b) ->
-      let v1, v2, r' = binary_app r a b in
-      (v1 - v2, r')
+      let v1, v2 = binary_app r a b in
+      v1 - v2
   | Mul (a, b) ->
-      let v1, v2, r' = binary_app r a b in
-      (v1 * v2, r')
+      let v1, v2 = binary_app r a b in
+      v1 * v2
   | Eq (a, b) ->
-      let v1, v2, r' = binary_app r a b in
-      (v1 = v2, r')
+      let v1, v2 = binary_app r a b in
+      v1 = v2
   | Neq (a, b) ->
-      let v1, v2, r' = binary_app r a b in
-      (v1 != v2, r')
+      let v1, v2 = binary_app r a b in
+      v1 != v2
   | Lt (a, b) ->
-      let v1, v2, r' = binary_app r a b in
-      (v1 < v2, r')
+      let v1, v2 = binary_app r a b in
+      v1 < v2
   | Leq (a, b) ->
-      let v1, v2, r' = binary_app r a b in
-      (v1 <= v2, r')
+      let v1, v2 = binary_app r a b in
+      v1 <= v2
   | Gt (a, b) ->
-      let v1, v2, r' = binary_app r a b in
-      (v1 > v2, r')
+      let v1, v2 = binary_app r a b in
+      v1 > v2
   | Geq (a, b) ->
-      let v1, v2, r' = binary_app r a b in
-      (v1 >= v2, r')
+      let v1, v2 = binary_app r a b in
+      v1 >= v2
 
 and exec_cmd r c : int * Runtime.t =
   match c with
   | Seq (c, c') ->
       let _, r' = exec_cmd r c in
       exec_cmd r' c'
-  | EAssgn (x, e) ->
-      let v, r' = exec_expr r e in
-      let r'' = Runtime.add_var r' x v in
-      (v, r'')
-  | PAssgn (x, f, ps) ->
-      let ps, r' =
-        List.fold_left
-          (fun (ps, r) p ->
-            let p', r' = exec_expr r p in
-            (p' :: ps, r'))
-          ([], r) ps
-      in
-      (* Ignore runtime returned by procedure *)
-      let v, _ =
-        match Runtime.find_proc r' f with
+  | Assgn (x, e) ->
+      let v = exec_expr r e in
+      let r' = Runtime.add_global_var r x v in
+      (v, r')
+  | Let (x, e) ->
+      let v = exec_expr r e in
+      let r' = Runtime.add_local_var r x v in
+      (v, r')
+  | Proc (f, ps) ->
+      let ps = List.map (exec_expr r) ps in
+      let v, r_proc =
+        match Runtime.find_proc r f with
         | { ps = fps; c; _ } ->
-            let r_fun = List.fold_left2 Runtime.add_var r' fps ps in
+            let r_fun = List.fold_left2 Runtime.add_local_var r fps ps in
             exec_cmd r_fun c
       in
-      let r'' = Runtime.add_var r' x v in
-      (v, r'')
+      (* Ignore changes to procedure-local context *)
+      (v, { r with global_vars = r_proc.global_vars })
   | If (e, c, c') ->
-      let b, r' = exec_expr r e in
-      if b then exec_cmd r' c else exec_cmd r' c'
+      let b = exec_expr r e in
+      if b then exec_cmd r c else exec_cmd r c'
   | While (_, e, c) as loop ->
-      let b, r' = exec_expr r e in
+      let b = exec_expr r e in
       if b then
-        let _, r'' = exec_cmd r' c in
-        exec_cmd r'' loop
-      else (0, r')
+        let _, r' = exec_cmd r c in
+        exec_cmd r' loop
+      else (0, r)
   | Print e ->
-      Printf.printf "%d\n" (fst @@ exec_expr r e);
+      Printf.printf "%d\n" (exec_expr r e);
       (0, r)
-  | IntExpr v -> exec_expr r v
+  | IntExpr v -> (exec_expr r v, r)
 
 let exec (ast : proc_t list) =
   let main, procs =

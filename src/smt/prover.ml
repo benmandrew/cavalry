@@ -2,9 +2,9 @@ open Core
 open Why3
 
 let config =
-  Whyconf.init_config None
-    (* (Some
-       "/Users/benmandrew/.opam/cavalry/share/why3/provers-detection-data.conf") *)
+  Whyconf.init_config (* None *)
+    (Some
+       "/Users/benmandrew/.opam/cavalry/share/why3/provers-detection-data.conf")
 
 let main = Whyconf.get_main config
 

@@ -1,11 +1,11 @@
-procedure f (x) =
-  requires { x = _x }
-  ensures { x = _x + 1 }
-  x + 1
+procedure f (y) =
+  requires { y = _y }
+  ensures { y = _y + 1 }
+  y <- y + 1;
+  y
 end
 
 { x = 2 }
 x <- 2;
-x <- f(x);
-x
+x <- f(x)
 { x = 3 }

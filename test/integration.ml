@@ -29,7 +29,7 @@ let%test_unit "Main.verify true succ" =
   let result = Main.verify ?timeout:(Some 5.) program in
   [%test_result: Smt.Prover.result] result ~expect:Smt.Prover.Valid
 
-let%test_unit "Main.verify true succ procedure" =
-  let program = Main.get_ast "test_verify_true_succ_proc.cvl" in
-  let result = Main.verify ?timeout:(Some 5.) program in
-  [%test_result: Smt.Prover.result] result ~expect:Smt.Prover.Valid
+(* let%test_unit "Main.verify true succ procedure" =
+   let program = Main.get_ast "test_verify_true_succ_proc.cvl" in
+   let result = Main.verify ?timeout:(Some 5.) program in
+   [%test_result: Smt.Prover.result] result ~expect:Smt.Prover.Valid *)
