@@ -37,11 +37,15 @@ module Proc_map = Map.Make (String)
 (* https://en.wikipedia.org/wiki/Predicate_transformer_semantics *)
 (* This does nothing as expressions are pure, but keep around anyway *)
 let rec wlp_int_expr procs vars e q =
-  match e with
-  | Value (Int _ | VarInst _) -> q
-  | Plus (a, b) | Sub (a, b) | Mul (a, b) ->
-      let q' = wlp_int_expr procs vars a q in
-      wlp_int_expr procs vars b q'
+  ignore procs;
+  ignore vars;
+  ignore e;
+  q
+(* match e with
+   | Value (Int _ | VarInst _) -> q
+   | Plus (a, b) | Sub (a, b) | Mul (a, b) ->
+       let q' = wlp_int_expr procs vars a q in
+       wlp_int_expr procs vars b q' *)
 
 (* and wlp_bool_expr procs vars e q =
    match e with
@@ -65,12 +69,14 @@ and wlp_cmd procs vars c q =
       let q_sub = T.t_subst_single x y_t q in
       T.(t_forall_close [ y ] [] (t_implies (t_equ y_t e_t) q_sub))
   | Proc (f, ps) ->
-      (* p_f[x_i <- e_i] /\ forall y. (q_f[x_i <- e_i] -> q)[x <- y] *)
-      let { Triple.p = p_f; f = _f; ps = fps; c = _c; q = q_f }, p_vars =
+      (* p_f[x_i <- e_i] /\ forall y. (q_f[x_i <- e_i][w_i <- y_i]['_w'_i <- w_i] -> q[w_i <- y_i]) *)
+      let { Triple.p = p_f; q = q_f; ws; f = _f; ps = fps; c = _c }, p_vars =
         Proc_map.find f procs
       in
-      let p_f = Logic.translate_term p_vars p_f in
-      let q_f = Logic.translate_term p_vars q_f in
+      ignore ws;
+      let all_vars = Vars.union p_vars vars in
+      let p_f = Logic.translate_term all_vars p_f in
+      let q_f = Logic.translate_term all_vars q_f in
       let substitute_params p =
         let params = List.map (expr_to_term vars) ps in
         let fn q fp p =
@@ -117,7 +123,8 @@ let merge_in vm x =
 
 let verify_procedure ?timeout procs proc =
   match proc with
-  | { Triple.p; f = _f; ps; c; q }, vars ->
+  | { Triple.p; q; ws; f = _f; ps; c }, vars ->
+      ignore ws;
       let p = Logic.translate_term vars p in
       let q = Logic.translate_term vars q in
       let p_gen = wlp_cmd procs vars c q in

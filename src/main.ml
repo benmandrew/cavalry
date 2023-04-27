@@ -9,8 +9,8 @@ let get_ast path =
   let lexbuf = Lexing.from_channel file in
   let ut_ast = Parser.top Lexer.main lexbuf in
   In_channel.close file;
-  let f { Triple.p; f; ps; u; q } =
-    let proc = { Triple.p; f; ps; c = Program.translate_cmd u; q } in
+  let f { Triple.p; q; ws; f; ps; u } =
+    let proc = { Triple.p; q; ws; f; ps; c = Program.translate_cmd u } in
     (proc, Var_collection.collect proc)
   in
   List.map f ut_ast

@@ -1,12 +1,11 @@
-
 %start top
 %type <Ast.Triple.ut_t list> top
 %type <Ast.Triple.ut_t> main
 %type <Ast.Triple.ut_t> procedure
-%type <string list> formal_params
+%type <string list> variable_list
 %type <Ast.Program.ut_expr> command
 %type <Ast.Program.ut_expr> expr
-%type <Ast.Program.ut_expr list> params
+%type <Ast.Program.ut_expr list> expression_list
 
 %%
 
@@ -17,21 +16,25 @@ top:
       { [ m ] }
 ;
 procedure:
-  | PROCEDURE f = VAR LPAREN ps = formal_params RPAREN EQ REQUIRES LBRACE p = logic_expr RBRACE ENSURES LBRACE q = logic_expr RBRACE u = command END
-      { {Ast.Triple.p; f; ps; u; q} }
-formal_params:
-  | p = VAR COMMA ps = formal_params
+  | PROCEDURE f = VAR LPAREN ps = variable_list RPAREN EQ REQUIRES LBRACE p = logic_expr RBRACE ENSURES LBRACE q = logic_expr RBRACE WRITES LBRACE ws = variable_list RBRACE u = command END
+      { { Ast.Triple.p; q; ws; f; ps; u } }
+;
+variable_list:
+  | p = VAR COMMA ps = variable_list
       { p :: ps }
   | p = VAR
       { [ p ] }
+  |
+      { [] }
+;
 main:
   | LBRACE p = logic_expr RBRACE u = command LBRACE q = logic_expr RBRACE
-      { {Ast.Triple.p; f="main"; ps=[]; u; q } }
+      { { Ast.Triple.p; q; ws = []; f="main"; ps=[]; u } }
 ;
 command:
   | v = VAR ASSGN e = expr
       { UAssgn (v, e) }
-  | f = VAR LPAREN ps = params RPAREN
+  | f = VAR LPAREN ps = expression_list RPAREN
       { UProc (f, ps) }
   | c0 = command SEMICOLON c1 = command
       { USeq (c0, c1) }
@@ -70,9 +73,11 @@ expr:
   | LPAREN e = expr RPAREN
       { ( e ) }
 ;
-params:
-  | p = expr COMMA ps = params
+expression_list:
+  | p = expr COMMA ps = expression_list
       { p :: ps }
   | p = expr
       { [ p ] }
+  |
+      { [] }
 ;

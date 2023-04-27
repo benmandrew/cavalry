@@ -1,9 +1,13 @@
 module Str_set = Set.Make (String)
 
+(* let parse_var s =
+   let open Astring.String in
+   if is_prefix ~affix:"_" s then with_range ~first:1 s else s *)
+
 let collect_logic e =
   let open Logic in
   let collect_arith_expr = function
-    | Var str -> Str_set.singleton str
+    | Var s -> Str_set.singleton s
     | Int _ | Plus _ | Sub _ | Mul _ -> Str_set.empty
   in
   let rec collect_logic_expr = function

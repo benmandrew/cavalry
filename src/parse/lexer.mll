@@ -71,6 +71,8 @@ rule main = parse
       { REQUIRES }
   | "ensures"
       { ENSURES }
+  | "writes"
+      { WRITES }
   | (['a'-'z']|['A'-'Z']|'_')+
       { VAR (Lexing.lexeme lexbuf) }
   | eof

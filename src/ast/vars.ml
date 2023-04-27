@@ -8,6 +8,7 @@ let find s (m : t) = M.find s m
 let find_opt s (m : t) = M.find_opt s m
 let add s x (m : t) = M.add s x m
 let bindings (m : t) = M.bindings m
+let union (a : t) (b : t) = M.union (fun _ v _ -> Some v) a b
 let create_fresh x = Why3.(Term.create_vsymbol (Ident.id_fresh x) Ty.ty_int)
 
 let filter_ghost_vars (m : t) =

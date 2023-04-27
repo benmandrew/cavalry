@@ -135,6 +135,7 @@ let%test_unit "Ast.Runtime.exec - function" =
             UAssgn ("x", UPlus (UVar "x", UVar "y")) );
       p = Logic.(Leq (Int 0, Int 0));
       q = Logic.(Leq (Int 0, Int 0));
+      ws = [];
     }
   in
   (* x := 2; y := 3; f(5); [ret] *)
@@ -149,6 +150,7 @@ let%test_unit "Ast.Runtime.exec - function" =
           );
       p = Logic.(Leq (Int 0, Int 0));
       q = Logic.(Leq (Int 0, Int 0));
+      ws = [];
     }
   in
   let program ret =
