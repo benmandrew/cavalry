@@ -18,4 +18,3 @@ val union : t -> t -> t
 (** In [union a b], if there are conflicts between keys we prefer the values from [a] *)
 
 val create_fresh : string -> Why3.Term.vsymbol
-val filter_ghost_vars : t -> t

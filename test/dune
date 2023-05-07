@@ -8,6 +8,7 @@
    test_verify_false.cvl
    test_verify_true_if.cvl
    test_verify_true_succ.cvl
+   test_verify_true_proc_empty.cvl
    test_verify_true_succ_proc.cvl
    test_verify_true_while.cvl))
  (preprocess

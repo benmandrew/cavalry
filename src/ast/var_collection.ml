@@ -1,14 +1,12 @@
 module Str_set = Set.Make (String)
 
-(* let parse_var s =
-   let open Astring.String in
-   if is_prefix ~affix:"_" s then with_range ~first:1 s else s *)
-
 let collect_logic e =
   let open Logic in
-  let collect_arith_expr = function
+  let rec collect_arith_expr = function
     | Var s -> Str_set.singleton s
-    | Int _ | Plus _ | Sub _ | Mul _ -> Str_set.empty
+    | Int _ -> Str_set.empty
+    | Plus (e, e') | Sub (e, e') | Mul (e, e') ->
+        Str_set.union (collect_arith_expr e) (collect_arith_expr e')
   in
   let rec collect_logic_expr = function
     | Bool _ -> Str_set.empty
@@ -48,7 +46,7 @@ let collect_program c =
     | IntExpr e -> collect_expr e
     | Seq (c, c') -> Str_set.union (collect_cmd c) (collect_cmd c')
     | Assgn (x, e) | Let (x, e) ->
-        Str_set.union (Str_set.singleton x) (collect_expr e)
+        Str_set.(union (singleton x) (collect_expr e))
     | Proc (_f, ps) ->
         List.fold_left
           (fun s e -> collect_expr e |> Str_set.union s)
@@ -61,13 +59,13 @@ let collect_program c =
   in
   collect_cmd c
 
-let collect { Triple.p; c; q; _ } =
-  let p_vars = collect_logic p in
-  let q_vars = collect_logic q in
-  let c_vars = collect_program c in
-  let vars = Str_set.union p_vars (Str_set.union q_vars c_vars) in
-  let f vs x =
+let collect (t : Triple.t) =
+  let p_vars = collect_logic t.p in
+  let q_vars = collect_logic t.q in
+  let c_vars = collect_program t.c in
+  let vars = Str_set.(union p_vars (union q_vars c_vars)) in
+  let f x vs =
     let symbol = Vars.create_fresh x in
     Vars.add x symbol vs
   in
-  List.fold_left f Vars.empty (Str_set.elements vars)
+  Str_set.fold f vars Vars.empty

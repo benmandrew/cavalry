@@ -1,11 +1,11 @@
 procedure f () =
   requires { true }
-  ensures { x = _x + 1 }
-  writes { x }
-  x <- x + 1
+  ensures { true }
+  writes {  }
+  y <- y + 1
 end
 
 { x = 2 }
 x <- 2;
-f()
+x <- x + 1
 { x = 3 }
