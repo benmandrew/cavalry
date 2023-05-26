@@ -1,5 +1,14 @@
 module Str_set = Set.Make (String)
 
+(* Split a list [l @ \[m\]] into the tuple [(l, m)] *)
+let split_last l =
+  let rec aux acc = function
+    | [] -> failwith "Can't take the last element of an empty list"
+    | [ x ] -> (List.rev acc, x)
+    | x :: l -> aux (x :: acc) l
+  in
+  aux [] l
+
 let collect_logic e =
   let open Logic in
   let rec collect_arith_expr = function
@@ -59,13 +68,29 @@ let collect_program c =
   in
   collect_cmd c
 
-let collect (t : Triple.t) =
+let collect_procedure globals (t : Triple.t) =
   let p_vars = collect_logic t.p in
   let q_vars = collect_logic t.q in
   let c_vars = collect_program t.c in
   let vars = Str_set.(union p_vars (union q_vars c_vars)) in
+  (* If global variables occur in the procedure, don't add them as local variables *)
+  Str_set.fold (fun global vars -> Str_set.remove global vars) globals vars
+
+let str_set_to_vars vars =
   let f x vs =
     let symbol = Vars.create_fresh x in
     Vars.add x symbol vs
   in
   Str_set.fold f vars Vars.empty
+
+let collect (program : Triple.t list) =
+  let procedures, main = split_last program in
+  let globals = collect_procedure Str_set.empty main in
+  let procedures =
+    List.map
+      (fun proc ->
+        let vars = str_set_to_vars (collect_procedure globals proc) in
+        (proc, vars))
+      procedures
+  in
+  procedures @ [ (main, str_set_to_vars globals) ]

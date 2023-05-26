@@ -1,1 +1,1 @@
-val collect : Triple.t -> Vars.t
+val collect : Triple.t list -> (Triple.t * Vars.t) list
