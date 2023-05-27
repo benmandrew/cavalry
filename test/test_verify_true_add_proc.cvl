@@ -1,0 +1,12 @@
+procedure f (a) =
+  requires { true }
+  ensures { x = _x + a }
+  writes { x }
+  x <- x + a
+end
+
+{ x = 2 }
+x <- 2;
+y <- 5;
+f(y)
+{ x = 7 }

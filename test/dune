@@ -10,7 +10,7 @@
    test_verify_true_fib_proc.cvl
    test_verify_true_succ.cvl
    test_verify_true_proc_empty.cvl
-   test_verify_true_succ_proc.cvl
+   test_verify_true_add_proc.cvl
    test_verify_true_while.cvl))
  (preprocess
   (pps ppx_jane ppx_inline_test ppx_assert)))
