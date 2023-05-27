@@ -1,0 +1,23 @@
+procedure fib_iteration () =
+  requires { a >= 0 && b >= 0 }
+  ensures { a = _a + _b && b = _a }
+  writes { a, b }
+  c <- a;
+  a <- a + b;
+  b <- c
+end
+
+{ a = 0 && b = 1 }
+a <- 1;
+b <- 0;
+fib_iteration();
+fib_iteration();
+fib_iteration();
+fib_iteration();
+fib_iteration();
+fib_iteration();
+fib_iteration();
+fib_iteration();
+fib_iteration();
+b
+{ b = 34 }

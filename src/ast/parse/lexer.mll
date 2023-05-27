@@ -53,6 +53,8 @@ rule main = parse
       { LBRACE }
   | '}'
       { RBRACE }
+  | ','
+      { COMMA }
   | "if"
       { IF }
   | "then"

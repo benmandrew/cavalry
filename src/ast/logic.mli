@@ -25,6 +25,6 @@ type logic_expr =
 
 type expr = logic_expr [@@deriving sexp_of, show]
 
-val translate_term : Vars.t -> expr -> T.term
+val translate_term : g_vars:Vars.t -> ?l_vars:Vars.t -> expr -> T.term
 val print_expr : expr -> unit
 val print_term : T.term -> unit

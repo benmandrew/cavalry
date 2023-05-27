@@ -25,20 +25,24 @@ type logic_expr =
 
 type expr = logic_expr [@@deriving sexp_of, show]
 
-let rec translate_arith_term vars e =
-  let f = translate_arith_term vars in
+let rec translate_arith_term ~g_vars ?l_vars e =
+  let f = translate_arith_term ~g_vars ?l_vars in
   e |> function
   | Int v -> T.t_nat_const v
-  | Var x ->
-      let symbol = Vars.find x vars in
-      T.t_var symbol
+  | Var x -> (
+      match l_vars with
+      | Some l_vars -> (
+          match Vars.find_opt x g_vars with
+          | Some symbol -> T.t_var symbol
+          | None -> T.t_var @@ Vars.find x l_vars)
+      | None -> T.t_var @@ Vars.find x g_vars)
   | Plus (e0, e1) -> Arith.plus (f e0) (f e1)
   | Sub (e0, e1) -> Arith.sub (f e0) (f e1)
   | Mul (e0, e1) -> Arith.mul (f e0) (f e1)
 
-let rec translate_term vars e =
-  let f_t = translate_term vars in
-  let f_a = translate_arith_term vars in
+let rec translate_term ~g_vars ?l_vars e =
+  let f_t = translate_term ~g_vars ?l_vars in
+  let f_a = translate_arith_term ~g_vars ?l_vars in
   e |> function
   | Bool b -> if b then T.t_true else T.t_false
   | Not e -> T.t_not (f_t e)
