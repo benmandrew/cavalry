@@ -35,20 +35,29 @@ x
 { x = 45 }
 ```
 
-Addition procedure
+Euclidean division procedure
 ```
-procedure f (a) =
-  requires { true }
-  ensures { x = _x + a }
-  writes { x }
-  x <- x + a
+procedure euclidean_div () =
+  requires { x >= 0 }
+  ensures { x = q * y + r && 0 <= r && r < y }
+  writes { q, r }
+  q <- 0;
+  r <- x;
+  while r >= y do
+    { x = q * y + r && 0 <= r }
+    r <- r - y;
+    q <- q + 1
+  end
 end
 
-{ x = 2 }
-x <- 2;
-y <- 5;
-f(y)
-{ x = 7 }
+{ true }
+x <- 42;
+y <- 17;
+q <- 0;
+r <- 0;
+euclidean_div()
+{ q = 2 && r = 8 }
+
 ```
 
 ## Limitations
@@ -60,10 +69,9 @@ f(y)
 - Along similar lines, the prover itself is not verified and so claims of (in)correctness of a given program may not be trustworthy.
 
 ## Sources
-- The Hoare Logic and Model Checking course at the University of Cambridge (https://www.cl.cam.ac.uk/teaching/2223/HLog+ModC/). This is based on John C. Reynolds
+- The Hoare Logic and Model Checking course at the University of Cambridge (https://www.cl.cam.ac.uk/teaching/2223/HLog+ModC/).
 
-- Chapter 3 of 
-
+- For verification of procedures, chapter 3 of the Proof of Program course at MPRI (https://www.lri.fr/~marche/MPRI-2-36-1/2012/). An updated version of the course is also linked (https://marche.gitlabpages.inria.fr/lecture-deductive-verif/).
 
 [1]: https://en.wikipedia.org/wiki/Hoare_logic
 [2]: https://en.wikipedia.org/wiki/Predicate_transformer_semantics
