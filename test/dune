@@ -3,14 +3,15 @@
  (libraries cavalry)
  (inline_tests
   (deps
-   test_exec_if.cvl
-   test_exec_while.cvl
-   test_verify_false.cvl
-   test_verify_true_if.cvl
-   test_verify_true_fib_proc.cvl
-   test_verify_true_succ.cvl
-   test_verify_true_proc_empty.cvl
-   test_verify_true_add_proc.cvl
-   test_verify_true_while.cvl))
+   exec_if.cvl
+   exec_while.cvl
+   verify_false.cvl
+   verify_true_if.cvl
+   verify_true_euclid.cvl
+   verify_true_fib_proc.cvl
+   verify_true_succ.cvl
+   verify_true_proc_empty.cvl
+   verify_true_add_proc.cvl
+   verify_true_while.cvl))
  (preprocess
   (pps ppx_jane ppx_inline_test ppx_assert)))
