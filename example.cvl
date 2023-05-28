@@ -16,5 +16,7 @@ x <- 42;
 y <- 17;
 q <- 0;
 r <- 0;
-euclidean_div()
+euclidean_div();
+print(q);
+print(r)
 { q = 2 && r = 8 }

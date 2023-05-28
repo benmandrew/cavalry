@@ -42,6 +42,8 @@ command:
       { UIf (e, c0, c1) }
   | WHILE e = expr DO LBRACE inv = logic_expr RBRACE c = command END
       { UWhile (inv, e, c) }
+  | PRINT e = expr
+      { UPrint e }
   | e = expr
       { e }
 ;

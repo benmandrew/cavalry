@@ -40,6 +40,7 @@ type ut_expr =
   | UProc of string * ut_expr list
   | UIf of ut_expr * ut_expr * ut_expr
   | UWhile of Logic.expr * ut_expr * ut_expr
+  | UPrint of ut_expr
   | UEq of ut_expr * ut_expr
   | UNeq of ut_expr * ut_expr
   | ULt of ut_expr * ut_expr

@@ -55,6 +55,8 @@ rule main = parse
       { RBRACE }
   | ','
       { COMMA }
+  | "print"
+      { PRINT }
   | "if"
       { IF }
   | "then"

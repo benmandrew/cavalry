@@ -41,6 +41,7 @@ type ut_expr =
   | UProc of string * ut_expr list
   | UIf of ut_expr * ut_expr * ut_expr
   | UWhile of Logic.expr * ut_expr * ut_expr
+  | UPrint of ut_expr
   | UEq of ut_expr * ut_expr
   | UNeq of ut_expr * ut_expr
   | ULt of ut_expr * ut_expr
@@ -86,6 +87,7 @@ and t_cmd = function
   | UProc (f, ps) -> Proc (f, List.map ps ~f:t_int_expr)
   | UIf (e, c, c') -> If (t_bool_expr e, t_cmd c, t_cmd c')
   | UWhile (inv, e, c) -> While (inv, t_bool_expr e, t_cmd c)
+  | UPrint e -> Print (t_int_expr e)
   | v -> expr_to_cmd v
 
 let translate_cmd = t_cmd
