@@ -12,11 +12,11 @@ let split_last l =
   in
   aux [] l
 
-let debug = false
+let debug = ref false
 
 let debug_print f vars p q p_gen =
   let open Printf in
-  if debug then (
+  if !debug then (
     printf "===== Procedure '%s'\n" f;
     printf "===== p           =====\n";
     Logic.print_term p;
@@ -166,7 +166,8 @@ let verify_procedure ?timeout ~is_main g_vars procs ((t : Triple.t), l_vars) =
 
 exception Proc_invalid of string
 
-let verify ?timeout program =
+let verify ?debug:d ?timeout program =
+  debug := Option.value ~default:false d;
   let procs, (main, globals) = split_last program in
   let f ~is_main procs proc =
     let (t : Triple.t) = fst proc in
@@ -183,5 +184,5 @@ let verify ?timeout program =
     in
     Smt.Prover.Valid
   with Proc_invalid s ->
-    if debug then Printf.printf "Procedure '%s' cannot be verified\n" s;
+    if !debug then Printf.printf "Procedure '%s' cannot be verified\n" s;
     Smt.Prover.Invalid
