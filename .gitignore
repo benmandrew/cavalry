@@ -33,7 +33,4 @@ _opam/
 # direnv cache
 .direnv/
 
-# nix flake shellHook one-time bootstrap marker
-.opam-bootstrap-done
-
 .vscode
