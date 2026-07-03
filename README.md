@@ -1,6 +1,6 @@
 # Cavalry
 
-![](https://benmandrew.s3.eu-west-2.amazonaws.com/headers/cavalry-banner.png)
+![](docs/cavalry-banner.png)
 
 Cavalry is a mini programming language of my own design where written programs can be "verified", i.e.  the implementation of the program can be rigorously checked against its logical specification for correctness, without ever running the code!
 
