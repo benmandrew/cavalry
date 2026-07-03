@@ -10,13 +10,13 @@ license: "MIT"
 homepage: "https://github.com/benmandrew/cavalry"
 bug-reports: "https://github.com/benmandrew/cavalry/issues"
 depends: [
-  "ocaml" { >= "4.08"}
+  "ocaml" {>= "4.08"}
   "dune" {>= "2.9"}
   "core"
   "astring"
-  "menhir"
+  "menhir" {>= "20180523"}
   "why3"
-  "alt-ergo" { = "2.4.3"}
+  "alt-ergo" {= "2.4.3"}
   "ppx_deriving"
   "odoc" {with-doc}
 ]

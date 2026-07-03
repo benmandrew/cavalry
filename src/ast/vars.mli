@@ -16,7 +16,8 @@ val add : string -> T.vsymbol -> t -> t
 val bindings : t -> (string * T.vsymbol) list
 
 val union : t -> t -> t
-(** In [union a b], if there are conflicts between keys we prefer the values from [a] *)
+(** In [union a b], if there are conflicts between keys we prefer the values
+    from [a] *)
 
 val fold : (string -> T.vsymbol -> 'a -> 'a) -> t -> 'a -> 'a
 val create_fresh : string -> Why3.Term.vsymbol

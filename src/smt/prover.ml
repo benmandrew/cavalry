@@ -35,19 +35,19 @@ let prove timeout base_task term =
   let task = Task.add_prop_decl base_task Decl.Pgoal goal_id term in
   let limit =
     match timeout with
-    | None -> Call_provers.empty_limit
+    | None -> Call_provers.empty_limits
     | Some limit_time ->
         { Call_provers.limit_time; limit_mem = -1; limit_steps = -1 }
   in
   let result =
-    Driver.prove_task ~limit ~config:main ~command:alt_ergo.Whyconf.command
-      alt_ergo_driver task
+    Driver.prove_task ~limits:limit ~config:main
+      ~command:alt_ergo.Whyconf.command alt_ergo_driver task
     |> Call_provers.wait_on_call
   in
   match (result.pr_answer : Call_provers.prover_answer) with
   | Valid -> Valid
   | Invalid | Unknown _ -> Invalid
-  | Timeout | OutOfMemory | StepLimitExceeded | HighFailure | Failure _ ->
+  | Timeout | OutOfMemory | StepLimitExceeded | HighFailure _ | Failure _ ->
       Failed result.pr_output
 
 let prove timeout base_task vars t =

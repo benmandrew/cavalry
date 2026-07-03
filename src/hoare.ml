@@ -41,8 +41,8 @@ let val_to_term : type a. g_vars:Vars.t -> ?l_vars:Vars.t -> a value -> T.term =
       | Some l_vars -> T.t_var @@ Vars.find_fallback x l_vars g_vars
       | None -> T.t_var @@ Vars.find x g_vars)
 
-let rec expr_to_term :
-    type a. g_vars:Vars.t -> ?l_vars:Vars.t -> a expr -> T.term =
+let rec expr_to_term : type a.
+    g_vars:Vars.t -> ?l_vars:Vars.t -> a expr -> T.term =
  fun ~g_vars ?l_vars e ->
   let f = expr_to_term ~g_vars ?l_vars in
   let open Arith in
