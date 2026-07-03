@@ -18,7 +18,7 @@
  (synopsis "Toy language for program verification experiments using Hoare logic")
  (description "Toy language for program verification experiments using Hoare logic")
  (depends
-  (ocaml (>= "4.08"))
+  (ocaml (>= "4.14"))
   dune
   core
   astring

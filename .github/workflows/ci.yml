@@ -13,6 +13,7 @@ jobs:
       matrix:
         ocaml-compiler:
           - "5.5.0"
+          - "4.14.4" # lowest OCaml version supported, per cavalry.opam
 
     steps:
       - name: Checkout

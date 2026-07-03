@@ -10,7 +10,7 @@ license: "MIT"
 homepage: "https://github.com/benmandrew/cavalry"
 bug-reports: "https://github.com/benmandrew/cavalry/issues"
 depends: [
-  "ocaml" {>= "4.08"}
+  "ocaml" {>= "4.14"}
   "dune" {>= "2.9"}
   "core"
   "astring"
