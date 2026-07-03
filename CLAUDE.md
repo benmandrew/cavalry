@@ -7,7 +7,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 Cavalry is a toy imperative programming language (OCaml) with Hoare-logic
 verification: programs carry pre/postcondition annotations and loop
 invariants, and can be proven correct via SMT (Alt-Ergo, through Why3)
-without executing them. See `example.cvl` for the surface syntax and the
+without executing them. See `example.cav` for the surface syntax and the
 article linked from `README.md` for the theory.
 
 ## Commands
@@ -21,13 +21,13 @@ dune build @fmt                          # check formatting (ocamlformat)
 dune build @fmt --auto-promote           # apply formatting fixes
 dune runtest                             # run the inline-test suite (test/)
 
-dune exec -- cavalry run <file.cvl>            # interpret a program
-dune exec -- cavalry verify <file.cvl>         # verify pre/post conditions
-dune exec -- cavalry verify -d <file.cvl>      # verify with debug output (prints WLP terms)
+dune exec -- cav run <file.cav>            # interpret a program
+dune exec -- cav verify <file.cav>         # verify pre/post conditions
+dune exec -- cav verify -d <file.cav>      # verify with debug output (prints WLP terms)
 ```
 
 There's no per-test filter wired up; `dune runtest` runs the whole
-`test/integration.ml` + `test/program.ml` suite together against the `.cvl`
+`test/integration.ml` + `test/program.ml` suite together against the `.cav`
 fixtures in `test/`. CI (`.github/workflows/`) runs `why3 config detect`,
 `dune build @fmt`, `dune build`, and `dune build @runtest` on ocaml 5.5.0.
 
@@ -52,7 +52,7 @@ through `src/main.ml` (`get_ast`, `verify`, `exec`):
    their `writes { ... }` clause.
 4. Two consumers of the same typed AST:
    - **`Ast.Runtime.exec`**: a plain tree-walking interpreter over
-     `Program.cmd`/`proc_t`, used by `cavalry run`.
+     `Program.cmd`/`proc_t`, used by `cav run`.
    - **`Hoare.verify`** (`src/hoare.ml`): computes the *weakest liberal
      precondition* (WLP, Dijkstra predicate transformer semantics) of each
      procedure body bottom-up (procedures must verify before anything that

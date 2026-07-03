@@ -13,10 +13,10 @@ git clone git@github.com:benmandrew/cavalry.git
 cd cavalry
 opam install --deps-only .
 dune build
-# Verify [example.cvl]
-dune exec -- cavalry verify example.cvl
-# Run [example.cvl]
-dune exec -- cavalry run example.cvl
+# Verify [example.cav]
+dune exec -- cav verify example.cav
+# Run [example.cav]
+dune exec -- cav run example.cav
 ```
 
 ## Example programs

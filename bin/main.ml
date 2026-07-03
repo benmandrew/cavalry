@@ -39,5 +39,5 @@ let verify_cmd =
 let () =
   let open Cmd in
   let doc = "Run and verify Cavalry programs" in
-  let info = info "cavalry" ~doc in
+  let info = info "cav" ~doc in
   exit @@ eval @@ group info [ verify_cmd; run_cmd ]

@@ -1,4 +1,4 @@
 (executable
- (public_name cavalry)
+ (public_name cav)
  (name main)
  (libraries cavalry why3 cmdliner))
