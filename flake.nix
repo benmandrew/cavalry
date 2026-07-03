@@ -28,7 +28,19 @@
           ];
 
           shellHook = ''
-            echo "cavalry dev shell: run 'opam install --deps-only --with-test .' then 'why3 config detect' if you haven't yet."
+            # One-time bootstrap: create the local opam switch if needed, install
+            # project deps, and let why3 detect the (opam-built) Alt-Ergo prover.
+            # Guarded by a stamp file so it only runs once per clone, not on
+            # every shell entry.
+            STAMP=.opam-bootstrap-done
+            if [ ! -f "$STAMP" ]; then
+              echo "cavalry dev shell: bootstrapping opam switch (one-time)..."
+              ( [ -d _opam ] || opam switch create . 5.5.0 -y ) \
+                && opam install --deps-only --with-test -y . \
+                && why3 config detect \
+                && touch "$STAMP"
+            fi
+            eval "$(opam env --switch=. --set-switch 2>/dev/null)"
           '';
         };
       }
