@@ -27,6 +27,9 @@ jobs:
       - name: Install dependencies
         run: opam install . --deps-only --with-test
 
+      - name: Detect why3 provers
+        run: opam exec -- why3 config detect
+
       - name: Install ocamlformat
         run: opam install "ocamlformat.$(sed -n 's/^version *= *//p' .ocamlformat)"
 
