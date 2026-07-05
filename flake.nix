@@ -24,6 +24,7 @@
             m4
             pkg-config
             gmp
+            zlib
             perl
           ];
 
