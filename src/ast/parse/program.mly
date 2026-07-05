@@ -40,7 +40,7 @@ command:
       { USeq (c0, c1) }
   | IF e = expr THEN c0 = command ELSE c1 = command END
       { UIf (e, c0, c1) }
-  | WHILE e = expr DO LBRACE inv = logic_expr RBRACE c = command END
+  | WHILE e = expr DO INVARIANT LBRACE inv = logic_expr RBRACE c = command END
       { UWhile (inv, e, c) }
   | PRINT e = expr
       { UPrint e }

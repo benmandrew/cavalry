@@ -75,6 +75,8 @@ rule main = parse
       { REQUIRES }
   | "ensures"
       { ENSURES }
+  | "invariant"
+      { INVARIANT }
   | "writes"
       { WRITES }
   | (['a'-'z']|['A'-'Z']|'_')+
