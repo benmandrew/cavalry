@@ -123,6 +123,60 @@ let%test_unit "Ast.Runtime.exec - while" =
   let result = exec [ main ] in
   [%test_result: int] result ~expect:45
 
+let dummy_invariant = Logic.(Eq (Int 1, Int 2))
+
+(* Fuel-bounded exec exposes the final environment, not just the return value.
+   x := 0; i := 0; while i < 3 do x := x + i; i := i + 1 end
+   terminates at x = 0+1+2 = 3, i = 3. *)
+let%test_unit "Ast.Runtime.exec_env - terminating loop returns final env" =
+  let c =
+    Seq
+      ( Assgn ("x", Value (Int 0)),
+        Seq
+          ( Assgn ("i", Value (Int 0)),
+            While
+              ( dummy_invariant,
+                Lt (Value (VarInst "i"), Value (Int 3)),
+                Seq
+                  ( Assgn ("x", Plus (Value (VarInst "x"), Value (VarInst "i"))),
+                    Assgn ("i", Plus (Value (VarInst "i"), Value (Int 1))) ) )
+          ) )
+  in
+  match exec_env ~fuel:100 [ { f = ""; ps = []; c } ] with
+  | Terminated env ->
+      [%test_result: int option] (Env.find_opt "x" env) ~expect:(Some 3);
+      [%test_result: int option] (Env.find_opt "i" env) ~expect:(Some 3)
+  | OutOfFuel | Raised -> assert false
+
+(* A loop whose guard never falsifies is discarded (OutOfFuel), not run
+   forever -- partial correctness means non-termination is not a witness. *)
+let%test_unit "Ast.Runtime.exec_env - non-terminating loop runs out of fuel" =
+  let c =
+    Seq
+      ( Assgn ("i", Value (Int 0)),
+        While
+          ( dummy_invariant,
+            Lt (Value (Int 0), Value (Int 1)),
+            Assgn ("i", Plus (Value (VarInst "i"), Value (Int 1))) ) )
+  in
+  let out_of_fuel =
+    match exec_env ~fuel:50 [ { f = ""; ps = []; c } ] with
+    | OutOfFuel -> true
+    | Terminated _ | Raised -> false
+  in
+  [%test_result: bool] out_of_fuel ~expect:true
+
+(* Reading an unbound variable is reported as [Raised], not an escaping
+   exception. *)
+let%test_unit "Ast.Runtime.exec_env - unbound read is Raised" =
+  let c = IntExpr (Plus (Value (VarInst "x"), Value (Int 2))) in
+  let raised =
+    match exec_env [ { f = ""; ps = []; c } ] with
+    | Raised -> true
+    | Terminated _ | OutOfFuel -> false
+  in
+  [%test_result: bool] raised ~expect:true
+
 let%test_unit "Ast.Runtime.exec - function" =
   (* f(z) = let y = z + 1; x := x + y *)
   let fn : Triple.ut_t =
