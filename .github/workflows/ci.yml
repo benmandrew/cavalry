@@ -42,3 +42,15 @@ jobs:
 
       - name: Run tests
         run: opam exec -- dune build @runtest
+
+      # zanuda is a typedtree-based linter tightly coupled to the OCaml
+      # compiler; its releases don't support 5.5.0, so this runs only on the
+      # 4.14 leg. It reports via OCaml alerts and doesn't fail on findings, so
+      # continue-on-error keeps it advisory rather than a blocking gate.
+      - name: Lint (zanuda)
+        if: matrix.ocaml-compiler == '4.14.4'
+        continue-on-error: true
+        run: |
+          opam install zanuda -y
+          opam exec -- dune build @check
+          opam exec -- zanuda -dir . -del-prefix "$(pwd)"
