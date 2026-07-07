@@ -1,0 +1,11 @@
+procedure f () =
+  requires { true }
+  ensures { x = _x + 1 }
+  writes { x }
+  x <- x + 2
+end
+
+{ x = 0 }
+x <- 0;
+f()
+{ true }

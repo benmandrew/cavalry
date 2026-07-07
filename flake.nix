@@ -29,6 +29,15 @@
           ];
 
           shellHook = ''
+            # opam builds native objects with the system toolchain, which
+            # targets the host macOS version, but nix's devShell otherwise pins
+            # MACOSX_DEPLOYMENT_TARGET to an older SDK. The mismatch makes the
+            # linker warn on every object file; align the target with the host
+            # so the two agree.
+            if [ "$(uname)" = "Darwin" ]; then
+              export MACOSX_DEPLOYMENT_TARGET="$(sw_vers -productVersion | cut -d. -f1).0"
+            fi
+
             # One-time bootstrap: create the local opam switch if needed, install
             # project deps, and let why3 detect the (opam-built) Alt-Ergo prover.
             # Guarded by a stamp file so it only runs once per clone, not on

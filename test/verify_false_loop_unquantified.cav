@@ -1,0 +1,8 @@
+{ true }
+x <- 0;
+while x < 10 do
+  invariant { true }
+  x <- x + 1
+end;
+x
+{ x = 999 }
