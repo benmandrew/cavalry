@@ -1,17 +1,38 @@
 (library
  (name tests)
- (libraries cavalry)
+ (libraries cavalry why3)
  (inline_tests
   (deps
    exec_if.cav
    exec_while.cav
+   exec_proc.cav
+   exec_nested_while.cav
+   exec_negative.cav
+   exec_unbound.cav
    verify_false.cav
+   verify_false_inv_entry.cav
+   verify_false_proc_ensures.cav
+   verify_false_proc_requires.cav
+   verify_false_nonlinear.cav
    verify_true_if.cav
    verify_true_euclid.cav
    verify_true_fib_proc.cav
    verify_true_succ.cav
    verify_true_proc_empty.cav
    verify_true_add_proc.cav
-   verify_true_while.cav))
+   verify_true_variable.cav
+   verify_true_while.cav
+   verify_true_frame.cav
+   verify_true_read_global.cav
+   verify_true_disjunction.cav
+   verify_true_implication.cav
+   verify_true_neq.cav
+   verify_true_negative.cav
+   verify_true_bigmul.cav
+   verify_true_nested_while.cav
+   type_error_if_guard.cav
+   type_error_assign_bool.cav
+   unsound_writes.cav
+   unsound_loop.cav))
  (preprocess
   (pps ppx_jane ppx_inline_test ppx_assert)))

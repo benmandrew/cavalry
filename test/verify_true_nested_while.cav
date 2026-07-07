@@ -1,0 +1,13 @@
+{ i = 0 && s = 0 }
+while i < 3 do
+  invariant { s >= 0 }
+  j <- 0;
+  while j < 3 do
+    invariant { s >= 0 }
+    s <- s + 1;
+    j <- j + 1
+  end;
+  i <- i + 1
+end;
+s
+{ s >= 0 }

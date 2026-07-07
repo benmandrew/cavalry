@@ -1,0 +1,7 @@
+{ true }
+if x + 1 then
+  x <- 1
+else
+  x <- 2
+end
+{ true }

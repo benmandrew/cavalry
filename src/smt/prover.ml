@@ -30,6 +30,16 @@ let alt_ergo_driver =
 
 type result = Valid | Invalid | Failed of string [@@deriving sexp_of, ord]
 
+(* Maps a prover's raw answer onto our tri-state result. Factored out of
+   [prove] so the [Failed] branch can be tested with a stubbed answer rather
+   than by provoking a real (slow, flaky) timeout. *)
+let result_of_answer ~output (answer : Call_provers.prover_answer) : result =
+  match answer with
+  | Valid -> Valid
+  | Invalid | Unknown _ -> Invalid
+  | Timeout | OutOfMemory | StepLimitExceeded | HighFailure _ | Failure _ ->
+      Failed output
+
 let prove timeout base_task term =
   let goal_id = Decl.create_prsymbol (Ident.id_fresh "goal") in
   let task = Task.add_prop_decl base_task Decl.Pgoal goal_id term in
@@ -44,11 +54,7 @@ let prove timeout base_task term =
       ~command:alt_ergo.Whyconf.command alt_ergo_driver task
     |> Call_provers.wait_on_call
   in
-  match (result.pr_answer : Call_provers.prover_answer) with
-  | Valid -> Valid
-  | Invalid | Unknown _ -> Invalid
-  | Timeout | OutOfMemory | StepLimitExceeded | HighFailure _ | Failure _ ->
-      Failed result.pr_output
+  result_of_answer ~output:result.pr_output result.pr_answer
 
 let prove timeout base_task vars t =
   Term.t_forall_close vars [] t |> prove timeout base_task
