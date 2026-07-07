@@ -50,6 +50,34 @@ module Runtime = struct
     }
 end
 
+exception Out_of_fuel
+exception Overflow
+
+(* Overflow-checked native arithmetic, enabled only on the fuel-bounded path
+   ([exec_env]) used by the fuzzer. Cavalry integers are Why3's *unbounded*
+   [int]; the interpreter uses native 63-bit ints, so a concrete run that
+   overflows would silently diverge from the symbolic semantics and manufacture
+   spurious counterexamples. When [check_overflow] is set we detect the
+   divergence and abort the run (treated as a discard) instead. [cav run]
+   leaves the flag unset and keeps plain wrapping arithmetic. *)
+let check_overflow = ref false
+
+let add_ovf a b =
+  let s = a + b in
+  if !check_overflow && a lxor b >= 0 && a lxor s < 0 then raise Overflow;
+  s
+
+let sub_ovf a b =
+  let s = a - b in
+  if !check_overflow && a lxor b < 0 && a lxor s < 0 then raise Overflow;
+  s
+
+let mul_ovf a b =
+  let p = a * b in
+  if !check_overflow && a <> 0 && (p / a <> b || (a = -1 && b = min_int)) then
+    raise Overflow;
+  p
+
 let exec_value r (type a) (v : a value) : a =
   match v with
   | Unit () -> ()
@@ -64,13 +92,13 @@ let rec exec_expr : type a. Runtime.t -> a expr -> a =
   | Value v -> exec_value r v
   | Plus (a, b) ->
       let v1, v2 = binary_app r a b in
-      v1 + v2
+      add_ovf v1 v2
   | Sub (a, b) ->
       let v1, v2 = binary_app r a b in
-      v1 - v2
+      sub_ovf v1 v2
   | Mul (a, b) ->
       let v1, v2 = binary_app r a b in
-      v1 * v2
+      mul_ovf v1 v2
   | Eq (a, b) ->
       let v1, v2 = binary_app r a b in
       v1 = v2
@@ -90,7 +118,8 @@ let rec exec_expr : type a. Runtime.t -> a expr -> a =
       let v1, v2 = binary_app r a b in
       v1 >= v2
 
-and exec_cmd r c : int * Runtime.t =
+and exec_cmd ?(fuel = ref max_int) r c : int * Runtime.t =
+  let exec_cmd r c = exec_cmd ~fuel r c in
   match c with
   | Seq (c, c') ->
       let _, r' = exec_cmd r c in
@@ -118,9 +147,11 @@ and exec_cmd r c : int * Runtime.t =
       if b then exec_cmd r c else exec_cmd r c'
   | While (_, e, c) as loop ->
       let b = exec_expr r e in
-      if b then
+      if b then (
+        if !fuel <= 0 then raise Out_of_fuel;
+        decr fuel;
         let _, r' = exec_cmd r c in
-        exec_cmd r' loop
+        exec_cmd r' loop)
       else (0, r)
   | Print e ->
       Printf.printf "%d\n" (exec_expr r e);
@@ -136,3 +167,41 @@ let exec (ast : proc_t list) =
     List.fold_left (fun r proc -> Runtime.add_proc r proc) Runtime.empty procs
   in
   match main with { c = entrypoint; _ } -> fst @@ exec_cmd r entrypoint
+
+(* Outcome of a fuel-bounded run. [Terminated] exposes the whole final global
+   environment (not just the return value) so a differential harness can read
+   every variable to build a postcondition. [OutOfFuel] covers both the fuel
+   cap and detected overflow -- both mean "this run is not a usable witness",
+   so callers discard it. [Raised] is any other runtime failure, e.g. reading
+   an unbound variable. *)
+(* The environment a run ends in, keyed by variable name. Alias of the
+   interpreter's internal variable map, surfaced at the top level so callers
+   need not spell out the (confusingly self-named) nested [Runtime] module. *)
+module Env = Runtime.BoundVars
+
+type exec_result = Terminated of int Env.t | OutOfFuel | Raised
+
+(* Like [exec], but bounds loop iterations by [fuel] and returns the final
+   environment rather than the entrypoint's value. Used by the soundness
+   fuzzer, where non-termination must be discarded (WLP is only a *liberal*
+   precondition) rather than treated as a counterexample. *)
+let exec_env ?(fuel = 10000) (ast : proc_t list) : exec_result =
+  let main, procs =
+    let rev = List.rev ast in
+    (List.hd rev, List.tl rev |> List.rev)
+  in
+  let r =
+    List.fold_left (fun r proc -> Runtime.add_proc r proc) Runtime.empty procs
+  in
+  let fuel = ref fuel in
+  let entrypoint = main.c in
+  check_overflow := true;
+  Fun.protect
+    ~finally:(fun () -> check_overflow := false)
+    (fun () ->
+      try
+        let _, r' = exec_cmd ~fuel r entrypoint in
+        Terminated r'.global_vars
+      with
+      | Out_of_fuel | Overflow -> OutOfFuel
+      | Runtime.UnboundError _ -> Raised)
