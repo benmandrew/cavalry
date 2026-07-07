@@ -18,6 +18,7 @@ depends: [
   "why3"
   "alt-ergo" {= "2.4.3"}
   "ppx_deriving"
+  "qcheck-core" {with-test}
   "odoc" {with-doc}
 ]
 build: [

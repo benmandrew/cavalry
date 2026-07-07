@@ -1,0 +1,8 @@
+; QuickCheck-based soundness harness: differential test between the symbolic
+; verifier (Hoare.verify) and the concrete interpreter (Runtime.exec_env).
+; Runs a small number of iterations under `dune runtest`; crank it up with the
+; CAVALRY_FUZZ_COUNT environment variable for longer local/nightly sessions.
+
+(test
+ (name fuzz)
+ (libraries cavalry ast smt why3 core qcheck-core qcheck-core.runner))

@@ -25,6 +25,7 @@
   menhir
   why3
   (alt-ergo (= "2.4.3"))
-  ppx_deriving))
+  ppx_deriving
+  (qcheck-core :with-test)))
 
 (using menhir 2.1)
