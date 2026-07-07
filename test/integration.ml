@@ -91,6 +91,11 @@ let%test_unit "Main.verify true bigmul" =
 let%test_unit "Main.verify true nested while" =
   check_verify "verify_true_nested_while.cav" Valid
 
+(* An `if` guard inside a procedure may reference a procedure-local (here the
+   parameter `a`); the guard must resolve through l_vars, not globals only. *)
+let%test_unit "Main.verify true if local guard" =
+  check_verify "verify_true_if_local_guard.cav" Valid
+
 (* ===== verify: expected Invalid ===== *)
 
 let%test_unit "Main.verify false" = check_verify "verify_false.cav" Invalid
@@ -143,29 +148,27 @@ let%test_unit "Prover.result_of_answer mapping" =
     (f Why3.Call_provers.OutOfMemory)
     ~expect:(Failed "boom")
 
-(* ===== KNOWN UNSOUNDNESS (regression markers) =====
-   These fixtures verify as Valid but are semantically wrong. They pin the
-   current (buggy) behavior; when the underlying bug is fixed, the expectation
-   should flip to Invalid. *)
+(* ===== Soundness regressions (previously unsound, now fixed) ===== *)
 
-(* BUG 1 (framing): `writes { }` is not checked against the variables a
-   procedure actually assigns. `f` mutates the global `y` without declaring
-   it, so the caller's WLP never havocs y and "proves" y = 1, yet the
-   interpreter yields 99. See Wlp.proc / sub_written_vars in src/hoare.ml. *)
-let%test_unit "KNOWN UNSOUND: writes clause not enforced (verify)" =
-  check_verify "unsound_writes.cav" Valid
+(* Framing: a procedure that assigns the global `y` without listing it in
+   `writes { }` must be rejected -- otherwise a caller's WLP would not havoc y
+   and could "prove" y = 1 while the interpreter yields 99 (see below). *)
+let%test_unit "Main.verify false undeclared write" =
+  check_verify "verify_false_writes_undeclared.cav" Invalid
 
-let%test_unit "KNOWN UNSOUND: writes clause not enforced (run diverges)" =
-  [%test_result: int] (Main.exec "unsound_writes.cav") ~expect:99
+let%test_unit "Main.exec undeclared write mutates global" =
+  [%test_result: int]
+    (Main.exec "verify_false_writes_undeclared.cav")
+    ~expect:99
 
-(* BUG 2 (loop rule): the While case in src/hoare.ml never universally
-   quantifies the loop-modified variables (the promised `forall y_i. (..)[x_i
-   <- y_i]` is missing), so invariant preservation and the `!guard` exit are
-   only checked at the loop's *entry* state. Any postcondition "verifies" as
-   long as the guard is initially true; here x = 999 passes though x ends at
-   10. *)
-let%test_unit "KNOWN UNSOUND: loop rule not quantified (verify)" =
-  check_verify "unsound_loop.cav" Valid
+(* Loop rule: with the invariant `true` the loop cannot establish x = 999, so
+   verification must fail. Before the loop-modified variables were havoc'd,
+   the obligations were only checked at the entry state and this "verified"
+   despite the loop ending at x = 10. *)
+let%test_unit "Main.verify false loop cannot prove postcondition" =
+  check_verify "verify_false_loop_unquantified.cav" Invalid
 
-let%test_unit "KNOWN UNSOUND: loop rule not quantified (run diverges)" =
-  [%test_result: int] (Main.exec "unsound_loop.cav") ~expect:10
+let%test_unit "Main.exec loop reaches its natural bound" =
+  [%test_result: int]
+    (Main.exec "verify_false_loop_unquantified.cav")
+    ~expect:10

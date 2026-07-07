@@ -60,6 +60,20 @@ let rec expr_to_term : type a.
 
 module Proc_map = Map.Make (String)
 
+(* Variables a command may assign: assignment targets plus the [writes] of any
+   procedure it calls. Used both to havoc the variables a loop modifies and to
+   check that a procedure's declared [writes] covers what it actually mutates. *)
+let rec assigned_vars procs c =
+  match c with
+  | Assgn (x, _) | Let (x, _) -> [ x ]
+  | Seq (a, b) | If (_, a, b) -> assigned_vars procs a @ assigned_vars procs b
+  | While (_, _, body) -> assigned_vars procs body
+  | Proc (f, _) -> (
+      match Proc_map.find_opt f procs with
+      | Some ((t : Triple.t), _) -> t.ws
+      | None -> [])
+  | IntExpr _ | Print _ -> []
+
 (* https://en.wikipedia.org/wiki/Predicate_transformer_semantics *)
 module Wlp = struct
   let sub_old_vars ~g_vars ~l_vars ws p =
@@ -125,7 +139,7 @@ module Wlp = struct
         proc g_vars q l_vars ps triple
     | If (b, c, c') ->
         (* ( b -> wlp(c, q) ) /\ ( ~b -> wlp(c', q) ) *)
-        let t = expr_to_term ~g_vars b in
+        let t = expr_to_term ~g_vars ~l_vars b in
         let wp = cmd c q in
         let wp' = cmd c' q in
         T.(t_and (t_implies t wp) (t_implies (t_not t) wp'))
@@ -133,13 +147,25 @@ module Wlp = struct
         (* inv
             /\ forall y_i.
                 (((b /\ inv) -> wlp(c, inv))
-                /\ ((~b /\ inv) -> q))[x_i <- y_i] *)
-        let guard = expr_to_term ~g_vars b in
-        let inv = Logic.translate_term ~g_vars inv in
-        let s = cmd c inv in
-        let iterate = T.(t_implies (t_and guard inv) s) in
-        let postcond = T.(t_implies (t_and (t_not guard) inv) q) in
-        T.(t_and inv (T.t_and iterate postcond))
+                /\ ((~b /\ inv) -> q))[x_i <- y_i]
+           where the x_i are the variables the body modifies. Havoc'ing them
+           (fresh y_i + t_forall_close, as for procedure calls) makes the two
+           obligations hold for an arbitrary iteration rather than only for the
+           loop's entry state. *)
+        let guard = expr_to_term ~g_vars ~l_vars b in
+        let inv_t = Logic.translate_term ~g_vars ~l_vars inv in
+        let s = cmd c inv_t in
+        let iterate = T.(t_implies (t_and guard inv_t) s) in
+        let postcond = T.(t_implies (t_and (t_not guard) inv_t) q) in
+        let modified = List.sort_uniq String.compare (assigned_vars procs c) in
+        let ys = List.map (fun _ -> Vars.create_fresh "y") modified in
+        let map =
+          List.map2
+            (fun x y -> (Vars.find_fallback x l_vars g_vars, T.t_var y))
+            modified ys
+        in
+        let havoc p = T.(t_subst (Mvs.of_list map) p |> t_forall_close ys []) in
+        T.t_and inv_t (havoc T.(t_and iterate postcond))
 end
 
 let merge_in vm x =
@@ -166,16 +192,30 @@ let verify_procedure ?timeout ~is_main g_vars procs ((t : Triple.t), l_vars) =
 
 exception Proc_invalid of string
 
+(* A procedure's [writes] clause must name every global it actually assigns;
+   otherwise a caller's WLP would never havoc that global and could "prove"
+   properties the body violates. Variables that are procedure-local (absent
+   from [globals]) are invisible to callers and need not be declared. *)
+let writes_are_declared globals procs (t : Triple.t) =
+  assigned_vars procs t.c
+  |> List.for_all (fun x ->
+      match Vars.find_opt x globals with
+      | None -> true
+      | Some _ -> List.mem x t.ws)
+
 let verify ?debug:d ?timeout program =
   debug := Option.value ~default:false d;
   let procs, (main, globals) = split_last program in
   let f ~is_main procs proc =
     let (t : Triple.t) = fst proc in
-    match verify_procedure ?timeout ~is_main globals procs proc with
+    let result =
+      if (not is_main) && not (writes_are_declared globals procs t) then
+        Smt.Prover.Invalid
+      else verify_procedure ?timeout ~is_main globals procs proc
+    in
+    match result with
     | Valid -> Proc_map.add t.f proc procs
-    | Invalid | Failed _ ->
-        let f = (fst proc).f in
-        raise (Proc_invalid f)
+    | Invalid | Failed _ -> raise (Proc_invalid t.f)
   in
   try
     let proc_map = List.fold_left (f ~is_main:false) Proc_map.empty procs in

@@ -30,9 +30,10 @@
    verify_true_negative.cav
    verify_true_bigmul.cav
    verify_true_nested_while.cav
+   verify_true_if_local_guard.cav
    type_error_if_guard.cav
    type_error_assign_bool.cav
-   unsound_writes.cav
-   unsound_loop.cav))
+   verify_false_writes_undeclared.cav
+   verify_false_loop_unquantified.cav))
  (preprocess
   (pps ppx_jane ppx_inline_test ppx_assert)))
