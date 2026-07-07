@@ -134,23 +134,43 @@ fixture.
 3. [DONE] Add the dual (true-`Q`) property. (Loop-free generator so the exact
    postcondition is always discharged by the solver; `Failed`/timeout treated
    as a skip, `Invalid` as a regression.)
-4. [TODO] Add procedure generation with random `writes` clauses. To give this
-   teeth against the framing bug class, generate procedures with `ensures
-   { true }` and *incomplete* `writes`, and build `Q` asserting the pre-state
-   is preserved: a correct `writes_are_declared` check rejects them (Invalid),
-   but removing the check lets the caller's WLP skip the havoc and "prove" the
-   false triple (Valid).
-5. [TODO] Shrinker tuning + a helper to emit a failing case as a `.cav`
-   fixture. (Failures currently print a readable sexp of the `cmd` plus `s0`,
-   `s1`, and `Q`; a `.cav` pretty-printer would let counterexamples drop
-   straight into `test/`.)
+4. [DONE] Add procedure generation with random `writes` clauses (`prop_framing`
+   in `test/fuzz/fuzz.ml`). A generated procedure `f` has `requires/ensures
+   { true }` and, per non-hidden pool variable, a role: not-written,
+   written-and-declared, or written-but-undeclared. A distinguished `hidden`
+   global is always written (`+kh`, so it definitely changes) and never
+   declared, guaranteeing an incomplete `writes`. `main` calls `f()` and
+   asserts `hidden = s0(hidden)`. A correct `writes_are_declared` check rejects
+   `f` (Invalid); drop the check and the caller's WLP skips the havoc and
+   "proves" the false triple (Valid). The interpreter confirms `hidden` really
+   changed, keeping it a genuine differential test.
+5. [DONE] `.cav` fixture emitter (`emit_cav` in `test/fuzz/fuzz.ml`). Every
+   failure prints the counterexample as surface-syntax Cavalry, round-tripped
+   through the real parser/verifier, so it drops straight into `test/`.
+   Shrinking is QCheck2's structural default (no custom shrinkers needed);
+   counterexamples minimize to a few lines -- e.g. the framing case shrinks to
+   essentially `verify_false_writes_undeclared.cav`. Note: the grammar has no
+   parenthesised-`logic_expr` rule, so assertions are emitted paren-free and
+   rely on operator precedence (fine for the left-nested `&&` of comparisons
+   the harness builds); only `arith_expr` sub-terms are parenthesised.
 
 ## Validation
 
-The harness was smoke-tested by reintroducing the pre-fix unsound loop rule
-(dropping the havoc in `Hoare.Wlp.cmd`'s `While` case): the primary property
-fails and shrinks to `while c > 0 do t := k; c := c - 1 end` with invariant
-`true` and a false postcondition -- essentially `verify_false_loop_unquantified.cav`.
-With the correct rule restored it passes across seeds. The trivial invariant
-`true` is deliberately over-represented in the invariant generator because it
-is the shape that exposes this whole class.
+Both properties with teeth were smoke-tested by reintroducing the exact bugs
+this branch fixed, confirming the harness catches them and shrinks to a minimal
+`.cav`:
+
+- **Loop rule**: dropping the havoc in `Hoare.Wlp.cmd`'s `While` case makes the
+  primary property fail and shrink to `while c > 0 do t := k; c := c - 1 end`
+  with invariant `true` and a false postcondition -- essentially
+  `verify_false_loop_unquantified.cav`. The trivial invariant `true` is
+  deliberately over-represented in the invariant generator because it is the
+  shape that exposes this whole class.
+- **Framing / writes**: disabling the `writes_are_declared` guard in
+  `Hoare.verify` makes `prop_framing` fail and shrink to
+  `procedure f () = ... writes { } x <- x + 1 end` with `{ ...x = 0... } f() { x = 0 }`
+  -- essentially `verify_false_writes_undeclared.cav`. The emitted `.cav` was
+  round-tripped through `cav verify`: Valid (bug reproduced) with the guard off,
+  Invalid with it on.
+
+With the correct code, all three properties pass across seeds.

@@ -251,10 +251,94 @@ let build_true_q env =
     (fun x v acc -> Logic.And (acc, Logic.Eq (Logic.Var x, logic_int v)))
     env (Logic.Bool true)
 
-let verify_triple p q c =
-  let triple = { Triple.p; q; ws = []; f = ""; ps = []; c } in
-  let collected = Var_collection.collect [ triple ] in
-  Hoare.verify ?timeout:(Some verify_timeout) collected
+let main_triple ~p ~q ~c : Triple.t = { p; q; ws = []; f = "main"; ps = []; c }
+
+let verify_program (triples : Triple.t list) =
+  Hoare.verify ?timeout:(Some verify_timeout) (Var_collection.collect triples)
+
+(* ===== Procedure generation (framing) ========================= *)
+
+(* Each non-hidden pool variable plays one of three roles in the generated
+   procedure [f]: it is either not written, written and declared in [writes],
+   or written but *not* declared (an incomplete writes clause). This directly
+   generates "random writes clauses, including deliberately incomplete ones". *)
+type role = Skip | Declared of int | Undeclared of int
+
+let gen_role =
+  G.oneof_weighted
+    [
+      (2, G.pure Skip);
+      (2, G.map (fun k -> Declared k) (G.int_range 1 8));
+      (2, G.map (fun k -> Undeclared k) (G.int_range 1 8));
+    ]
+
+(* A framing case: an initial state, a distinguished [hidden] global that [f]
+   always writes (by [+kh], so it definitely changes) but *never* declares, and
+   a role for every other pool variable. [hidden] is the guaranteed incomplete
+   write that gives this property teeth against a missing [writes] check. *)
+let gen_framing =
+  G.bind gen_s0 (fun s0 ->
+      G.bind (G.oneof_list pool) (fun hidden ->
+          G.bind (G.int_range 1 8) (fun kh ->
+              let others = List.filter (fun v -> v <> hidden) pool in
+              G.map
+                (fun roles -> (s0, hidden, kh, List.combine others roles))
+                (G.flatten_list (List.map (fun _ -> gen_role) others)))))
+
+let framing_body hidden kh roles =
+  let open Program in
+  let assign v k = Assgn (v, Plus (Value (VarInst v), Value (Int k))) in
+  let stmts =
+    assign hidden kh
+    :: List.filter_map
+         (fun (v, role) ->
+           match role with
+           | Skip -> None
+           | Declared k | Undeclared k -> Some (assign v k))
+         roles
+  in
+  List.fold_left (fun acc st -> Seq (acc, st)) (List.hd stmts) (List.tl stmts)
+
+let framing_writes roles =
+  List.filter_map
+    (fun (v, role) -> match role with Declared _ -> Some v | _ -> None)
+    roles
+
+(* Triples for a framing case:
+
+     procedure f () = requires { true } ensures { true } writes { <declared> }
+       hidden := hidden + kh; <other writes>
+     end
+     { P }  f()  { hidden = s0(hidden) }
+
+   [f]'s postcondition tells the caller nothing, and [hidden] is written but
+   undeclared. A correct [writes_are_declared] check rejects [f] outright
+   (Invalid). Drop the check and the caller's WLP no longer havocs [hidden], so
+   it "proves" it is unchanged (Valid) -- while the interpreter changed it. This
+   is the minimized shape of [verify_false_writes_undeclared.cav]. *)
+let framing_triples (s0, hidden, kh, roles) : Triple.t list =
+  let f : Triple.t =
+    {
+      p = Logic.Bool true;
+      q = Logic.Bool true;
+      ws = framing_writes roles;
+      f = "f";
+      ps = [];
+      c = framing_body hidden kh roles;
+    }
+  in
+  let q = Logic.Eq (Logic.Var hidden, logic_int (List.assoc hidden s0)) in
+  [ f; main_triple ~p:(build_p s0) ~q ~c:(Program.Proc ("f", [])) ]
+
+(* Execute a framing case through the interpreter: main seeds [s0] then calls
+   [f]. [f]'s global writes persist to main, so the final environment shows the
+   real effect of the (partially undeclared) writes. *)
+let run_framing (s0, hidden, kh, roles) =
+  let f_proc = { Runtime.f = "f"; ps = []; c = framing_body hidden kh roles } in
+  let main_proc =
+    { Runtime.f = "main"; ps = []; c = seed_cmd s0 (Program.Proc ("f", [])) }
+  in
+  Runtime.exec_env ~fuel:2000 [ f_proc; main_proc ]
 
 (* ===== Properties ============================================= *)
 
@@ -268,7 +352,7 @@ let prop_false_rejected (s0, c) =
       match build_false_q env with
       | None -> true
       | Some q -> (
-          match verify_triple (build_p s0) q c with
+          match verify_program [ main_triple ~p:(build_p s0) ~q ~c ] with
           | Prover.Valid -> false
           | Prover.Invalid | Prover.Failed _ -> true))
 
@@ -279,36 +363,172 @@ let prop_true_accepted (s0, c) =
   match run s0 c with
   | Runtime.OutOfFuel | Runtime.Raised -> true
   | Runtime.Terminated env -> (
-      match verify_triple (build_p s0) (build_true_q env) c with
+      let q = build_true_q env in
+      match verify_program [ main_triple ~p:(build_p s0) ~q ~c ] with
       | Prover.Valid -> true
       | Prover.Failed _ -> true (* solver resource limit: not a regression *)
       | Prover.Invalid -> false)
 
-(* ===== Reporting ============================================= *)
+(* Framing: a procedure with an incomplete [writes] clause must never let a
+   caller "prove" a false triple. The interpreter confirms [hidden] really
+   changed (differential sanity); then [verify] must answer Invalid. A [Valid]
+   is a framing soundness bug. *)
+let prop_framing ((s0, hidden, _, _) as case) =
+  match run_framing case with
+  | Runtime.OutOfFuel | Runtime.Raised -> true
+  | Runtime.Terminated env -> (
+      match Runtime.Env.find_opt hidden env with
+      | Some v when v = List.assoc hidden s0 -> true (* unchanged: skip *)
+      | _ -> (
+          match verify_program (framing_triples case) with
+          | Prover.Valid -> false
+          | Prover.Invalid | Prover.Failed _ -> true))
 
-let cmd_to_string c = Core.Sexp.to_string_hum (Program.sexp_of_cmd c)
-let logic_to_string e = Core.Sexp.to_string_hum (Logic.sexp_of_expr e)
+(* ===== .cav pretty-printer =================================== *)
+
+(* Render a failing case as surface-syntax Cavalry, so a counterexample can be
+   dropped straight into test/ as a regression fixture. Binary operators are
+   fully parenthesised to sidestep precedence; negatives are written [0 - n]. *)
+
+let indent n s =
+  let pad = String.make n ' ' in
+  String.split_on_char '\n' s
+  |> List.map (fun l -> pad ^ l)
+  |> String.concat "\n"
+
+let value_to_cav : type a. a Program.value -> string = function
+  | Program.Int i -> string_of_int i
+  | Program.Bool b -> string_of_bool b
+  | Program.VarInst x -> x
+  | Program.Unit () -> "()"
+
+let rec expr_to_cav : type a. a Program.expr -> string =
+ fun e ->
+  let bin op a b =
+    Printf.sprintf "(%s %s %s)" (expr_to_cav a) op (expr_to_cav b)
+  in
+  match e with
+  | Program.Value v -> value_to_cav v
+  | Program.Plus (a, b) -> bin "+" a b
+  | Program.Sub (a, b) -> bin "-" a b
+  | Program.Mul (a, b) -> bin "*" a b
+  | Program.Eq (a, b) -> bin "=" a b
+  | Program.Neq (a, b) -> bin "!=" a b
+  | Program.Lt (a, b) -> bin "<" a b
+  | Program.Leq (a, b) -> bin "<=" a b
+  | Program.Gt (a, b) -> bin ">" a b
+  | Program.Geq (a, b) -> bin ">=" a b
+
+let rec arith_to_cav = function
+  | Logic.Int i -> string_of_int i
+  | Logic.Var x -> x
+  | Logic.Plus (a, b) ->
+      Printf.sprintf "(%s + %s)" (arith_to_cav a) (arith_to_cav b)
+  | Logic.Sub (a, b) ->
+      Printf.sprintf "(%s - %s)" (arith_to_cav a) (arith_to_cav b)
+  | Logic.Mul (a, b) ->
+      Printf.sprintf "(%s * %s)" (arith_to_cav a) (arith_to_cav b)
+
+(* The grammar has no parenthesised-[logic_expr] rule (only [arith_expr] can be
+   parenthesised), so boolean connectives and comparisons are emitted bare and
+   rely on the declared precedence: [&&] is left-associative and comparisons
+   bind tighter, which faithfully reproduces the left-nested [And] of
+   comparisons this harness generates for P and Q. *)
+let rec logic_to_cav = function
+  | Logic.Bool b -> string_of_bool b
+  | Logic.Not e -> Printf.sprintf "!%s" (logic_to_cav e)
+  | Logic.And (a, b) ->
+      Printf.sprintf "%s && %s" (logic_to_cav a) (logic_to_cav b)
+  | Logic.Or (a, b) ->
+      Printf.sprintf "%s || %s" (logic_to_cav a) (logic_to_cav b)
+  | Logic.Impl (a, b) ->
+      Printf.sprintf "%s -> %s" (logic_to_cav a) (logic_to_cav b)
+  | Logic.Eq (a, b) ->
+      Printf.sprintf "%s = %s" (arith_to_cav a) (arith_to_cav b)
+  | Logic.Neq (a, b) ->
+      Printf.sprintf "%s != %s" (arith_to_cav a) (arith_to_cav b)
+  | Logic.Lt (a, b) ->
+      Printf.sprintf "%s < %s" (arith_to_cav a) (arith_to_cav b)
+  | Logic.Leq (a, b) ->
+      Printf.sprintf "%s <= %s" (arith_to_cav a) (arith_to_cav b)
+  | Logic.Gt (a, b) ->
+      Printf.sprintf "%s > %s" (arith_to_cav a) (arith_to_cav b)
+  | Logic.Geq (a, b) ->
+      Printf.sprintf "%s >= %s" (arith_to_cav a) (arith_to_cav b)
+
+let rec cmd_to_cav c =
+  match c with
+  | Program.Assgn (x, e) -> Printf.sprintf "%s <- %s" x (expr_to_cav e)
+  | Program.Let (x, e) -> Printf.sprintf "%s <- %s" x (expr_to_cav e)
+  | Program.Seq (a, b) -> Printf.sprintf "%s;\n%s" (cmd_to_cav a) (cmd_to_cav b)
+  | Program.If (b, c0, c1) ->
+      Printf.sprintf "if %s then\n%s\nelse\n%s\nend" (expr_to_cav b)
+        (indent 2 (cmd_to_cav c0))
+        (indent 2 (cmd_to_cav c1))
+  | Program.While (inv, b, body) ->
+      Printf.sprintf "while %s do\n  invariant { %s }\n%s\nend" (expr_to_cav b)
+        (logic_to_cav inv)
+        (indent 2 (cmd_to_cav body))
+  | Program.Proc (f, ps) ->
+      Printf.sprintf "%s(%s)" f (String.concat ", " (List.map expr_to_cav ps))
+  | Program.IntExpr e -> expr_to_cav e
+  | Program.Print e -> Printf.sprintf "print %s" (expr_to_cav e)
+
+let proc_to_cav (t : Triple.t) =
+  Printf.sprintf
+    "procedure %s (%s) =\n\
+    \  requires { %s }\n\
+    \  ensures { %s }\n\
+    \  writes { %s }\n\
+     %s\n\
+     end"
+    t.f (String.concat ", " t.ps) (logic_to_cav t.p) (logic_to_cav t.q)
+    (String.concat ", " t.ws)
+    (indent 2 (cmd_to_cav t.c))
+
+let main_to_cav (t : Triple.t) =
+  Printf.sprintf "{ %s }\n%s\n{ %s }" (logic_to_cav t.p) (cmd_to_cav t.c)
+    (logic_to_cav t.q)
+
+let emit_cav (triples : Triple.t list) =
+  let procs, main =
+    match List.rev triples with
+    | last :: rev_procs -> (List.rev rev_procs, last)
+    | [] ->
+        ( [],
+          main_triple ~p:(Logic.Bool true) ~q:(Logic.Bool true)
+            ~c:(Program.IntExpr (Program.Value (Program.Int 0))) )
+  in
+  String.concat "\n\n" (List.map proc_to_cav procs @ [ main_to_cav main ])
+
+(* ===== Reporting ============================================= *)
 
 let s0_to_string s0 =
   String.concat ", " (List.map (fun (x, v) -> Printf.sprintf "%s=%d" x v) s0)
 
-let print_case ~q_of (s0, c) =
-  let outcome =
-    match run s0 c with
-    | Runtime.Terminated env ->
-        let s1 =
-          Runtime.Env.fold (fun x v acc -> (x, v) :: acc) env []
-          |> List.rev
-          |> List.map (fun (x, v) -> Printf.sprintf "%s=%d" x v)
-          |> String.concat ", "
-        in
-        Printf.sprintf "s1: {%s}\nq:  %s" s1
-          (match q_of env with Some q -> logic_to_string q | None -> "<none>")
-    | Runtime.OutOfFuel -> "out of fuel"
-    | Runtime.Raised -> "raised"
-  in
-  Printf.sprintf "s0: {%s}\ncmd:\n%s\n%s" (s0_to_string s0) (cmd_to_string c)
-    outcome
+let env_to_string env =
+  Runtime.Env.fold (fun x v acc -> (x, v) :: acc) env []
+  |> List.rev
+  |> List.map (fun (x, v) -> Printf.sprintf "%s=%d" x v)
+  |> String.concat ", "
+
+let outcome_to_string = function
+  | Runtime.Terminated env -> Printf.sprintf "s1: {%s}" (env_to_string env)
+  | Runtime.OutOfFuel -> "out of fuel"
+  | Runtime.Raised -> "raised"
+
+let print_case ~triples_of (s0, c) =
+  let triples = triples_of (s0, c) in
+  Printf.sprintf "s0: {%s}\n%s\n\n.cav:\n%s" (s0_to_string s0)
+    (outcome_to_string (run s0 c))
+    (match triples with Some t -> emit_cav t | None -> "<no triple>")
+
+let print_framing ((s0, hidden, kh, _) as case) =
+  Printf.sprintf
+    "s0: {%s}\nhidden (undeclared write): %s (+%d)\n%s\n\n.cav:\n%s"
+    (s0_to_string s0) hidden kh
+    (outcome_to_string (run_framing case))
+    (emit_cav (framing_triples case))
 
 (* ===== Wiring ============================================= *)
 
@@ -318,16 +538,35 @@ let count =
   | None -> 20
 
 let test_false_rejected =
+  let triples_of (s0, c) =
+    match run s0 c with
+    | Runtime.Terminated env ->
+        Option.map
+          (fun q -> [ main_triple ~p:(build_p s0) ~q ~c ])
+          (build_false_q env)
+    | Runtime.OutOfFuel | Runtime.Raised -> None
+  in
   QCheck2.Test.make ~count ~name:"soundness: false postcondition is rejected"
-    ~print:(print_case ~q_of:build_false_q)
-    (gen_case gen_cmd_full) prop_false_rejected
+    ~print:(print_case ~triples_of) (gen_case gen_cmd_full) prop_false_rejected
 
 let test_true_accepted =
+  let triples_of (s0, c) =
+    match run s0 c with
+    | Runtime.Terminated env ->
+        Some [ main_triple ~p:(build_p s0) ~q:(build_true_q env) ~c ]
+    | Runtime.OutOfFuel | Runtime.Raised -> None
+  in
   QCheck2.Test.make ~count
     ~name:"regression: true postcondition is accepted (loop-free)"
-    ~print:(print_case ~q_of:(fun env -> Some (build_true_q env)))
+    ~print:(print_case ~triples_of)
     (gen_case gen_cmd_loopfree)
     prop_true_accepted
 
+let test_framing =
+  QCheck2.Test.make ~count
+    ~name:"soundness: incomplete writes clause is rejected" ~print:print_framing
+    gen_framing prop_framing
+
 let () =
-  QCheck_base_runner.run_tests_main [ test_false_rejected; test_true_accepted ]
+  QCheck_base_runner.run_tests_main
+    [ test_false_rejected; test_true_accepted; test_framing ]
