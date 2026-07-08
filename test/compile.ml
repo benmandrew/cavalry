@@ -58,10 +58,32 @@ let%test_unit "Compile.emit - result epilogue prints main's value" =
   let out = emit_main body in
   [%test_pred: string] (contains ~substring:"let _result =") out
 
-let%test_unit "Compile.emit - control flow is rejected in milestone 1" =
+let%test_unit "Compile.emit - if compiles both branches" =
+  (* if x < 5 then x else 0 end *)
   let body =
-    If (Value (Bool true), IntExpr (Value (Int 1)), IntExpr (Value (Int 0)))
+    If
+      ( Lt (Value (VarInst "x"), Value (Int 5)),
+        IntExpr (Value (VarInst "x")),
+        IntExpr (Value (Int 0)) )
   in
+  let out = emit_main body in
+  List.iter [ "(if "; "Z.lt"; "then"; "else" ] ~f:(fun substring ->
+      [%test_pred: string] (contains ~substring) out)
+
+let%test_unit "Compile.emit - while emits a Zarith-guarded loop" =
+  (* while i < 10 do invariant { true } i <- i + 1 end *)
+  let body =
+    While
+      ( Logic.Bool true,
+        Lt (Value (VarInst "i"), Value (Int 10)),
+        Assgn ("i", Plus (Value (VarInst "i"), Value (Int 1))) )
+  in
+  let out = emit_main body in
+  List.iter [ "while "; "Z.lt"; "do"; "done"; "i := " ] ~f:(fun substring ->
+      [%test_pred: string] (contains ~substring) out)
+
+let%test_unit "Compile.emit - procedures are rejected until milestone 3" =
+  let body = Proc ("f", []) in
   match emit_main body with
   | _ -> assert false
   | exception Cavalry.Compile.Unsupported _ -> ()
