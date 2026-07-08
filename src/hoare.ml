@@ -107,7 +107,24 @@ module Wlp = struct
     in
     T.(t_subst (Mvs.of_list map) p)
 
-  let proc g_vars q l_vars ps (t : Triple.t) =
+  (* Restrict havoc'd variables to the machine range. [ys] are fresh variables
+     standing for post-havoc values -- a loop iteration's modified vars or a
+     procedure call's written globals. On a real machine those are always
+     representable, so guard the havoc'd formula with [in_bounds] for each;
+     otherwise the overflow obligations inside would also have to hold for
+     out-of-range values and would spuriously fail. A no-op outside
+     machine-integer mode, so the default WLP is unchanged. *)
+  let havoc_in_bounds ~machine_int ys body =
+    if not machine_int then body
+    else
+      let premise =
+        List.fold_left
+          (fun acc y -> T.t_and_simp acc (Arith.in_bounds (T.t_var y)))
+          T.t_true ys
+      in
+      T.t_implies_simp premise body
+
+  let proc ~machine_int g_vars q l_vars ps (t : Triple.t) =
     let p_f = Logic.translate_term ~g_vars ~l_vars t.p in
     let q_f = Logic.translate_term ~g_vars ~l_vars t.q in
     let sub_params p =
@@ -127,7 +144,8 @@ module Wlp = struct
       let map =
         List.map2 (fun w y -> (Vars.find w g_vars, T.t_var y)) t.ws ys
       in
-      T.(t_subst (Mvs.of_list map) p |> t_forall_close ys [])
+      T.t_forall_close ys []
+        (havoc_in_bounds ~machine_int ys (T.t_subst (T.Mvs.of_list map) p))
     in
     (* forall y. ((q_f[x_i <- e_i] -> q)[x <- y])[x_i@old <- x_i] *)
     let q_sub =
@@ -172,7 +190,8 @@ module Wlp = struct
           List.fold_left (fun acc e -> T.t_and_simp acc (safe_e e)) T.t_true ps
         in
         let triple, callee_l_vars = Proc_map.find f procs in
-        T.t_and_simp args_safe (proc g_vars q callee_l_vars ps triple)
+        T.t_and_simp args_safe
+          (proc ~machine_int g_vars q callee_l_vars ps triple)
     | If (b, c, c') ->
         (* safe(b) /\ ( b -> wlp(c, q) ) /\ ( ~b -> wlp(c', q) ) *)
         let t = expr_to_term ~g_vars ~l_vars b in
@@ -183,15 +202,20 @@ module Wlp = struct
     | While (inv, b, c) ->
         (* inv
             /\ forall y_i.
-                (((b /\ inv) -> wlp(c, inv))
+                ((inv -> safe(b))
+                /\ ((b /\ inv) -> wlp(c, inv))
                 /\ ((~b /\ inv) -> q))[x_i <- y_i]
            where the x_i are the variables the body modifies. Havoc'ing them
            (fresh y_i + t_forall_close, as for procedure calls) makes the two
            obligations hold for an arbitrary iteration rather than only for the
-           loop's entry state. *)
+           loop's entry state. In machine-integer mode the guard is evaluated in
+           every reachable (invariant-satisfying) state, so its arithmetic must
+           not overflow there; the havoc'd y_i are also restricted to the machine
+           range (see [havoc_in_bounds]). *)
         let guard = expr_to_term ~g_vars ~l_vars b in
         let inv_t = Logic.translate_term ~g_vars ~l_vars inv in
         let s = cmd c inv_t in
+        let guard_safe = T.t_implies_simp inv_t (safe_e b) in
         let iterate = T.(t_implies (t_and guard inv_t) s) in
         let postcond = T.(t_implies (t_and (t_not guard) inv_t) q) in
         let modified = List.sort_uniq String.compare (assigned_vars procs c) in
@@ -201,8 +225,11 @@ module Wlp = struct
             (fun x y -> (Vars.find_fallback x l_vars g_vars, T.t_var y))
             modified ys
         in
-        let havoc p = T.(t_subst (Mvs.of_list map) p |> t_forall_close ys []) in
-        T.t_and inv_t (havoc T.(t_and iterate postcond))
+        let havoc p =
+          T.t_forall_close ys []
+            (havoc_in_bounds ~machine_int ys (T.t_subst (T.Mvs.of_list map) p))
+        in
+        T.t_and inv_t (havoc T.(t_and iterate (t_and_simp postcond guard_safe)))
 end
 
 let merge_in vm x =

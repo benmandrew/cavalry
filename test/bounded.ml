@@ -21,3 +21,18 @@ let%test_unit "machine-int: unbounded increment is rejected" =
 let%test_unit "machine-int: bounded increment still verifies" =
   [%test_result: bool] ~expect:true
     (is_valid (verify ~machine_int:true "verify_bounded_succ.cav"))
+
+(* Loops: the invariant + the in_bounds-guarded havoc must let a bounded loop
+   verify, while an unbounded counter is rejected because [i + 1] can overflow.
+   Both verify over unbounded integers. *)
+let%test_unit "machine-int: bounded loop verifies" =
+  [%test_result: bool] ~expect:true
+    (is_valid (verify "verify_bounded_loop.cav"));
+  [%test_result: bool] ~expect:true
+    (is_valid (verify ~machine_int:true "verify_bounded_loop.cav"))
+
+let%test_unit "machine-int: unbounded loop is rejected" =
+  [%test_result: bool] ~expect:true
+    (is_valid (verify "verify_unbounded_loop.cav"));
+  [%test_result: bool] ~expect:true
+    (is_invalid (verify ~machine_int:true "verify_unbounded_loop.cav"))
