@@ -8,8 +8,13 @@ val verify :
 
 val exec : string -> int
 
-val compile : ?debug:bool -> output:string -> string -> unit
+exception Verification_failed of string
+(** Raised by [compile] when its verification gate rejects the program. *)
+
+val compile : ?debug:bool -> ?verify:bool -> output:string -> string -> unit
 (** [compile ~output path] transpiles the program at [path] to OCaml and builds
     a native executable at [output]. With [debug], the generated OCaml is also
-    written to stdout. May raise [Compile.Unsupported] or
-    [Compile.Toolchain_error]. *)
+    written to stdout. Unless [verify] is [false] (default [true]), the program
+    is verified first and nothing is emitted if it fails. May raise
+    [Verification_failed], [Compile.Unsupported], or [Compile.Toolchain_error].
+*)
