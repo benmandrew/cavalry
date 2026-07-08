@@ -2,10 +2,10 @@ open Cavalry
 
 let exec source_file = Printf.printf "%d\n" (Main.exec source_file)
 
-let verify debug source_file =
+let verify debug machine_int source_file =
   let program = Main.get_ast source_file in
   let open Smt.Prover in
-  match Main.verify ~debug program with
+  match Main.verify ~debug ~machine_int program with
   | Valid -> Printf.printf "verification successful\n"
   | Invalid ->
       Printf.printf
@@ -44,6 +44,15 @@ let debug =
   Arg.value @@ Arg.flag
   @@ Arg.info ~doc:"Emit debug information" ~docv:"DEBUG" [ "d"; "debug" ]
 
+let machine_int =
+  Arg.value @@ Arg.flag
+  @@ Arg.info
+       ~doc:
+         "Verify against OCaml's 63-bit machine integers: every arithmetic \
+          operation must be proven not to overflow. The default reasons over \
+          unbounded integers."
+       [ "machine-int" ]
+
 let run_cmd =
   let doc = "Run a Cavalry program in an interpreter" in
   let info = Cmd.info "run" ~doc in
@@ -53,7 +62,7 @@ let run_cmd =
 let verify_cmd =
   let doc = "Verify that a Cavalry program satisfy its specification" in
   let info = Cmd.info "verify" ~doc in
-  let cmd_t = Term.(const verify $ debug $ source_file) in
+  let cmd_t = Term.(const verify $ debug $ machine_int $ source_file) in
   Cmd.v info cmd_t
 
 let output =
