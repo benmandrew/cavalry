@@ -4,18 +4,11 @@ open Ast.Program
 
 (* Build a [(Triple.t * Vars.t) list] the way [Main.get_ast] would, from a
    hand-written [main] body, and emit OCaml for it. *)
+let triple ?(f = "main") ?(ps = []) ?(ws = []) (c : cmd) : Triple.t =
+  { p = Logic.Bool true; q = Logic.Bool true; ws; f; ps; c }
+
 let emit_main (c : cmd) : string =
-  let main : Triple.t =
-    {
-      p = Logic.Bool true;
-      q = Logic.Bool true;
-      ws = [];
-      f = "main";
-      ps = [];
-      c;
-    }
-  in
-  Var_collection.collect [ main ] |> Cavalry.Compile.emit
+  Var_collection.collect [ triple c ] |> Cavalry.Compile.emit
 
 let contains ~substring s = String.is_substring s ~substring
 
@@ -32,15 +25,15 @@ let%test_unit "Compile.emit - straight-line arithmetic" =
   let out = emit_main body in
   let want =
     [
-      (* assignment targets become mutable refs *)
-      "let x = ref Z.zero";
-      "let y = ref Z.zero";
+      (* assignment targets become prefixed global refs *)
+      "let g_x = ref Z.zero";
+      "let g_y = ref Z.zero";
       (* unbounded arithmetic, not native + *)
       "Z.add";
       "(Z.of_int (3))";
       "(Z.of_int (4))";
-      (* reads of a mutable are dereferenced *)
-      "!x";
+      (* reads of a global are dereferenced *)
+      "!g_x";
       (* print keeps the interpreter's decimal-per-line format *)
       "print_string (Z.to_string";
     ]
@@ -79,11 +72,45 @@ let%test_unit "Compile.emit - while emits a Zarith-guarded loop" =
         Assgn ("i", Plus (Value (VarInst "i"), Value (Int 1))) )
   in
   let out = emit_main body in
-  List.iter [ "while "; "Z.lt"; "do"; "done"; "i := " ] ~f:(fun substring ->
+  List.iter [ "while "; "Z.lt"; "do"; "done"; "g_i := " ] ~f:(fun substring ->
       [%test_pred: string] (contains ~substring) out)
 
-let%test_unit "Compile.emit - procedures are rejected until milestone 3" =
-  let body = Proc ("f", []) in
-  match emit_main body with
-  | _ -> assert false
-  | exception Cavalry.Compile.Unsupported _ -> ()
+let%test_unit "Compile.emit - procedure: formals are locals, Assgn hits global"
+    =
+  (* procedure f (a) = ... writes { x } x <- x + a end
+     { true } x <- 2; y <- 5; f(y); x { true } *)
+  let proc =
+    triple ~f:"f" ~ps:[ "a" ] ~ws:[ "x" ]
+      (Assgn ("x", Plus (Value (VarInst "x"), Value (VarInst "a"))))
+  in
+  let main =
+    triple
+      (Seq
+         ( Assgn ("x", Value (Int 2)),
+           Seq
+             ( Assgn ("y", Value (Int 5)),
+               Seq
+                 ( Proc ("f", [ Value (VarInst "y") ]),
+                   IntExpr (Value (VarInst "x")) ) ) ))
+  in
+  let out = Var_collection.collect [ proc; main ] |> Cavalry.Compile.emit in
+  List.iter
+    [
+      "let p_f l_a =";
+      (* formal [a] read as a local *)
+      "l_a";
+      (* the [<-] target is the shared global, not the formal *)
+      "g_x :=";
+      (* call passes the actual through the caller's global [y] *)
+      "(p_f (!g_y))";
+    ] ~f:(fun substring ->
+      if not (contains ~substring out) then
+        raise_s
+          [%message "missing fragment" (substring : string) (out : string)])
+
+let%test_unit "Compile.emit - zero-arg procedure takes unit" =
+  let proc = triple ~f:"f" (Assgn ("y", Value (Int 1))) in
+  let main = triple (Proc ("f", [])) in
+  let out = Var_collection.collect [ proc; main ] |> Cavalry.Compile.emit in
+  List.iter [ "let p_f () ="; "(p_f ())" ] ~f:(fun substring ->
+      [%test_pred: string] (contains ~substring) out)
