@@ -12,6 +12,26 @@ let verify debug source_file =
         "verification unsuccessful: precondition does not imply postcondition\n"
   | Failed s -> Printf.printf "internal failure: %s\n" s
 
+let compile debug no_verify native_int output source_file =
+  let output =
+    match output with
+    | Some o -> o
+    | None -> Filename.remove_extension (Filename.basename source_file)
+  in
+  match
+    Main.compile ~debug ~verify:(not no_verify) ~native_int ~output source_file
+  with
+  | () -> Printf.printf "compiled to %s\n" output
+  | exception Main.Verification_failed msg ->
+      Printf.eprintf "refusing to compile: verification failed: %s\n" msg;
+      exit 1
+  | exception Compile.Unsupported what ->
+      Printf.eprintf "cannot compile: %s is not supported\n" what;
+      exit 1
+  | exception Compile.Toolchain_error msg ->
+      Printf.eprintf "%s\n" msg;
+      exit 1
+
 (* Command-line parsing *)
 open Cmdliner
 
@@ -36,8 +56,40 @@ let verify_cmd =
   let cmd_t = Term.(const verify $ debug $ source_file) in
   Cmd.v info cmd_t
 
+let output =
+  Arg.value
+  @@ Arg.opt Arg.(some string) None
+  @@ Arg.info
+       ~doc:"Output executable path (default: source basename without .cav)"
+       ~docv:"OUTPUT" [ "o"; "output" ]
+
+let no_verify =
+  Arg.value @@ Arg.flag
+  @@ Arg.info
+       ~doc:
+         "Skip the verification gate and compile even if the program does not \
+          verify"
+       [ "no-verify" ]
+
+let native_int =
+  Arg.value @@ Arg.flag
+  @@ Arg.info
+       ~doc:
+         "Compute in wrapping 63-bit int instead of unbounded integers. \
+          Faster, but unsound on overflow (diverges from the verified \
+          semantics)."
+       [ "native-int" ]
+
+let compile_cmd =
+  let doc = "Compile a Cavalry program to a native executable" in
+  let info = Cmd.info "compile" ~doc in
+  let cmd_t =
+    Term.(const compile $ debug $ no_verify $ native_int $ output $ source_file)
+  in
+  Cmd.v info cmd_t
+
 let () =
   let open Cmd in
-  let doc = "Run and verify Cavalry programs" in
+  let doc = "Run, verify and compile Cavalry programs" in
   let info = info "cav" ~doc in
-  exit @@ eval @@ group info [ verify_cmd; run_cmd ]
+  exit @@ eval @@ group info [ verify_cmd; run_cmd; compile_cmd ]

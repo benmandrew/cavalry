@@ -18,3 +18,29 @@ let verify = Hoare.verify
 
 let exec path =
   get_ast path |> List.map (fun p -> fst p |> Runtime.to_proc_t) |> Runtime.exec
+
+(* Raised when [compile]'s verification gate rejects the program. A compiled
+   binary asserts the program meets its spec, so by default we refuse to emit
+   one for a program that does not verify. *)
+exception Verification_failed of string
+
+(* Compile [path] to a native executable at [output], transpiling to OCaml and
+   building it with the external toolchain. With [debug], also dump the
+   generated OCaml to stdout. Unless [verify] is [false], run the Hoare-logic
+   verifier first and raise [Verification_failed] (emitting nothing) if the
+   program does not verify. *)
+let compile ?(debug = false) ?(verify = true) ?(native_int = false) ~output path
+    =
+  let ast = get_ast path in
+  (if verify then
+     match Hoare.verify ast with
+     | Smt.Prover.Valid -> ()
+     | Smt.Prover.Invalid ->
+         raise (Verification_failed "precondition does not imply postcondition")
+     | Smt.Prover.Failed s ->
+         raise (Verification_failed ("internal failure: " ^ s)));
+  let ocaml = Compile.emit ~native_int ast in
+  if debug then (
+    print_string ocaml;
+    flush stdout);
+  Compile.to_native ~native_int ~output ocaml
