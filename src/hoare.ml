@@ -58,6 +58,27 @@ let rec expr_to_term : type a.
   | Sub (e, e') -> sub (f e) (f e')
   | Mul (e, e') -> mul (f e) (f e')
 
+(* Overflow-freedom obligation for an expression: the conjunction of
+   [Arith.in_bounds] over every arithmetic *result* it computes (each
+   [Plus]/[Sub]/[Mul] node). Leaves ([Int] literals, [VarInst] reads) are in
+   range by assumption -- literals fit by construction, and variables are kept
+   in range by the invariant that every prior write was itself proven safe (the
+   WLP will add that as a hypothesis) -- so they contribute nothing. Comparisons
+   yield a boolean, not a machine integer, so they add no bound of their own but
+   still require their integer operands to be safe. [t_and_simp] keeps fully-safe
+   expressions as [true] rather than a pile of [true /\ ...]. *)
+let rec safe : type a. g_vars:Vars.t -> ?l_vars:Vars.t -> a expr -> T.term =
+ fun ~g_vars ?l_vars e ->
+  let self = safe ~g_vars ?l_vars in
+  match e with
+  | Value _ -> T.t_true
+  | Plus (a, b) | Sub (a, b) | Mul (a, b) ->
+      let operands = T.t_and_simp (self a) (self b) in
+      let result = Arith.in_bounds (expr_to_term ~g_vars ?l_vars e) in
+      T.t_and_simp operands result
+  | Eq (a, b) | Neq (a, b) | Lt (a, b) | Leq (a, b) | Gt (a, b) | Geq (a, b) ->
+      T.t_and_simp (self a) (self b)
+
 module Proc_map = Map.Make (String)
 
 (* Variables a command may assign: assignment targets plus the [writes] of any
