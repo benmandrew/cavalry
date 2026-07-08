@@ -29,7 +29,8 @@ exception Verification_failed of string
    generated OCaml to stdout. Unless [verify] is [false], run the Hoare-logic
    verifier first and raise [Verification_failed] (emitting nothing) if the
    program does not verify. *)
-let compile ?(debug = false) ?(verify = true) ~output path =
+let compile ?(debug = false) ?(verify = true) ?(native_int = false) ~output path
+    =
   let ast = get_ast path in
   (if verify then
      match Hoare.verify ast with
@@ -38,8 +39,8 @@ let compile ?(debug = false) ?(verify = true) ~output path =
          raise (Verification_failed "precondition does not imply postcondition")
      | Smt.Prover.Failed s ->
          raise (Verification_failed ("internal failure: " ^ s)));
-  let ocaml = Compile.emit ast in
+  let ocaml = Compile.emit ~native_int ast in
   if debug then (
     print_string ocaml;
     flush stdout);
-  Compile.to_native ~output ocaml
+  Compile.to_native ~native_int ~output ocaml

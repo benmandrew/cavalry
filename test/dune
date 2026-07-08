@@ -34,6 +34,8 @@
    type_error_if_guard.cav
    type_error_assign_bool.cav
    verify_false_writes_undeclared.cav
-   verify_false_loop_unquantified.cav))
+   verify_false_loop_unquantified.cav
+   compile_overflow.cav
+   compile_false_spec.cav))
  (preprocess
   (pps ppx_jane ppx_inline_test ppx_assert)))

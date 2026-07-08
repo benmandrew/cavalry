@@ -114,3 +114,69 @@ let%test_unit "Compile.emit - zero-arg procedure takes unit" =
   let out = Var_collection.collect [ proc; main ] |> Cavalry.Compile.emit in
   List.iter [ "let p_f () ="; "(p_f ())" ] ~f:(fun substring ->
       [%test_pred: string] (contains ~substring) out)
+
+(* --- end-to-end: actually build the binary and run it --- *)
+
+(* Compile [fixture] to a native binary (skipping the verification gate, which
+   is exercised separately), run it, and return its trimmed stdout. *)
+let compile_and_run ?(native_int = false) fixture : string =
+  let ocaml =
+    Cavalry.Main.get_ast fixture |> Cavalry.Compile.emit ~native_int
+  in
+  let bin = Stdlib.Filename.temp_file "cav_it_" ".bin" in
+  let out = Stdlib.Filename.temp_file "cav_it_" ".out" in
+  Cavalry.Compile.to_native ~native_int ~output:bin ocaml;
+  let rc =
+    Stdlib.Sys.command
+      (Printf.sprintf "%s > %s"
+         (Stdlib.Filename.quote bin)
+         (Stdlib.Filename.quote out))
+  in
+  let stdout = In_channel.read_all out |> String.strip in
+  (try Stdlib.Sys.remove bin with _ -> ());
+  (try Stdlib.Sys.remove out with _ -> ());
+  if rc <> 0 then failwithf "%s: compiled binary exited %d" fixture rc ();
+  stdout
+
+(* The compiled (Zarith) binary must reproduce the interpreter's output. These
+   fixtures stay within 63 bits, so all three semantics -- verifier, cav run,
+   and the Zarith binary -- agree; see the overflow test for where they part. *)
+let%test_unit "Compile e2e - Zarith binary matches interpreter" =
+  List.iter
+    [
+      "exec_negative.cav";
+      "verify_true_variable.cav";
+      "exec_if.cav";
+      "exec_while.cav";
+      "exec_nested_while.cav";
+      "exec_proc.cav";
+      "verify_true_fib_proc.cav";
+    ] ~f:(fun fixture ->
+      let expect = Int.to_string (Cavalry.Main.exec fixture) in
+      [%test_result: string] ~expect (compile_and_run fixture))
+
+(* On overflow the three semantics diverge, which is the whole reason Zarith is
+   the default: the Zarith binary yields the true unbounded value (what the
+   verifier reasons about), while --native-int wraps -- and its wrap matches the
+   tree-walking interpreter, which also uses native ints. *)
+let%test_unit "Compile e2e - Zarith is unbounded, native-int wraps" =
+  let fixture = "compile_overflow.cav" in
+  let zarith = compile_and_run fixture in
+  let native = compile_and_run ~native_int:true fixture in
+  let interp = Int.to_string (Cavalry.Main.exec fixture) in
+  [%test_result: string] ~expect:"1000000000000000000000000000" zarith;
+  [%test_result: string] ~expect:interp native;
+  if String.equal zarith native then
+    failwithf "backends should diverge on overflow but both gave %s" zarith ()
+
+(* The verification gate refuses to emit a binary for a program that does not
+   meet its spec, unless verification is skipped. *)
+let%test_unit "Compile - verification gate rejects a false spec" =
+  let fixture = "compile_false_spec.cav" in
+  (match
+     Cavalry.Main.compile ~verify:true ~output:"/dev/null/never" fixture
+   with
+  | () -> failwith "expected verification to reject the program"
+  | exception Cavalry.Main.Verification_failed _ -> ());
+  (* with the gate off it compiles and runs the (spec-violating) program *)
+  [%test_result: string] ~expect:"1" (compile_and_run ~native_int:false fixture)

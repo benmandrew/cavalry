@@ -12,13 +12,15 @@ let verify debug source_file =
         "verification unsuccessful: precondition does not imply postcondition\n"
   | Failed s -> Printf.printf "internal failure: %s\n" s
 
-let compile debug no_verify output source_file =
+let compile debug no_verify native_int output source_file =
   let output =
     match output with
     | Some o -> o
     | None -> Filename.remove_extension (Filename.basename source_file)
   in
-  match Main.compile ~debug ~verify:(not no_verify) ~output source_file with
+  match
+    Main.compile ~debug ~verify:(not no_verify) ~native_int ~output source_file
+  with
   | () -> Printf.printf "compiled to %s\n" output
   | exception Main.Verification_failed msg ->
       Printf.eprintf "refusing to compile: verification failed: %s\n" msg;
@@ -69,10 +71,21 @@ let no_verify =
           verify"
        [ "no-verify" ]
 
+let native_int =
+  Arg.value @@ Arg.flag
+  @@ Arg.info
+       ~doc:
+         "Compute in wrapping 63-bit int instead of unbounded integers. \
+          Faster, but unsound on overflow (diverges from the verified \
+          semantics)."
+       [ "native-int" ]
+
 let compile_cmd =
   let doc = "Compile a Cavalry program to a native executable" in
   let info = Cmd.info "compile" ~doc in
-  let cmd_t = Term.(const compile $ debug $ no_verify $ output $ source_file) in
+  let cmd_t =
+    Term.(const compile $ debug $ no_verify $ native_int $ output $ source_file)
+  in
   Cmd.v info cmd_t
 
 let () =
