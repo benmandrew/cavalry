@@ -84,9 +84,10 @@ let native_int =
   Arg.value @@ Arg.flag
   @@ Arg.info
        ~doc:
-         "Compute in wrapping 63-bit int instead of unbounded integers. \
-          Faster, but unsound on overflow (diverges from the verified \
-          semantics)."
+         "Compile to 63-bit machine int instead of unbounded integers. The \
+          verification gate then proves overflow-freedom, so the (faster) \
+          binary is still sound; --no-verify skips that check and native-int \
+          arithmetic may then wrap."
        [ "native-int" ]
 
 let compile_cmd =

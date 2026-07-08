@@ -180,3 +180,22 @@ let%test_unit "Compile - verification gate rejects a false spec" =
   | exception Cavalry.Main.Verification_failed _ -> ());
   (* with the gate off it compiles and runs the (spec-violating) program *)
   [%test_result: string] ~expect:"1" (compile_and_run ~native_int:false fixture)
+
+(* Native-int codegen is sound because its verification gate proves
+   overflow-freedom: a program that can overflow is rejected under --native-int
+   (63-bit gate) but accepted under the default Zarith backend (unbounded gate,
+   where overflow is impossible). A bounded program compiles either way. *)
+let%test_unit "Compile - native-int is gated by machine-int verification" =
+  let out = Stdlib.Filename.temp_file "cav_ni_" ".bin" in
+  let cleanup () = try Stdlib.Sys.remove out with _ -> () in
+  Exn.protect ~finally:cleanup ~f:(fun () ->
+      (match
+         Cavalry.Main.compile ~native_int:true ~verify:true ~output:out
+           "compile_overflow.cav"
+       with
+      | () -> failwith "native-int gate should reject an overflowing program"
+      | exception Cavalry.Main.Verification_failed _ -> ());
+      Cavalry.Main.compile ~native_int:false ~verify:true ~output:out
+        "compile_overflow.cav";
+      Cavalry.Main.compile ~native_int:true ~verify:true ~output:out
+        "verify_bounded_succ.cav")

@@ -26,7 +26,8 @@ val compile :
     a native executable at [output]. With [debug], the generated OCaml is also
     written to stdout. Unless [verify] is [false] (default [true]), the program
     is verified first and nothing is emitted if it fails. With [native_int], the
-    binary computes in wrapping 63-bit [int] rather than the default unbounded
-    Zarith integers -- faster, but unsound on overflow. May raise
-    [Verification_failed], [Compile.Unsupported], or [Compile.Toolchain_error].
-*)
+    binary computes in 63-bit machine [int] rather than the default unbounded
+    Zarith integers; the gate then verifies against 63-bit integers too, proving
+    overflow-freedom, so the faster native-int binary is still sound (only
+    [verify = false] forfeits that). May raise [Verification_failed],
+    [Compile.Unsupported], or [Compile.Toolchain_error]. *)
