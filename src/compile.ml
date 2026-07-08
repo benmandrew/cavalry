@@ -1,15 +1,14 @@
-(* Ahead-of-time backend: transpile the typed AST to OCaml source, which is
-   then built into a native binary by [ocamlfind ocamlopt] (CLI wiring lands in
-   a later milestone). See PLAN.md (Option B).
+(* Ahead-of-time backend: [emit] transpiles the typed AST to OCaml source and
+   [to_native] builds it into a native binary via [ocamlfind ocamlopt]. Driven
+   by [cav compile] (see [Main.compile] and [bin/main.ml]). See PLAN.md
+   (Option B).
 
    Correctness note: Cavalry integers are Why3's *unbounded* mathematical
    integers, and that is the model [Hoare.verify] proves against. OCaml native
    [int] is 63-bit and wraps (see the [check_overflow] discussion in
    [Ast.Runtime]), so a naive transpile to [+]/[-]/[*] could produce results the
    proof never sanctioned. We therefore emit arbitrary-precision [Zarith]
-   arithmetic so the runtime integer model coincides with the verified one.
-
-   Milestone 3: the whole language, including procedures. *)
+   arithmetic so the runtime integer model coincides with the verified one. *)
 
 open Ast
 open Program
@@ -164,3 +163,43 @@ let emit (program : (Triple.t * Vars.t) list) : string =
     \  print_string (Z.to_string _result); print_newline ()\n"
     (String.concat "\n\n" sections)
     main_body
+
+(* Raised when the external OCaml toolchain is missing or rejects the emitted
+   source. Kept distinct from [Unsupported] (a Cavalry feature we cannot yet
+   compile) so the CLI can phrase each differently. *)
+exception Toolchain_error of string
+
+let write_file path contents =
+  let oc = open_out path in
+  Fun.protect
+    ~finally:(fun () -> close_out oc)
+    (fun () -> output_string oc contents)
+
+(* Build [ocaml_source] into a native executable at [output] by shelling out to
+   [ocamlfind ocamlopt] with Zarith linked. The source and ocamlopt's
+   intermediate artifacts ([.cmi]/[.cmx]/[.o]) go in a temp file that is removed
+   afterwards; only the executable at [output] survives. *)
+let to_native ~output ocaml_source =
+  let ml = Filename.temp_file "cavalry_out_" ".ml" in
+  let base = Filename.remove_extension ml in
+  write_file ml ocaml_source;
+  let cleanup () =
+    List.iter
+      (fun ext -> try Sys.remove (base ^ ext) with Sys_error _ -> ())
+      [ ".ml"; ".cmi"; ".cmo"; ".cmx"; ".o" ]
+  in
+  Fun.protect ~finally:cleanup (fun () ->
+      let cmd =
+        Printf.sprintf "ocamlfind ocamlopt -package zarith -linkpkg %s -o %s"
+          (Filename.quote ml) (Filename.quote output)
+      in
+      match Sys.command cmd with
+      | 0 -> ()
+      | 127 ->
+          raise
+            (Toolchain_error
+               "'ocamlfind'/'ocamlopt' not found; install the OCaml toolchain \
+                and the 'zarith' package")
+      | n ->
+          raise
+            (Toolchain_error (Printf.sprintf "ocamlopt exited with code %d" n)))

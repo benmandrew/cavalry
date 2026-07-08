@@ -18,3 +18,13 @@ let verify = Hoare.verify
 
 let exec path =
   get_ast path |> List.map (fun p -> fst p |> Runtime.to_proc_t) |> Runtime.exec
+
+(* Compile [path] to a native executable at [output], transpiling to OCaml and
+   building it with the external toolchain. With [debug], also dump the
+   generated OCaml to stdout. *)
+let compile ?(debug = false) ~output path =
+  let ocaml = get_ast path |> Compile.emit in
+  if debug then (
+    print_string ocaml;
+    flush stdout);
+  Compile.to_native ~output ocaml
