@@ -36,6 +36,7 @@
    verify_false_writes_undeclared.cav
    verify_false_loop_unquantified.cav
    compile_overflow.cav
-   compile_false_spec.cav))
+   compile_false_spec.cav
+   verify_bounded_succ.cav))
  (preprocess
   (pps ppx_jane ppx_inline_test ppx_assert)))

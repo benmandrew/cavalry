@@ -11,4 +11,13 @@ val safe : g_vars:Vars.t -> ?l_vars:Vars.t -> 'a Program.expr -> T.term
     for expressions built only from literals, variables, and comparisons. *)
 
 val verify :
-  ?debug:bool -> ?timeout:float -> (Triple.t * Vars.t) list -> Smt.Prover.result
+  ?debug:bool ->
+  ?timeout:float ->
+  ?machine_int:bool ->
+  (Triple.t * Vars.t) list ->
+  Smt.Prover.result
+(** With [machine_int] (default [false]), verify against OCaml's 63-bit machine
+    integers: each arithmetic operation must be proven not to overflow (see
+    [safe]/[Arith.in_bounds]). The default reasons over unbounded integers.
+    Loops are only fully handled once the [While] rule gains its overflow
+    obligations (a later milestone). *)

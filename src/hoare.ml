@@ -137,33 +137,49 @@ module Wlp = struct
     (* p_f[x_i <- e_i] /\ forall y. (q_f[x_i <- e_i][x_i <- y_i][x_i@old <- x_i] -> q[x_i <- y_i]) *)
     T.(t_and pre q_sub)
 
-  let rec cmd procs ~g_vars ~l_vars c q =
-    let cmd = cmd procs ~g_vars ~l_vars in
+  let rec cmd procs ~machine_int ~g_vars ~l_vars c q =
+    let cmd = cmd procs ~machine_int ~g_vars ~l_vars in
+    (* Overflow-freedom obligation for an expression evaluated by [c], added
+       only in machine-integer mode; in the default (unbounded) mode it is
+       [true] and the WLP is unchanged. *)
+    let safe_e : type a. a expr -> T.term =
+     fun e -> if machine_int then safe ~g_vars ~l_vars e else T.t_true
+    in
     match c with
-    | IntExpr _ -> q
-    | Print _ -> q
+    (* [IntExpr]/[Print] do not change the state but do evaluate their argument,
+       so its arithmetic must not overflow. *)
+    | IntExpr e -> T.t_and_simp (safe_e e) q
+    | Print e -> T.t_and_simp (safe_e e) q
     | Seq (c, c') -> cmd c (cmd c' q)
     | Assgn (x, e) | Let (x, e) ->
-        (* forall y. y = e -> q[ x <- y ] *)
+        (* safe(e) /\ forall y. y = e -> q[ x <- y ] *)
         let e_t = expr_to_term ~g_vars ~l_vars e in
         let x = Vars.find_fallback x l_vars g_vars in
         let y = Vars.create_fresh "y" in
         let y_t = T.t_var y in
         let q_sub = T.t_subst_single x y_t q in
-        T.(t_forall_close [ y ] [] (t_implies (t_equ y_t e_t) q_sub))
+        let assign =
+          T.(t_forall_close [ y ] [] (t_implies (t_equ y_t e_t) q_sub))
+        in
+        T.t_and_simp (safe_e e) assign
     | Proc (f, ps) ->
-        (* p_f[x_i <- e_i]
+        (* safe(e_i) for each actual argument (evaluated in the caller's scope)
+            /\ p_f[x_i <- e_i]
             /\ forall y.
               (q_f[x_i <- e_i][x_i <- y_i][x_i@old <- x_i]
               -> q[x_i <- y_i]) *)
-        let triple, l_vars = Proc_map.find f procs in
-        proc g_vars q l_vars ps triple
+        let args_safe =
+          List.fold_left (fun acc e -> T.t_and_simp acc (safe_e e)) T.t_true ps
+        in
+        let triple, callee_l_vars = Proc_map.find f procs in
+        T.t_and_simp args_safe (proc g_vars q callee_l_vars ps triple)
     | If (b, c, c') ->
-        (* ( b -> wlp(c, q) ) /\ ( ~b -> wlp(c', q) ) *)
+        (* safe(b) /\ ( b -> wlp(c, q) ) /\ ( ~b -> wlp(c', q) ) *)
         let t = expr_to_term ~g_vars ~l_vars b in
         let wp = cmd c q in
         let wp' = cmd c' q in
-        T.(t_and (t_implies t wp) (t_implies (t_not t) wp'))
+        let branches = T.(t_and (t_implies t wp) (t_implies (t_not t) wp')) in
+        T.t_and_simp (safe_e b) branches
     | While (inv, b, c) ->
         (* inv
             /\ forall y_i.
@@ -194,7 +210,8 @@ let merge_in vm x =
   | None -> Vars.(add x (create_fresh x)) vm
   | Some _ -> vm
 
-let verify_procedure ?timeout ~is_main g_vars procs ((t : Triple.t), l_vars) =
+let verify_procedure ?timeout ~machine_int ~is_main g_vars procs
+    ((t : Triple.t), l_vars) =
   let p, q =
     if is_main then
       (Logic.translate_term ~g_vars t.p, Logic.translate_term ~g_vars t.q)
@@ -203,13 +220,27 @@ let verify_procedure ?timeout ~is_main g_vars procs ((t : Triple.t), l_vars) =
         Logic.translate_term ~g_vars ~l_vars t.q )
   in
   let p_gen =
-    Wlp.(sub_old_vars ~g_vars ~l_vars t.ws @@ cmd procs ~g_vars ~l_vars t.c q)
+    Wlp.(
+      sub_old_vars ~g_vars ~l_vars t.ws
+      @@ cmd procs ~machine_int ~g_vars ~l_vars t.c q)
   in
   let merged_vars =
     List.fold_left merge_in (Vars.union l_vars g_vars) t.ps |> list_of_var_map
   in
+  (* In machine-integer mode assume every live variable already holds a
+     representable value on entry -- the invariant that the machine only ever
+     stores in-range integers (each prior write was proven [safe]). Without
+     this the overflow obligations would be unprovable. *)
+  let antecedent =
+    if machine_int then
+      List.fold_left
+        (fun acc v -> T.t_and_simp acc (Arith.in_bounds (T.t_var v)))
+        p merged_vars
+    else p
+  in
   debug_print t.f merged_vars p q p_gen;
-  Smt.Prover.prove timeout Arith.base_task merged_vars (T.t_implies p p_gen)
+  Smt.Prover.prove timeout Arith.base_task merged_vars
+    (T.t_implies antecedent p_gen)
 
 exception Proc_invalid of string
 
@@ -224,7 +255,7 @@ let writes_are_declared globals procs (t : Triple.t) =
       | None -> true
       | Some _ -> List.mem x t.ws)
 
-let verify ?debug:d ?timeout program =
+let verify ?debug:d ?timeout ?(machine_int = false) program =
   debug := Option.value ~default:false d;
   let procs, (main, globals) = split_last program in
   let f ~is_main procs proc =
@@ -232,7 +263,7 @@ let verify ?debug:d ?timeout program =
     let result =
       if (not is_main) && not (writes_are_declared globals procs t) then
         Smt.Prover.Invalid
-      else verify_procedure ?timeout ~is_main globals procs proc
+      else verify_procedure ?timeout ~machine_int ~is_main globals procs proc
     in
     match result with
     | Valid -> Proc_map.add t.f proc procs
