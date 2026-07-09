@@ -1,0 +1,8 @@
+{ 0 <= n && n < 100 }
+i <- 0;
+while i < n do
+  invariant { 0 <= i && i <= n }
+  i <- i + 1
+end;
+i
+{ i = n }

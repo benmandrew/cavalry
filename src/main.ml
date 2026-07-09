@@ -28,12 +28,19 @@ exception Verification_failed of string
    building it with the external toolchain. With [debug], also dump the
    generated OCaml to stdout. Unless [verify] is [false], run the Hoare-logic
    verifier first and raise [Verification_failed] (emitting nothing) if the
-   program does not verify. *)
+   program does not verify.
+
+   The gate verifies against the same integer model the code is compiled in, so
+   the proof matches what the binary computes: unbounded integers for the
+   default Zarith backend, and 63-bit machine integers (proving overflow-freedom)
+   for [native_int]. That pairing is what makes native-int codegen *sound* --
+   the gate rejects any program whose arithmetic could overflow. Skipping the
+   gate ([verify = false]) with [native_int] forfeits that guarantee. *)
 let compile ?(debug = false) ?(verify = true) ?(native_int = false) ~output path
     =
   let ast = get_ast path in
   (if verify then
-     match Hoare.verify ast with
+     match Hoare.verify ~machine_int:native_int ast with
      | Smt.Prover.Valid -> ()
      | Smt.Prover.Invalid ->
          raise (Verification_failed "precondition does not imply postcondition")

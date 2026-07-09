@@ -5,5 +5,18 @@ module Proc_map : sig
   type 'a t
 end
 
+val safe : g_vars:Vars.t -> ?l_vars:Vars.t -> 'a Program.expr -> T.term
+(** [safe e] is the overflow-freedom obligation for [e]: the conjunction of
+    [Arith.in_bounds] over every arithmetic result [e] computes. It is [true]
+    for expressions built only from literals, variables, and comparisons. *)
+
 val verify :
-  ?debug:bool -> ?timeout:float -> (Triple.t * Vars.t) list -> Smt.Prover.result
+  ?debug:bool ->
+  ?timeout:float ->
+  ?machine_int:bool ->
+  (Triple.t * Vars.t) list ->
+  Smt.Prover.result
+(** With [machine_int] (default [false]), verify against OCaml's 63-bit machine
+    integers: each arithmetic operation must be proven not to overflow (see
+    [safe]/[Arith.in_bounds]), including inside loops and across procedure
+    calls. The default reasons over unbounded integers. *)

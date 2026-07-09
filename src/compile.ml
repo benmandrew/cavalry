@@ -41,10 +41,12 @@ let pname f = "p_" ^ f
    [(op a b)].
    - [zarith]: Why3's *unbounded* integers, the model [Hoare.verify] proves
      against -- the default, so the binary agrees with what was verified.
-   - [native]: OCaml 63-bit [int], which *wraps*. Faster, but it can diverge
-     from the proof exactly when a value overflows (and it happens to match the
-     tree-walking interpreter, which also uses native ints). Exposed only via
-     [cav compile --native-int], documented as fast-but-unsound-on-overflow. *)
+   - [native]: OCaml 63-bit [int], which *wraps*, and matches the tree-walking
+     interpreter (also native ints). Faster. It can diverge from the proof only
+     when a value overflows, so [cav compile --native-int] runs the verification
+     gate in machine-integer mode ([Hoare.verify ~machine_int:true]), which
+     proves overflow cannot happen -- making the native-int binary sound. It is
+     unsound only if that gate is skipped with --no-verify. *)
 type ops = {
   ty : string; (* the OCaml type of a program integer *)
   zero : string; (* its zero literal *)

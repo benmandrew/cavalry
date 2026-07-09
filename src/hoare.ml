@@ -58,6 +58,27 @@ let rec expr_to_term : type a.
   | Sub (e, e') -> sub (f e) (f e')
   | Mul (e, e') -> mul (f e) (f e')
 
+(* Overflow-freedom obligation for an expression: the conjunction of
+   [Arith.in_bounds] over every arithmetic *result* it computes (each
+   [Plus]/[Sub]/[Mul] node). Leaves ([Int] literals, [VarInst] reads) are in
+   range by assumption -- literals fit by construction, and variables are kept
+   in range by the invariant that every prior write was itself proven safe (the
+   WLP will add that as a hypothesis) -- so they contribute nothing. Comparisons
+   yield a boolean, not a machine integer, so they add no bound of their own but
+   still require their integer operands to be safe. [t_and_simp] keeps fully-safe
+   expressions as [true] rather than a pile of [true /\ ...]. *)
+let rec safe : type a. g_vars:Vars.t -> ?l_vars:Vars.t -> a expr -> T.term =
+ fun ~g_vars ?l_vars e ->
+  let self = safe ~g_vars ?l_vars in
+  match e with
+  | Value _ -> T.t_true
+  | Plus (a, b) | Sub (a, b) | Mul (a, b) ->
+      let operands = T.t_and_simp (self a) (self b) in
+      let result = Arith.in_bounds (expr_to_term ~g_vars ?l_vars e) in
+      T.t_and_simp operands result
+  | Eq (a, b) | Neq (a, b) | Lt (a, b) | Leq (a, b) | Gt (a, b) | Geq (a, b) ->
+      T.t_and_simp (self a) (self b)
+
 module Proc_map = Map.Make (String)
 
 (* Variables a command may assign: assignment targets plus the [writes] of any
@@ -86,7 +107,24 @@ module Wlp = struct
     in
     T.(t_subst (Mvs.of_list map) p)
 
-  let proc g_vars q l_vars ps (t : Triple.t) =
+  (* Restrict havoc'd variables to the machine range. [ys] are fresh variables
+     standing for post-havoc values -- a loop iteration's modified vars or a
+     procedure call's written globals. On a real machine those are always
+     representable, so guard the havoc'd formula with [in_bounds] for each;
+     otherwise the overflow obligations inside would also have to hold for
+     out-of-range values and would spuriously fail. A no-op outside
+     machine-integer mode, so the default WLP is unchanged. *)
+  let havoc_in_bounds ~machine_int ys body =
+    if not machine_int then body
+    else
+      let premise =
+        List.fold_left
+          (fun acc y -> T.t_and_simp acc (Arith.in_bounds (T.t_var y)))
+          T.t_true ys
+      in
+      T.t_implies_simp premise body
+
+  let proc ~machine_int g_vars q l_vars ps (t : Triple.t) =
     let p_f = Logic.translate_term ~g_vars ~l_vars t.p in
     let q_f = Logic.translate_term ~g_vars ~l_vars t.q in
     let sub_params p =
@@ -106,7 +144,8 @@ module Wlp = struct
       let map =
         List.map2 (fun w y -> (Vars.find w g_vars, T.t_var y)) t.ws ys
       in
-      T.(t_subst (Mvs.of_list map) p |> t_forall_close ys [])
+      T.t_forall_close ys []
+        (havoc_in_bounds ~machine_int ys (T.t_subst (T.Mvs.of_list map) p))
     in
     (* forall y. ((q_f[x_i <- e_i] -> q)[x <- y])[x_i@old <- x_i] *)
     let q_sub =
@@ -116,45 +155,67 @@ module Wlp = struct
     (* p_f[x_i <- e_i] /\ forall y. (q_f[x_i <- e_i][x_i <- y_i][x_i@old <- x_i] -> q[x_i <- y_i]) *)
     T.(t_and pre q_sub)
 
-  let rec cmd procs ~g_vars ~l_vars c q =
-    let cmd = cmd procs ~g_vars ~l_vars in
+  let rec cmd procs ~machine_int ~g_vars ~l_vars c q =
+    let cmd = cmd procs ~machine_int ~g_vars ~l_vars in
+    (* Overflow-freedom obligation for an expression evaluated by [c], added
+       only in machine-integer mode; in the default (unbounded) mode it is
+       [true] and the WLP is unchanged. *)
+    let safe_e : type a. a expr -> T.term =
+     fun e -> if machine_int then safe ~g_vars ~l_vars e else T.t_true
+    in
     match c with
-    | IntExpr _ -> q
-    | Print _ -> q
+    (* [IntExpr]/[Print] do not change the state but do evaluate their argument,
+       so its arithmetic must not overflow. *)
+    | IntExpr e -> T.t_and_simp (safe_e e) q
+    | Print e -> T.t_and_simp (safe_e e) q
     | Seq (c, c') -> cmd c (cmd c' q)
     | Assgn (x, e) | Let (x, e) ->
-        (* forall y. y = e -> q[ x <- y ] *)
+        (* safe(e) /\ forall y. y = e -> q[ x <- y ] *)
         let e_t = expr_to_term ~g_vars ~l_vars e in
         let x = Vars.find_fallback x l_vars g_vars in
         let y = Vars.create_fresh "y" in
         let y_t = T.t_var y in
         let q_sub = T.t_subst_single x y_t q in
-        T.(t_forall_close [ y ] [] (t_implies (t_equ y_t e_t) q_sub))
+        let assign =
+          T.(t_forall_close [ y ] [] (t_implies (t_equ y_t e_t) q_sub))
+        in
+        T.t_and_simp (safe_e e) assign
     | Proc (f, ps) ->
-        (* p_f[x_i <- e_i]
+        (* safe(e_i) for each actual argument (evaluated in the caller's scope)
+            /\ p_f[x_i <- e_i]
             /\ forall y.
               (q_f[x_i <- e_i][x_i <- y_i][x_i@old <- x_i]
               -> q[x_i <- y_i]) *)
-        let triple, l_vars = Proc_map.find f procs in
-        proc g_vars q l_vars ps triple
+        let args_safe =
+          List.fold_left (fun acc e -> T.t_and_simp acc (safe_e e)) T.t_true ps
+        in
+        let triple, callee_l_vars = Proc_map.find f procs in
+        T.t_and_simp args_safe
+          (proc ~machine_int g_vars q callee_l_vars ps triple)
     | If (b, c, c') ->
-        (* ( b -> wlp(c, q) ) /\ ( ~b -> wlp(c', q) ) *)
+        (* safe(b) /\ ( b -> wlp(c, q) ) /\ ( ~b -> wlp(c', q) ) *)
         let t = expr_to_term ~g_vars ~l_vars b in
         let wp = cmd c q in
         let wp' = cmd c' q in
-        T.(t_and (t_implies t wp) (t_implies (t_not t) wp'))
+        let branches = T.(t_and (t_implies t wp) (t_implies (t_not t) wp')) in
+        T.t_and_simp (safe_e b) branches
     | While (inv, b, c) ->
         (* inv
             /\ forall y_i.
-                (((b /\ inv) -> wlp(c, inv))
+                ((inv -> safe(b))
+                /\ ((b /\ inv) -> wlp(c, inv))
                 /\ ((~b /\ inv) -> q))[x_i <- y_i]
            where the x_i are the variables the body modifies. Havoc'ing them
            (fresh y_i + t_forall_close, as for procedure calls) makes the two
            obligations hold for an arbitrary iteration rather than only for the
-           loop's entry state. *)
+           loop's entry state. In machine-integer mode the guard is evaluated in
+           every reachable (invariant-satisfying) state, so its arithmetic must
+           not overflow there; the havoc'd y_i are also restricted to the machine
+           range (see [havoc_in_bounds]). *)
         let guard = expr_to_term ~g_vars ~l_vars b in
         let inv_t = Logic.translate_term ~g_vars ~l_vars inv in
         let s = cmd c inv_t in
+        let guard_safe = T.t_implies_simp inv_t (safe_e b) in
         let iterate = T.(t_implies (t_and guard inv_t) s) in
         let postcond = T.(t_implies (t_and (t_not guard) inv_t) q) in
         let modified = List.sort_uniq String.compare (assigned_vars procs c) in
@@ -164,8 +225,11 @@ module Wlp = struct
             (fun x y -> (Vars.find_fallback x l_vars g_vars, T.t_var y))
             modified ys
         in
-        let havoc p = T.(t_subst (Mvs.of_list map) p |> t_forall_close ys []) in
-        T.t_and inv_t (havoc T.(t_and iterate postcond))
+        let havoc p =
+          T.t_forall_close ys []
+            (havoc_in_bounds ~machine_int ys (T.t_subst (T.Mvs.of_list map) p))
+        in
+        T.t_and inv_t (havoc T.(t_and iterate (t_and_simp postcond guard_safe)))
 end
 
 let merge_in vm x =
@@ -173,7 +237,8 @@ let merge_in vm x =
   | None -> Vars.(add x (create_fresh x)) vm
   | Some _ -> vm
 
-let verify_procedure ?timeout ~is_main g_vars procs ((t : Triple.t), l_vars) =
+let verify_procedure ?timeout ~machine_int ~is_main g_vars procs
+    ((t : Triple.t), l_vars) =
   let p, q =
     if is_main then
       (Logic.translate_term ~g_vars t.p, Logic.translate_term ~g_vars t.q)
@@ -182,13 +247,27 @@ let verify_procedure ?timeout ~is_main g_vars procs ((t : Triple.t), l_vars) =
         Logic.translate_term ~g_vars ~l_vars t.q )
   in
   let p_gen =
-    Wlp.(sub_old_vars ~g_vars ~l_vars t.ws @@ cmd procs ~g_vars ~l_vars t.c q)
+    Wlp.(
+      sub_old_vars ~g_vars ~l_vars t.ws
+      @@ cmd procs ~machine_int ~g_vars ~l_vars t.c q)
   in
   let merged_vars =
     List.fold_left merge_in (Vars.union l_vars g_vars) t.ps |> list_of_var_map
   in
+  (* In machine-integer mode assume every live variable already holds a
+     representable value on entry -- the invariant that the machine only ever
+     stores in-range integers (each prior write was proven [safe]). Without
+     this the overflow obligations would be unprovable. *)
+  let antecedent =
+    if machine_int then
+      List.fold_left
+        (fun acc v -> T.t_and_simp acc (Arith.in_bounds (T.t_var v)))
+        p merged_vars
+    else p
+  in
   debug_print t.f merged_vars p q p_gen;
-  Smt.Prover.prove timeout Arith.base_task merged_vars (T.t_implies p p_gen)
+  Smt.Prover.prove timeout Arith.base_task merged_vars
+    (T.t_implies antecedent p_gen)
 
 exception Proc_invalid of string
 
@@ -203,7 +282,7 @@ let writes_are_declared globals procs (t : Triple.t) =
       | None -> true
       | Some _ -> List.mem x t.ws)
 
-let verify ?debug:d ?timeout program =
+let verify ?debug:d ?timeout ?(machine_int = false) program =
   debug := Option.value ~default:false d;
   let procs, (main, globals) = split_last program in
   let f ~is_main procs proc =
@@ -211,7 +290,7 @@ let verify ?debug:d ?timeout program =
     let result =
       if (not is_main) && not (writes_are_declared globals procs t) then
         Smt.Prover.Invalid
-      else verify_procedure ?timeout ~is_main globals procs proc
+      else verify_procedure ?timeout ~machine_int ~is_main globals procs proc
     in
     match result with
     | Valid -> Proc_map.add t.f proc procs
