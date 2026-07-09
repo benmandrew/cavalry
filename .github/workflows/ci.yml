@@ -24,13 +24,22 @@ jobs:
         with:
           ocaml-compiler: ${{ matrix.ocaml-compiler }}
           dune-cache: true
-          # Pin the opam-repository commit so setup-ocaml's cache key stays
-          # stable. Otherwise it tracks upstream HEAD (which moves many times a
-          # day), invalidating the opam switch cache on nearly every run and
-          # forcing a full rebuild of the heavy deps (why3, alt-ergo). Bump this
-          # SHA manually to pick up newer dependency versions.
+          # Pin the opam-repository commit for reproducibility: the resolved
+          # dependency set (and thus the switch cache below) only changes when
+          # this SHA or cavalry.opam does. Bump manually to pick up newer deps.
           opam-repositories: |
             default: https://github.com/ocaml/opam-repository.git#d4a5573a48263007395b46a5dffbdcfbce894d0e
+
+      # setup-ocaml's own cache only stores opam's download cache + repo
+      # metadata, so 'opam install' still recompiles all ~90 deps (why3,
+      # alt-ergo, core...) every run — ~3 min. Cache the built switch itself so
+      # a hit makes 'opam install --deps-only' a near no-op. Bump the numeric
+      # suffix to force a rebuild if the switch ever gets into a bad state.
+      - name: Cache opam switch
+        uses: actions/cache@v4
+        with:
+          path: _opam
+          key: opam-switch-v1-${{ matrix.ocaml-compiler }}-${{ hashFiles('cavalry.opam') }}
 
       - name: Install dependencies
         run: opam install . --deps-only --with-test
