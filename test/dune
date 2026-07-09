@@ -39,6 +39,13 @@
    compile_false_spec.cav
    verify_bounded_succ.cav
    verify_bounded_loop.cav
-   verify_unbounded_loop.cav))
+   verify_unbounded_loop.cav
+   verify_boundary_ok.cav
+   verify_boundary_overflow.cav
+   verify_underflow_ok.cav
+   verify_underflow_reject.cav
+   verify_bounded_proc.cav
+   overflow_concrete.cav
+   no_overflow_concrete.cav))
  (preprocess
   (pps ppx_jane ppx_inline_test ppx_assert)))

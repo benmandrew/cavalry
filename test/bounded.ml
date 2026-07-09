@@ -36,3 +36,29 @@ let%test_unit "machine-int: unbounded loop is rejected" =
     (is_valid (verify "verify_unbounded_loop.cav"));
   [%test_result: bool] ~expect:true
     (is_invalid (verify ~machine_int:true "verify_unbounded_loop.cav"))
+
+(* Pin the exact overflow boundary: a result of exactly max_int (2^62-1) is in
+   range, but max_int + 1 is not. This is what catches an off-by-one in the
+   bounds -- every other machine-int fixture sits far from the boundary. *)
+let%test_unit "machine-int: exact overflow boundary (max_int)" =
+  [%test_result: bool] ~expect:true
+    (is_valid (verify ~machine_int:true "verify_boundary_ok.cav"));
+  [%test_result: bool] ~expect:true
+    (is_invalid (verify ~machine_int:true "verify_boundary_overflow.cav"))
+
+(* The symmetric lower boundary, exercising subtraction/underflow: a result of
+   exactly min_int (-2^62) is in range, but min_int - 1 is not. *)
+let%test_unit "machine-int: exact underflow boundary (min_int)" =
+  [%test_result: bool] ~expect:true
+    (is_valid (verify ~machine_int:true "verify_underflow_ok.cav"));
+  [%test_result: bool] ~expect:true
+    (is_invalid (verify ~machine_int:true "verify_underflow_reject.cav"))
+
+(* A procedure whose body is bounded by its precondition verifies under machine
+   integers, and so does a caller composing with it -- the accept direction of
+   the procedure-call path (the triage only covers rejections). *)
+let%test_unit "machine-int: bounded procedure call verifies" =
+  [%test_result: bool] ~expect:true
+    (is_valid (verify "verify_bounded_proc.cav"));
+  [%test_result: bool] ~expect:true
+    (is_valid (verify ~machine_int:true "verify_bounded_proc.cav"))

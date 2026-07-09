@@ -31,6 +31,8 @@ let%test_unit "safe - literals, variables and comparisons carry no obligation" =
 let%test_unit "safe - one bound per arithmetic result" =
   (* x + y : one result *)
   [%test_result: int] ~expect:1 (bound_count (Plus (var "x", var "y")));
+  (* x - y : subtraction is guarded too (underflow) *)
+  [%test_result: int] ~expect:1 (bound_count (Sub (var "x", var "y")));
   (* (x + y) * z : two results, both guarded *)
   [%test_result: int] ~expect:2
     (bound_count (Mul (Plus (var "x", var "y"), var "z")));
