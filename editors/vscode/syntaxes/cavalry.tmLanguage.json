@@ -1,0 +1,118 @@
+{
+  "$schema": "https://raw.githubusercontent.com/martinring/tmlanguage/master/tmlanguage.json",
+  "name": "Cavalry",
+  "scopeName": "source.cavalry",
+  "patterns": [
+    { "include": "#comments" },
+    { "include": "#specification" },
+    { "include": "#keywords" },
+    { "include": "#constants" },
+    { "include": "#builtins" },
+    { "include": "#numbers" },
+    { "include": "#operators" },
+    { "include": "#punctuation" },
+    { "include": "#identifiers" }
+  ],
+  "repository": {
+    "comments": {
+      "patterns": [
+        {
+          "name": "comment.line.double-slash.cavalry",
+          "begin": "//",
+          "end": "$",
+          "beginCaptures": {
+            "0": { "name": "punctuation.definition.comment.cavalry" }
+          }
+        }
+      ]
+    },
+    "specification": {
+      "patterns": [
+        {
+          "name": "keyword.other.specification.cavalry",
+          "match": "\\b(requires|ensures|invariant|variant|writes)\\b"
+        }
+      ]
+    },
+    "keywords": {
+      "patterns": [
+        {
+          "name": "keyword.control.cavalry",
+          "match": "\\b(if|then|else|while|do|end)\\b"
+        },
+        {
+          "name": "keyword.other.cavalry",
+          "match": "\\b(procedure|print)\\b"
+        }
+      ]
+    },
+    "constants": {
+      "patterns": [
+        {
+          "name": "constant.language.boolean.cavalry",
+          "match": "\\b(true|false)\\b"
+        }
+      ]
+    },
+    "builtins": {
+      "patterns": [
+        {
+          "name": "support.function.builtin.cavalry",
+          "match": "\\b(len|array)\\b"
+        },
+        {
+          "name": "keyword.other.quantifier.cavalry",
+          "match": "\\b(forall|exists)\\b"
+        }
+      ]
+    },
+    "numbers": {
+      "patterns": [
+        {
+          "name": "constant.numeric.integer.cavalry",
+          "match": "\\b[0-9]+\\b"
+        }
+      ]
+    },
+    "operators": {
+      "patterns": [
+        {
+          "name": "keyword.operator.assignment.cavalry",
+          "match": "<-"
+        },
+        {
+          "name": "keyword.operator.logical.cavalry",
+          "match": "->|&&|\\|\\||!"
+        },
+        {
+          "name": "keyword.operator.comparison.cavalry",
+          "match": "<=|>=|!=|<|>|="
+        },
+        {
+          "name": "keyword.operator.arithmetic.cavalry",
+          "match": "[-+*/%]"
+        }
+      ]
+    },
+    "punctuation": {
+      "patterns": [
+        {
+          "name": "punctuation.terminator.statement.cavalry",
+          "match": ";"
+        },
+        {
+          "name": "punctuation.separator.cavalry",
+          "match": "[.,]"
+        }
+      ]
+    },
+    "identifiers": {
+      "patterns": [
+        {
+          "name": "variable.other.cavalry",
+          "match": "[A-Za-z_]+"
+        }
+      ]
+    }
+  }
+}

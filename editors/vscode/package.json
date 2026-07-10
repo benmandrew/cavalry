@@ -1,0 +1,33 @@
+{
+  "name": "cavalry",
+  "displayName": "Cavalry",
+  "description": "Syntax highlighting for the Cavalry verification language",
+  "version": "0.1.0",
+  "publisher": "benmandrew",
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/benmandrew/cavalry"
+  },
+  "engines": {
+    "vscode": "^1.60.0"
+  },
+  "categories": ["Programming Languages"],
+  "contributes": {
+    "languages": [
+      {
+        "id": "cavalry",
+        "aliases": ["Cavalry", "cavalry"],
+        "extensions": [".cav"],
+        "configuration": "./language-configuration.json"
+      }
+    ],
+    "grammars": [
+      {
+        "language": "cavalry",
+        "scopeName": "source.cavalry",
+        "path": "./syntaxes/cavalry.tmLanguage.json"
+      }
+    ]
+  }
+}
