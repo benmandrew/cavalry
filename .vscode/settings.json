@@ -1,0 +1,10 @@
+{
+  "editor.tokenColorCustomizations": {
+    "textMateRules": [
+      {
+        "scope": "keyword.other.specification.cavalry",
+        "settings": { "fontStyle": "italic" }
+      }
+    ]
+  }
+}

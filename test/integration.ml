@@ -14,6 +14,11 @@ let check_verify path expect =
 let%test_unit "Main.exec if" =
   [%test_result: int] (Main.exec "exec_if.cav") ~expect:182
 
+(* [//] line comments are stripped by the lexer, so a program peppered with
+   them evaluates identically to exec_if.cav: 2 + 60 * 3 = 182. *)
+let%test_unit "Main.exec line comments" =
+  [%test_result: int] (Main.exec "exec_comment.cav") ~expect:182
+
 let%test_unit "Main.exec while" =
   [%test_result: int] (Main.exec "exec_while.cav") ~expect:45
 

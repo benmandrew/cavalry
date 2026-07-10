@@ -4,6 +4,7 @@
  (inline_tests
   (deps
    exec_if.cav
+   exec_comment.cav
    exec_while.cav
    exec_proc.cav
    exec_nested_while.cav
