@@ -48,15 +48,16 @@
             # PATH and died with "why3: command not found".
             eval "$(opam env --switch=. --set-switch 2>/dev/null)"
 
-            # Re-sync deps whenever the manifest changes, not just once per
-            # clone. The stamp records a checksum of cavalry.opam, so adding a
-            # dependency (say a new with-test library) re-triggers the install
-            # for existing clones instead of leaving them silently drifted.
+            # Re-sync deps whenever the manifest or this hook changes, not just
+            # once per clone. The stamp records a checksum of cavalry.opam and
+            # flake.nix, so adding a dependency (say a new with-test library) or
+            # changing the install line below re-triggers the install for
+            # existing clones instead of leaving them silently drifted.
             STAMP=.direnv/opam-deps.stamp
-            WANT=$(cksum cavalry.opam | cut -d' ' -f1)
+            WANT=$(cat cavalry.opam flake.nix | cksum | cut -d' ' -f1)
             if [ "$(cat "$STAMP" 2>/dev/null)" != "$WANT" ]; then
               echo "cavalry dev shell: syncing opam deps (manifest changed)..."
-              opam install --deps-only --with-test -y . \
+              opam install --deps-only --with-test --with-doc -y . \
                 && why3 config detect \
                 && mkdir -p .direnv \
                 && printf '%s' "$WANT" > "$STAMP"
