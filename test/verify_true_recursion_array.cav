@@ -1,0 +1,17 @@
+procedure fill (i) =
+  requires { 0 <= i && i <= len(a) }
+  ensures { true }
+  variant { len(a) - i }
+  writes { a }
+  if i < len(a) then
+    a[i] <- 0;
+    fill(i + 1)
+  else
+    0
+  end
+end
+
+{ true }
+a <- array(3);
+fill(0)
+{ true }

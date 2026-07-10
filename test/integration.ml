@@ -201,6 +201,12 @@ let%test_unit "Main.verify true recursion (partial, vacuous)" =
 let%test_unit "Main.verify true recursion (multiple calls)" =
   check_verify "verify_true_recursion_multi.cav" Valid
 
+(* Recursion over an array: [fill] writes [a\[i\]] and recurses with a
+   [len(a) - i] measure, exercising the array bounds obligation and the array
+   havoc across a recursive call together. *)
+let%test_unit "Main.verify true recursion over an array" =
+  check_verify "verify_true_recursion_array.cav" Valid
+
 (* A variant whose measure is array-based ([len(a) - i]): variants compose with
    arrays and the [len]/element machinery. *)
 let%test_unit "Main.verify true variant with array measure" =
