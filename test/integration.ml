@@ -29,6 +29,10 @@ let%test_unit "Main.exec nested while" =
 let%test_unit "Main.exec negative" =
   [%test_result: int] (Main.exec "exec_negative.cav") ~expect:(-5)
 
+(* Truncated division and remainder: 20 / 6 = 3, 20 % 6 = 2 -> 3*10 + 2. *)
+let%test_unit "Main.exec div and mod" =
+  [%test_result: int] (Main.exec "exec_div.cav") ~expect:32
+
 (* Reading an unbound variable at runtime raises (preconditions do not
    initialize variables; they are assertions only). *)
 let%test_unit "Main.exec unbound raises" =
@@ -78,6 +82,10 @@ let%test_unit "Main.verify true implication" =
 
 let%test_unit "Main.verify true neq" = check_verify "verify_true_neq.cav" Valid
 
+(* Division/remainder identity [x = q*y + r] holds for a non-zero divisor; the
+   divisor-non-zero obligation is discharged from the precondition [y > 0]. *)
+let%test_unit "Main.verify true div" = check_verify "verify_true_div.cav" Valid
+
 (* Negative results reasoned about via `0 - n`. *)
 let%test_unit "Main.verify true negative" =
   check_verify "verify_true_negative.cav" Valid
@@ -116,6 +124,13 @@ let%test_unit "Main.verify false procedure requires" =
    that Alt-Ergo cannot discharge, so verify reports Invalid, not Valid. *)
 let%test_unit "Main.verify false nonlinear incompleteness" =
   check_verify "verify_false_nonlinear.cav" Invalid
+
+(* Well-definedness: [q <- x / y] with an unconstrained divisor cannot discharge
+   the [y <> 0] obligation, so verification fails even though the postcondition
+   is [true]. (Like the nonlinear case, the prover cannot close the goal within
+   the timeout, which the pipeline reports as Invalid.) *)
+let%test_unit "Main.verify false div by zero" =
+  check_verify "verify_false_div_by_zero.cav" Invalid
 
 (* ===== Type errors: get_ast raises during translation ===== *)
 

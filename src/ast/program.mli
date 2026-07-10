@@ -16,6 +16,8 @@ type _ expr =
   | Plus : int expr * int expr -> int expr
   | Sub : int expr * int expr -> int expr
   | Mul : int expr * int expr -> int expr
+  | Div : int expr * int expr -> int expr
+  | Mod : int expr * int expr -> int expr
 [@@deriving sexp_of]
 
 type cmd =
@@ -50,6 +52,8 @@ type ut_expr =
   | UPlus of ut_expr * ut_expr
   | USub of ut_expr * ut_expr
   | UMul of ut_expr * ut_expr
+  | UDiv of ut_expr * ut_expr
+  | UMod of ut_expr * ut_expr
 [@@deriving sexp_of, show]
 
 exception TypeError of string

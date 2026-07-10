@@ -99,6 +99,15 @@ let rec exec_expr : type a. Runtime.t -> a expr -> a =
   | Mul (a, b) ->
       let v1, v2 = binary_app r a b in
       mul_ovf v1 v2
+  (* Truncated division/remainder (native [/], [mod]); [b = 0] raises
+     [Division_by_zero]. [verify] discharges a [divisor <> 0] obligation, so a
+     verified program never reaches that. *)
+  | Div (a, b) ->
+      let v1, v2 = binary_app r a b in
+      v1 / v2
+  | Mod (a, b) ->
+      let v1, v2 = binary_app r a b in
+      v1 mod v2
   | Eq (a, b) ->
       let v1, v2 = binary_app r a b in
       v1 = v2

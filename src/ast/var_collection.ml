@@ -14,7 +14,7 @@ let collect_logic e =
   let rec collect_arith_expr = function
     | Var s -> Str_set.singleton s
     | Int _ -> Str_set.empty
-    | Plus (e, e') | Sub (e, e') | Mul (e, e') ->
+    | Plus (e, e') | Sub (e, e') | Mul (e, e') | Div (e, e') | Mod (e, e') ->
         Str_set.union (collect_arith_expr e) (collect_arith_expr e')
   in
   let rec collect_logic_expr = function
@@ -43,6 +43,8 @@ let collect_program c =
     | Plus (e, e')
     | Sub (e, e')
     | Mul (e, e')
+    | Div (e, e')
+    | Mod (e, e')
     | Eq (e, e')
     | Neq (e, e')
     | Lt (e, e')

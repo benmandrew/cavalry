@@ -7,6 +7,8 @@ type arith_expr =
   | Plus of arith_expr * arith_expr
   | Sub of arith_expr * arith_expr
   | Mul of arith_expr * arith_expr
+  | Div of arith_expr * arith_expr
+  | Mod of arith_expr * arith_expr
 [@@deriving sexp_of, show]
 
 type logic_expr =
@@ -39,6 +41,8 @@ let rec translate_arith_term ~g_vars ?l_vars e =
   | Plus (e0, e1) -> Arith.plus (f e0) (f e1)
   | Sub (e0, e1) -> Arith.sub (f e0) (f e1)
   | Mul (e0, e1) -> Arith.mul (f e0) (f e1)
+  | Div (e0, e1) -> Arith.div (f e0) (f e1)
+  | Mod (e0, e1) -> Arith.modulo (f e0) (f e1)
 
 let rec translate_term ~g_vars ?l_vars e =
   let f_t = translate_term ~g_vars ?l_vars in

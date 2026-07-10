@@ -18,6 +18,8 @@ type _ expr =
   | Plus : int expr * int expr -> int expr
   | Sub : int expr * int expr -> int expr
   | Mul : int expr * int expr -> int expr
+  | Div : int expr * int expr -> int expr
+  | Mod : int expr * int expr -> int expr
 [@@deriving sexp_of]
 
 type cmd =
@@ -51,6 +53,8 @@ type ut_expr =
   | UPlus of ut_expr * ut_expr
   | USub of ut_expr * ut_expr
   | UMul of ut_expr * ut_expr
+  | UDiv of ut_expr * ut_expr
+  | UMod of ut_expr * ut_expr
 [@@deriving sexp_of, show]
 
 exception TypeError of string
@@ -61,6 +65,8 @@ let rec t_int_expr = function
   | UPlus (a, b) -> Plus (t_int_expr a, t_int_expr b)
   | USub (a, b) -> Sub (t_int_expr a, t_int_expr b)
   | UMul (a, b) -> Mul (t_int_expr a, t_int_expr b)
+  | UDiv (a, b) -> Div (t_int_expr a, t_int_expr b)
+  | UMod (a, b) -> Mod (t_int_expr a, t_int_expr b)
   | e -> raise (TypeError (show_ut_expr e))
 
 and t_bool_expr = function

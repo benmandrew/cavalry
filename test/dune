@@ -9,6 +9,9 @@
    exec_nested_while.cav
    exec_negative.cav
    exec_unbound.cav
+   exec_div.cav
+   verify_true_div.cav
+   verify_false_div_by_zero.cav
    verify_false.cav
    verify_false_inv_entry.cav
    verify_false_proc_ensures.cav
