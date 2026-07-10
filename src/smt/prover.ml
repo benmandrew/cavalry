@@ -10,12 +10,19 @@ let config =
 
 let main = Whyconf.get_main config
 
+(* Pinned to match the [alt-ergo] constraint in dune-project/cavalry.opam.
+   The filter is versioned so that a why3 config pointing at a different
+   Alt-Ergo (e.g. a stray 2.6.2 on PATH) fails fast here rather than silently
+   discharging goals against a prover we haven't vetted. *)
+let alt_ergo_version = "2.4.3"
+
 let alt_ergo =
   let open Printf in
-  let fp = Whyconf.parse_filter_prover "Alt-Ergo" in
+  let fp = Whyconf.parse_filter_prover ("Alt-Ergo," ^ alt_ergo_version) in
   let provers = Whyconf.filter_provers config fp in
   if Whyconf.Mprover.is_empty provers then (
-    eprintf "Prover Alt-Ergo not installed or not configured\n";
+    eprintf "Prover Alt-Ergo %s not installed or not configured\n"
+      alt_ergo_version;
     exit 1);
   snd (Whyconf.Mprover.max_binding provers)
 
