@@ -9,6 +9,8 @@ exception Error of error
 rule main = parse
   | [' ' '\t' '\n']
       { main lexbuf }
+  | "//"
+      { comment lexbuf }
   | ['0'-'9']+ as i
       { INT (int_of_string i) }
   | "true"
@@ -107,3 +109,12 @@ rule main = parse
     { raise
         (Error
           (Illegal_character illegal_char)) }
+
+(* A [//] line comment runs to the next newline (or eof). *)
+and comment = parse
+  | '\n'
+      { main lexbuf }
+  | eof
+      { EOF }
+  | _
+      { comment lexbuf }
