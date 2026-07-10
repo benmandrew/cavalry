@@ -1,0 +1,10 @@
+procedure init () =
+  requires { true }
+  ensures { g = 0 }
+  writes { g }
+  g <- 0
+end
+
+{ true }
+init()
+{ true }

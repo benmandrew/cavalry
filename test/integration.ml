@@ -95,6 +95,12 @@ let%test_unit "Main.verify true frame" =
 let%test_unit "Main.verify true read global" =
   check_verify "verify_true_read_global.cav" Valid
 
+(* A procedure may `writes` a global that never appears in `main`: it is still
+   classified as a global (not a procedure-local), so the caller's havoc
+   resolves it. Previously this crashed with [Var_not_found]. *)
+let%test_unit "Main.verify true writes global absent from main" =
+  check_verify "verify_true_writes_global_not_in_main.cav" Valid
+
 (* Assertion operators absent from other fixtures: || , -> , != . *)
 let%test_unit "Main.verify true disjunction" =
   check_verify "verify_true_disjunction.cav" Valid

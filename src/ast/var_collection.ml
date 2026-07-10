@@ -153,6 +153,15 @@ let arrays_program c =
   in
   cmd c
 
+(* Every variable a procedure declares in [writes] is a global it mutates, so it
+   must be classified as a global even if it never appears in [main]. Otherwise
+   it would be misfiled as a procedure-local and a caller's havoc (which resolves
+   [writes] against the globals) would fail to find it. *)
+let all_writes (program : Triple.t list) =
+  List.fold_left
+    (fun s (t : Triple.t) -> List.fold_left (fun s w -> Str_set.add w s) s t.ws)
+    Str_set.empty program
+
 let all_arrays (program : Triple.t list) =
   List.fold_left
     (fun s (t : Triple.t) ->
@@ -186,7 +195,9 @@ let str_set_to_vars ~arrays vars =
 let collect (program : Triple.t list) =
   let procedures, main = split_last program in
   let arrays = all_arrays program in
-  let globals = collect_procedure Str_set.empty main in
+  let globals =
+    Str_set.union (collect_procedure Str_set.empty main) (all_writes program)
+  in
   let procedures =
     List.map
       (fun proc ->
