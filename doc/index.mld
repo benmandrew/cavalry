@@ -1,0 +1,48 @@
+{0 Cavalry}
+
+Cavalry is a toy imperative language with Hoare-logic verification. A program
+carries its own specification -- preconditions, postconditions, and loop
+invariants -- and is proven to meet it by a {e satisfiability-modulo-theories}
+(SMT) solver, Alt-Ergo, driven through Why3. Nothing is executed to establish
+correctness; the proof is discharged over the program text.
+
+The surface syntax is shown in [example.cav]; the theory is described in the
+article linked from the {{:https://github.com/benmandrew/cavalry}repository}.
+
+{1 Pipeline}
+
+Both [cav run] and [cav verify] share a front end and split at the final step.
+The stages, in order:
+
+- {b Parse} ({!Parse}) turns source into an {e untyped} AST -- [Ast.Program.ut_expr]
+  wrapped in [Ast.Triple.ut_t].
+- {b Type and translate} ({!Ast.Program}) resolves that into the GADT-typed
+  {!Ast.Program.cmd}, rejecting ill-typed programs with {!Ast.Program.TypeError}.
+- {b Resolve variables} ({!Ast.Var_collection}) assigns every program variable a
+  Why3 symbol, splitting per-procedure locals from [main]'s globals.
+- {b Run or verify.} {!Ast.Runtime} is the tree-walking interpreter behind
+  [cav run]; {!Cavalry.Hoare} is the weakest-liberal-precondition calculus
+  behind [cav verify], which compiles each triple to a Why3 goal and discharges
+  it through {!Smt.Prover}.
+
+{1 Modules}
+
+{2 Front end}
+
+- {!Ast.Program} -- the executable program AST, untyped and GADT-typed.
+- {!Ast.Logic} -- the assertion language of the annotations.
+- {!Ast.Triple} -- one Hoare triple [{p} c {q}] per procedure.
+- {!Parse} -- the ocamllex/Menhir lexer and grammar.
+
+{2 Verification}
+
+- {!Cavalry.Hoare} -- the WLP calculus and top-level [verify].
+- {!Ast.Arith} -- the Why3 encoding of the integer and array theory.
+- {!Smt.Prover} -- the Why3/Alt-Ergo backend.
+
+{2 Support}
+
+- {!Ast.Vars} -- the name-to-symbol environment.
+- {!Ast.Var_collection} -- building those environments from a program.
+- {!Ast.Runtime} -- the interpreter.
+- {!Cavalry.Main} -- the library entry points the [cav] CLI wraps.

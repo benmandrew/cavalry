@@ -1,5 +1,6 @@
 (library
  (name cavalry)
+ (public_name cavalry)
  (libraries core why3 ast smt parse)
  (preprocess
   (pps ppx_jane)))

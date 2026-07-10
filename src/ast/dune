@@ -1,5 +1,6 @@
 (library
  (name ast)
+ (public_name cavalry.ast)
  (libraries core why3 smt astring)
  (preprocess
   (pps ppx_jane ppx_deriving.show)))
