@@ -59,9 +59,6 @@ jobs:
       - name: Run tests
         run: opam exec -- dune build @runtest
 
-      - name: Build docs
-        run: opam exec -- dune build @doc
-
       # zanuda is a typedtree-based linter tightly coupled to the OCaml
       # compiler; its releases don't support 5.5.0, so this runs only on the
       # 4.14 leg. It reports via OCaml alerts and doesn't fail on findings, so
@@ -73,3 +70,36 @@ jobs:
           opam install zanuda -y
           opam exec -- dune build @check
           opam exec -- zanuda -dir . -del-prefix "$(pwd)"
+
+  # Runs concurrently with the build matrix (no `needs`) so the odoc build
+  # doesn't extend the critical path. Doc generation only compiles the modules,
+  # so it skips the test run and prover detection the build job needs.
+  docs:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up OCaml
+        uses: ocaml/setup-ocaml@v3
+        with:
+          ocaml-compiler: "5.5.0"
+          dune-cache: true
+          # Match the build job's pin so the resolved dependency set (and the
+          # switch cache below) stays identical between the two jobs.
+          opam-repositories: |
+            default: https://github.com/ocaml/opam-repository.git#d4a5573a48263007395b46a5dffbdcfbce894d0e
+
+      # Same key as the build job's 5.5.0 leg, so whichever job populates the
+      # switch first is reused by the other.
+      - name: Cache opam switch
+        uses: actions/cache@v4
+        with:
+          path: _opam
+          key: opam-switch-v1-5.5.0-${{ hashFiles('cavalry.opam') }}
+
+      - name: Install dependencies
+        run: opam install . --deps-only --with-test --with-doc
+
+      - name: Build docs
+        run: opam exec -- dune build @doc
