@@ -54,6 +54,8 @@ type ops = {
   add : string;
   sub : string;
   mul : string;
+  div : string; (* truncated division, matching the interpreter's native [/] *)
+  mod_ : string; (* remainder, matching the interpreter's native [mod] *)
   eq : string;
   lt : string;
   leq : string;
@@ -70,6 +72,11 @@ let zarith =
     add = "Z.add";
     sub = "Z.sub";
     mul = "Z.mul";
+    (* [Z.div]/[Z.rem] truncate towards zero (sign of dividend), matching OCaml
+       native [/]/[mod] and Why3's [ComputerDivision]. [Z.ediv]/[Z.erem] would
+       be Euclidean and disagree on negatives. *)
+    div = "Z.div";
+    mod_ = "Z.rem";
     eq = "Z.equal";
     lt = "Z.lt";
     leq = "Z.leq";
@@ -86,6 +93,8 @@ let native =
     add = "( + )";
     sub = "( - )";
     mul = "( * )";
+    div = "( / )";
+    mod_ = "( mod )";
     eq = "( = )";
     lt = "( < )";
     leq = "( <= )";
@@ -123,6 +132,8 @@ let rec emit_int ~ops ~locals (e : int expr) : string =
   | Plus (a, b) -> bin ops.add a b
   | Sub (a, b) -> bin ops.sub a b
   | Mul (a, b) -> bin ops.mul a b
+  | Div (a, b) -> bin ops.div a b
+  | Mod (a, b) -> bin ops.mod_ a b
 
 let emit_bool ~ops ~locals (e : bool expr) : string =
   let cmp op a b =

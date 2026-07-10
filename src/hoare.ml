@@ -57,6 +57,8 @@ let rec expr_to_term : type a.
   | Plus (e, e') -> plus (f e) (f e')
   | Sub (e, e') -> sub (f e) (f e')
   | Mul (e, e') -> mul (f e) (f e')
+  | Div (e, e') -> div (f e) (f e')
+  | Mod (e, e') -> modulo (f e) (f e')
 
 (* Overflow-freedom obligation for an expression: the conjunction of
    [Arith.in_bounds] over every arithmetic *result* it computes (each
@@ -72,10 +74,39 @@ let rec safe : type a. g_vars:Vars.t -> ?l_vars:Vars.t -> a expr -> T.term =
   let self = safe ~g_vars ?l_vars in
   match e with
   | Value _ -> T.t_true
-  | Plus (a, b) | Sub (a, b) | Mul (a, b) ->
+  | Plus (a, b) | Sub (a, b) | Mul (a, b) | Div (a, b) ->
+      (* Division overflows in exactly one case, [min_int / -1] (its result
+         [2^62] is one past [max_int]), so it carries a bound like the others.
+         Well-definedness (a non-zero divisor) is a separate, always-on
+         obligation -- see [defined]. *)
       let operands = T.t_and_simp (self a) (self b) in
       let result = Arith.in_bounds (expr_to_term ~g_vars ?l_vars e) in
       T.t_and_simp operands result
+  | Mod (a, b) ->
+      (* [a mod b] is bounded in magnitude by [b], so if the operands are in
+         range the result is too -- no bound of its own. *)
+      T.t_and_simp (self a) (self b)
+  | Eq (a, b) | Neq (a, b) | Lt (a, b) | Leq (a, b) | Gt (a, b) | Geq (a, b) ->
+      T.t_and_simp (self a) (self b)
+
+(* Well-definedness obligation for an expression: the conjunction of
+   [divisor <> 0] over every [Div]/[Mod] node it contains. Unlike [safe] (which
+   guards against overflow and is only imposed in machine-integer mode), this is
+   *always* required -- [Arith.div]/[modulo] are left unspecified by a zero
+   divisor and the interpreter/compiled binary would raise [Division_by_zero],
+   so a verified program must prove it never divides by zero. [t_and_simp]
+   collapses division-free expressions back to [true]. *)
+let rec defined : type a. g_vars:Vars.t -> ?l_vars:Vars.t -> a expr -> T.term =
+ fun ~g_vars ?l_vars e ->
+  let self = defined ~g_vars ?l_vars in
+  match e with
+  | Value _ -> T.t_true
+  | Plus (a, b) | Sub (a, b) | Mul (a, b) -> T.t_and_simp (self a) (self b)
+  | Div (a, b) | Mod (a, b) ->
+      let nonzero =
+        Arith.neq (expr_to_term ~g_vars ?l_vars b) (T.t_nat_const 0)
+      in
+      T.t_and_simp (T.t_and_simp (self a) (self b)) nonzero
   | Eq (a, b) | Neq (a, b) | Lt (a, b) | Leq (a, b) | Gt (a, b) | Geq (a, b) ->
       T.t_and_simp (self a) (self b)
 
@@ -157,11 +188,14 @@ module Wlp = struct
 
   let rec cmd procs ~machine_int ~g_vars ~l_vars c q =
     let cmd = cmd procs ~machine_int ~g_vars ~l_vars in
-    (* Overflow-freedom obligation for an expression evaluated by [c], added
-       only in machine-integer mode; in the default (unbounded) mode it is
-       [true] and the WLP is unchanged. *)
+    (* Well-definedness obligations for an expression evaluated by [c]. The
+       divisor-non-zero part ([defined]) is always imposed; the overflow-freedom
+       part ([safe]) only in machine-integer mode. In the default (unbounded,
+       division-free) case both collapse to [true] and the WLP is unchanged. *)
     let safe_e : type a. a expr -> T.term =
-     fun e -> if machine_int then safe ~g_vars ~l_vars e else T.t_true
+     fun e ->
+      let overflow = if machine_int then safe ~g_vars ~l_vars e else T.t_true in
+      T.t_and_simp (defined ~g_vars ~l_vars e) overflow
     in
     match c with
     (* [IntExpr]/[Print] do not change the state but do evaluate their argument,
@@ -266,8 +300,8 @@ let verify_procedure ?timeout ~machine_int ~is_main g_vars procs
     else p
   in
   debug_print t.f merged_vars p q p_gen;
-  Smt.Prover.prove timeout Arith.base_task merged_vars
-    (T.t_implies antecedent p_gen)
+  let goal = T.t_implies antecedent p_gen in
+  Smt.Prover.prove timeout (Arith.task_for goal) merged_vars goal
 
 exception Proc_invalid of string
 

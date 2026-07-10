@@ -7,6 +7,8 @@ type arith_expr =
   | Plus of arith_expr * arith_expr
   | Sub of arith_expr * arith_expr
   | Mul of arith_expr * arith_expr
+  | Div of arith_expr * arith_expr
+  | Mod of arith_expr * arith_expr
 [@@deriving sexp_of, show]
 
 type logic_expr =

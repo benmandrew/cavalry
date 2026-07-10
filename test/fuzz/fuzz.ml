@@ -412,6 +412,8 @@ let rec expr_to_cav : type a. a Program.expr -> string =
   | Program.Plus (a, b) -> bin "+" a b
   | Program.Sub (a, b) -> bin "-" a b
   | Program.Mul (a, b) -> bin "*" a b
+  | Program.Div (a, b) -> bin "/" a b
+  | Program.Mod (a, b) -> bin "%" a b
   | Program.Eq (a, b) -> bin "=" a b
   | Program.Neq (a, b) -> bin "!=" a b
   | Program.Lt (a, b) -> bin "<" a b
@@ -428,6 +430,10 @@ let rec arith_to_cav = function
       Printf.sprintf "(%s - %s)" (arith_to_cav a) (arith_to_cav b)
   | Logic.Mul (a, b) ->
       Printf.sprintf "(%s * %s)" (arith_to_cav a) (arith_to_cav b)
+  | Logic.Div (a, b) ->
+      Printf.sprintf "(%s / %s)" (arith_to_cav a) (arith_to_cav b)
+  | Logic.Mod (a, b) ->
+      Printf.sprintf "(%s %% %s)" (arith_to_cav a) (arith_to_cav b)
 
 (* The grammar has no parenthesised-[logic_expr] rule (only [arith_expr] can be
    parenthesised), so boolean connectives and comparisons are emitted bare and

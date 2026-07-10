@@ -8,7 +8,7 @@
 %token IF THEN ELSE
 %token WHILE DO END
 %token EOF
-%token PLUS SUB MUL
+%token PLUS SUB MUL DIV MOD
 %token EQ NEQ LT LEQ GT GEQ
 %token AND OR IMPL NOT
 %token LPAREN RPAREN
@@ -22,6 +22,6 @@
 %left EQ NEQ LT LEQ GT GEQ
 %left PLUS
 %left SUB
-%left MUL
+%left MUL DIV MOD
 
 %%
