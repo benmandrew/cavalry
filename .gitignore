@@ -33,5 +33,6 @@ _opam/
 # direnv cache
 .direnv/
 
-.vscode
+.vscode/*
+!.vscode/settings.json
 PLAN.md
