@@ -27,6 +27,10 @@
   (alt-ergo (= "2.4.3"))
   zarith
   ppx_deriving
-  (qcheck-core :with-test)))
+  (qcheck-core :with-test)
+  (ocamlformat
+   (and
+    (= "0.29.0")
+    :with-test))))
 
 (using menhir 2.1)
