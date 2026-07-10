@@ -126,6 +126,15 @@ let%test_unit "Main.verify true exists" =
 let%test_unit "Main.verify true array procedure" =
   check_verify "verify_true_array_proc.cav" Valid
 
+(* Two arrays are independent maps: writing [a] does not disturb [b]. *)
+let%test_unit "Main.verify true array framing" =
+  check_verify "verify_true_array_frame.cav" Valid
+
+(* Nested quantifiers: every pair of in-bounds elements of a freshly created
+   (all-zeros) array is equal. *)
+let%test_unit "Main.verify true nested forall" =
+  check_verify "verify_true_nested_forall.cav" Valid
+
 (* Negative results reasoned about via `0 - n`. *)
 let%test_unit "Main.verify true negative" =
   check_verify "verify_true_negative.cav" Valid

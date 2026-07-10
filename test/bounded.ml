@@ -62,3 +62,12 @@ let%test_unit "machine-int: bounded procedure call verifies" =
     (is_valid (verify "verify_bounded_proc.cav"));
   [%test_result: bool] ~expect:true
     (is_valid (verify ~machine_int:true "verify_bounded_proc.cav"))
+
+(* Arrays coexist with machine-int mode: the map-typed variables must be skipped
+   by the [in_bounds] antecedent and the havoc guard (they are not integers),
+   and in-range element writes still verify. Valid under both models. *)
+let%test_unit "machine-int: arrays verify" =
+  [%test_result: bool] ~expect:true
+    (is_valid (verify "verify_true_array_machine_int.cav"));
+  [%test_result: bool] ~expect:true
+    (is_valid (verify ~machine_int:true "verify_true_array_machine_int.cav"))
