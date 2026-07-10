@@ -13,13 +13,14 @@ article linked from `README.md` for the theory.
 ## Commands
 
 ```bash
-opam install --deps-only --with-test .   # install deps (incl. why3, alt-ergo 2.4.3)
+opam install --deps-only --with-test --with-doc .   # install deps (incl. why3, alt-ergo 2.4.3, odoc)
 why3 config detect                       # required once, so why3 can find alt-ergo
 
 dune build                               # build everything
 dune build @fmt                          # check formatting (ocamlformat)
 dune build @fmt --auto-promote           # apply formatting fixes
 dune runtest                             # run the inline-test suite (test/)
+dune build @doc                          # generate HTML API docs to _build/default/_doc/_html/
 
 dune exec -- cav run <file.cav>            # interpret a program
 dune exec -- cav verify <file.cav>         # verify pre/post conditions
@@ -29,7 +30,8 @@ dune exec -- cav verify -d <file.cav>      # verify with debug output (prints WL
 There's no per-test filter wired up; `dune runtest` runs the whole
 `test/integration.ml` + `test/program.ml` suite together against the `.cav`
 fixtures in `test/`. CI (`.github/workflows/`) runs `why3 config detect`,
-`dune build @fmt`, `dune build`, and `dune build @runtest` on ocaml 5.5.0.
+`dune build @fmt`, `dune build`, `dune build @runtest`, and `dune build @doc`
+on ocaml 5.5.0.
 
 ## Architecture
 

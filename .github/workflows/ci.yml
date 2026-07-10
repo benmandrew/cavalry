@@ -42,7 +42,7 @@ jobs:
           key: opam-switch-v1-${{ matrix.ocaml-compiler }}-${{ hashFiles('cavalry.opam') }}
 
       - name: Install dependencies
-        run: opam install . --deps-only --with-test
+        run: opam install . --deps-only --with-test --with-doc
 
       - name: Detect why3 provers
         run: opam exec -- why3 config detect
@@ -58,6 +58,9 @@ jobs:
 
       - name: Run tests
         run: opam exec -- dune build @runtest
+
+      - name: Build docs
+        run: opam exec -- dune build @doc
 
       # zanuda is a typedtree-based linter tightly coupled to the OCaml
       # compiler; its releases don't support 5.5.0, so this runs only on the

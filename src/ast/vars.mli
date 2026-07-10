@@ -1,3 +1,8 @@
+(** The variable environment: a map from source names to the Why3 [vsymbol]s
+    that stand for them in translated terms. {!Var_collection} builds these (one
+    per procedure, one for [main]'s globals); {!Logic} and [Hoare] look names up
+    in them. *)
+
 module T = Why3.Term
 
 (* module M : sig
@@ -7,11 +12,20 @@ module T = Why3.Term
    type t = T.vsymbol M.t *)
 
 type t
+(** A name-to-[vsymbol] environment. *)
 
 val empty : t
+
 val find : string -> t -> T.vsymbol
+(** Look a name up in the environment. Raises the internal [Var_not_found] if it
+    is unbound; use {!find_opt} to handle absence. *)
+
 val find_opt : string -> t -> T.vsymbol option
+
 val find_fallback : string -> t -> t -> T.vsymbol
+(** [find_fallback s a b] looks [s] up in [a], falling back to [b]. Used to
+    resolve a name against procedure-locals first, then globals. *)
+
 val add : string -> T.vsymbol -> t -> t
 val bindings : t -> (string * T.vsymbol) list
 
@@ -20,7 +34,10 @@ val union : t -> t -> t
     from [a] *)
 
 val fold : (string -> T.vsymbol -> 'a -> 'a) -> t -> 'a -> 'a
+
 val create_fresh : string -> Why3.Term.vsymbol
+(** A fresh integer-valued ([int]) [vsymbol] with a unique name derived from the
+    argument. *)
 
 val create_fresh_array : string -> Why3.Term.vsymbol
 (** A fresh array-valued ([map int int]) variable. *)

@@ -28,6 +28,7 @@
   zarith
   ppx_deriving
   (qcheck-core :with-test)
+  (odoc :with-doc)
   (ocamlformat
    (and
     (= "0.29.0")

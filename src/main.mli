@@ -1,7 +1,13 @@
+(** The library entry point wiring the pipeline together: parse a source file,
+    then either verify it, run it, or compile it. The [cav] CLI in [bin/main.ml]
+    is a thin cmdliner shell over these. *)
+
 module Ast = Ast
 open Ast
 
 val get_ast : string -> (Triple.t * Vars.t) list
+(** Parse the source file at the given path and run variable collection,
+    producing the annotated triples that {!verify} and {!Hoare} consume. *)
 
 val verify :
   ?debug:bool ->
@@ -9,8 +15,12 @@ val verify :
   ?machine_int:bool ->
   (Triple.t * Vars.t) list ->
   Smt.Prover.result
+(** Verify a parsed program. See {!Hoare.verify} for [machine_int] and the other
+    parameters. *)
 
 val exec : string -> int
+(** Parse and interpret the source file at the given path, returning [main]'s
+    result. Backs [cav run]. *)
 
 exception Verification_failed of string
 (** Raised by [compile] when its verification gate rejects the program. *)
