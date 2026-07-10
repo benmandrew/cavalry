@@ -37,6 +37,15 @@ let%test_unit "Main.exec div and mod" =
 let%test_unit "Main.exec array" =
   [%test_result: int] (Main.exec "exec_array.cav") ~expect:50
 
+(* [len] as a program expression: len(a) + a[6] = 7 + 3. *)
+let%test_unit "Main.exec array len" =
+  [%test_result: int] (Main.exec "exec_array_len.cav") ~expect:10
+
+(* Procedure array write propagates to the caller (a[0] = 7) while the caller's
+   own write (a[1] = 4) is preserved across the call: 7 + 4. *)
+let%test_unit "Main.exec array via procedure" =
+  [%test_result: int] (Main.exec "exec_array_proc.cav") ~expect:11
+
 (* Reading an unbound variable at runtime raises (preconditions do not
    initialize variables; they are assertions only). *)
 let%test_unit "Main.exec unbound raises" =
@@ -111,6 +120,12 @@ let%test_unit "Main.verify true array fill" =
 let%test_unit "Main.verify true exists" =
   check_verify "verify_true_exists.cav" Valid
 
+(* A procedure that [writes { a }] an array global: the caller havocs the array
+   and recovers the written cell from the procedure's [ensures]. Exercises the
+   array path through [Wlp.proc]. *)
+let%test_unit "Main.verify true array procedure" =
+  check_verify "verify_true_array_proc.cav" Valid
+
 (* Negative results reasoned about via `0 - n`. *)
 let%test_unit "Main.verify true negative" =
   check_verify "verify_true_negative.cav" Valid
@@ -166,6 +181,11 @@ let%test_unit "Main.verify false array write out of bounds" =
    imposed on reads via [defined]. *)
 let%test_unit "Main.verify false array read out of bounds" =
   check_verify "verify_false_array_read_oob.cav" Invalid
+
+(* [array(n)] with an unconstrained [n] cannot discharge its [0 <= n]
+   well-definedness obligation, so it is rejected. *)
+let%test_unit "Main.verify false array negative length" =
+  check_verify "verify_false_array_negative_length.cav" Invalid
 
 (* ===== Type errors: get_ast raises during translation ===== *)
 

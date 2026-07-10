@@ -19,6 +19,10 @@
    verify_true_exists.cav
    verify_false_array_write_oob.cav
    verify_false_array_read_oob.cav
+   exec_array_len.cav
+   exec_array_proc.cav
+   verify_true_array_proc.cav
+   verify_false_array_negative_length.cav
    verify_false.cav
    verify_false_inv_entry.cav
    verify_false_proc_ensures.cav
