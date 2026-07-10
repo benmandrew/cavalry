@@ -31,6 +31,11 @@ type logic_expr =
 
 type expr = logic_expr [@@deriving sexp_of, show]
 
+val translate_arith_term :
+  g_vars:Vars.t -> ?l_vars:Vars.t -> ?bound:Vars.t -> arith_expr -> T.term
+(** Translate an arithmetic assertion term (e.g. a loop variant's measure) to a
+    Why3 term, resolving names the same way as {!translate_term}. *)
+
 val translate_term :
   g_vars:Vars.t -> ?l_vars:Vars.t -> ?bound:Vars.t -> expr -> T.term
 

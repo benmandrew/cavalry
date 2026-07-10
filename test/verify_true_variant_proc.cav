@@ -1,0 +1,15 @@
+procedure count_down (n) =
+  requires { n >= 0 }
+  ensures { r = 0 }
+  writes { r }
+  r <- n;
+  while r > 0 do
+    invariant { 0 <= r }
+    variant { r }
+    r <- r - 1
+  end
+end
+
+{ true }
+count_down(5)
+{ r = 0 }

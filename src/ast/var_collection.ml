@@ -9,16 +9,24 @@ let split_last l =
   in
   aux [] l
 
+let rec collect_arith_expr (e : Logic.arith_expr) =
+  let open Logic in
+  match e with
+  | Var s -> Str_set.singleton s
+  | Int _ -> Str_set.empty
+  | Plus (e, e') | Sub (e, e') | Mul (e, e') | Div (e, e') | Mod (e, e') ->
+      Str_set.union (collect_arith_expr e) (collect_arith_expr e')
+  | Get (a, e) -> Str_set.add a (collect_arith_expr e)
+  | Len a -> Str_set.singleton a
+
+(* Variables of a loop variant's measure (if any), collected like the
+   invariant's. *)
+let collect_measure = function
+  | Some m -> collect_arith_expr m
+  | None -> Str_set.empty
+
 let collect_logic e =
   let open Logic in
-  let rec collect_arith_expr = function
-    | Var s -> Str_set.singleton s
-    | Int _ -> Str_set.empty
-    | Plus (e, e') | Sub (e, e') | Mul (e, e') | Div (e, e') | Mod (e, e') ->
-        Str_set.union (collect_arith_expr e) (collect_arith_expr e')
-    | Get (a, e) -> Str_set.add a (collect_arith_expr e)
-    | Len a -> Str_set.singleton a
-  in
   let rec collect_logic_expr = function
     | Bool _ -> Str_set.empty
     | Not e -> collect_logic_expr e
@@ -71,8 +79,9 @@ let collect_program c =
     | If (b, e, e') ->
         Str_set.union (collect_expr b)
           (Str_set.union (collect_cmd e) (collect_cmd e'))
-    | While (inv, b, c) ->
-        Str_set.union (collect_logic inv)
+    | While (inv, variant, b, c) ->
+        Str_set.union
+          (Str_set.union (collect_logic inv) (collect_measure variant))
           (Str_set.union (collect_expr b) (collect_cmd c))
     | Print e -> collect_expr e
     | ArrMake (a, n) -> Str_set.add a (collect_expr n)
@@ -86,15 +95,20 @@ let collect_program c =
    array-typed iff it appears in one of these positions; every other name is a
    scalar integer. Array names get a [map int int] vsymbol plus a companion
    length variable (see [str_set_to_vars]). *)
+let rec arrays_arith (e : Logic.arith_expr) =
+  let open Logic in
+  match e with
+  | Get (a, e) -> Str_set.add a (arrays_arith e)
+  | Len a -> Str_set.singleton a
+  | Plus (a, b) | Sub (a, b) | Mul (a, b) | Div (a, b) | Mod (a, b) ->
+      Str_set.union (arrays_arith a) (arrays_arith b)
+  | Int _ | Var _ -> Str_set.empty
+
+let arrays_measure = function Some m -> arrays_arith m | None -> Str_set.empty
+
 let arrays_logic e =
   let open Logic in
-  let rec arith = function
-    | Get (a, e) -> Str_set.add a (arith e)
-    | Len a -> Str_set.singleton a
-    | Plus (a, b) | Sub (a, b) | Mul (a, b) | Div (a, b) | Mod (a, b) ->
-        Str_set.union (arith a) (arith b)
-    | Int _ | Var _ -> Str_set.empty
-  in
+  let arith = arrays_arith in
   let rec logic = function
     | Bool _ -> Str_set.empty
     | Not e | Forall (_, e) | Exists (_, e) -> logic e
@@ -128,8 +142,10 @@ let arrays_program c =
     | IntExpr e | Print e | Assgn (_, e) | Let (_, e) -> expr e
     | Seq (a, b) -> Str_set.union (cmd a) (cmd b)
     | If (b, c, c') -> Str_set.union (expr b) (Str_set.union (cmd c) (cmd c'))
-    | While (inv, b, c) ->
-        Str_set.union (arrays_logic inv) (Str_set.union (expr b) (cmd c))
+    | While (inv, variant, b, c) ->
+        Str_set.union
+          (Str_set.union (arrays_logic inv) (arrays_measure variant))
+          (Str_set.union (expr b) (cmd c))
     | Proc (_, ps) ->
         List.fold_left (fun s e -> Str_set.union s (expr e)) Str_set.empty ps
     | ArrMake (a, n) -> Str_set.add a (expr n)

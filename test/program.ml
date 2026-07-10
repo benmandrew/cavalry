@@ -111,6 +111,7 @@ let%test_unit "Ast.Runtime.exec - while" =
             Seq
               ( While
                   ( dummy_invariant,
+                    None,
                     Lt (Value (VarInst "i"), Value (Int 10)),
                     Seq
                       ( Assgn
@@ -136,6 +137,7 @@ let%test_unit "Ast.Runtime.exec_env - terminating loop returns final env" =
           ( Assgn ("i", Value (Int 0)),
             While
               ( dummy_invariant,
+                None,
                 Lt (Value (VarInst "i"), Value (Int 3)),
                 Seq
                   ( Assgn ("x", Plus (Value (VarInst "x"), Value (VarInst "i"))),
@@ -156,6 +158,7 @@ let%test_unit "Ast.Runtime.exec_env - non-terminating loop runs out of fuel" =
       ( Assgn ("i", Value (Int 0)),
         While
           ( dummy_invariant,
+            None,
             Lt (Value (Int 0), Value (Int 1)),
             Assgn ("i", Plus (Value (VarInst "i"), Value (Int 1))) ) )
   in

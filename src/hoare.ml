@@ -145,7 +145,7 @@ let rec assigned_vars procs c =
   match c with
   | Assgn (x, _) | Let (x, _) -> [ x ]
   | Seq (a, b) | If (_, a, b) -> assigned_vars procs a @ assigned_vars procs b
-  | While (_, _, body) -> assigned_vars procs body
+  | While (_, _, _, body) -> assigned_vars procs body
   | Proc (f, _) -> (
       match Proc_map.find_opt f procs with
       | Some ((t : Triple.t), _) -> t.ws
@@ -299,11 +299,11 @@ module Wlp = struct
         let wp' = cmd c' q in
         let branches = T.(t_and (t_implies t wp) (t_implies (t_not t) wp')) in
         T.t_and_simp (safe_e b) branches
-    | While (inv, b, c) ->
+    | While (inv, variant, b, c) ->
         (* inv
             /\ forall y_i.
                 ((inv -> safe(b))
-                /\ ((b /\ inv) -> wlp(c, inv))
+                /\ ((b /\ inv) -> BODY)
                 /\ ((~b /\ inv) -> q))[x_i <- y_i]
            where the x_i are the variables the body modifies. Havoc'ing them
            (fresh y_i + t_forall_close, as for procedure calls) makes the two
@@ -311,10 +311,29 @@ module Wlp = struct
            loop's entry state. In machine-integer mode the guard is evaluated in
            every reachable (invariant-satisfying) state, so its arithmetic must
            not overflow there; the havoc'd y_i are also restricted to the machine
-           range (see [havoc_in_bounds]). *)
+           range (see [havoc_in_bounds]).
+
+           BODY is [wlp(c, inv)] (partial correctness) unless the loop carries a
+           [variant] measure V, in which case it is
+             forall w. w = V -> (0 <= V /\ wlp(c, inv /\ V < w))
+           the *total*-correctness rule: the measure is non-negative and each
+           iteration strictly decreases it. [w] freezes V's pre-body value (it is
+           fresh, so [wlp] never rewrites it), while the [V] inside [wlp] is the
+           post-body measure -- so the obligation is post-V < pre-V. *)
         let guard = expr_to_term ~g_vars ~l_vars b in
         let inv_t = Logic.translate_term ~g_vars ~l_vars inv in
-        let s = cmd c inv_t in
+        let s =
+          match variant with
+          | None -> cmd c inv_t
+          | Some measure ->
+              let m = Logic.translate_arith_term ~g_vars ~l_vars measure in
+              let w = Vars.create_fresh "variant" in
+              let w_t = T.t_var w in
+              let decreases = cmd c (T.t_and inv_t (Arith.lt m w_t)) in
+              let bounded = Arith.leq (T.t_nat_const 0) m in
+              T.t_forall_close [ w ] []
+                (T.t_implies (T.t_equ w_t m) (T.t_and bounded decreases))
+        in
         let guard_safe = T.t_implies_simp inv_t (safe_e b) in
         let iterate = T.(t_implies (t_and guard inv_t) s) in
         let postcond = T.(t_implies (t_and (t_not guard) inv_t) q) in

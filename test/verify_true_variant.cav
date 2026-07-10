@@ -1,0 +1,8 @@
+{ true }
+i <- 0;
+while i < 10 do
+  invariant { 0 <= i && i <= 10 }
+  variant { 10 - i }
+  i <- i + 1
+end
+{ i = 10 }

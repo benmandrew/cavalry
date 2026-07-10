@@ -45,7 +45,9 @@ command:
   | IF e = expr THEN c0 = command ELSE c1 = command END
       { UIf (e, c0, c1) }
   | WHILE e = expr DO INVARIANT LBRACE inv = logic_expr RBRACE c = command END
-      { UWhile (inv, e, c) }
+      { UWhile (inv, None, e, c) }
+  | WHILE e = expr DO INVARIANT LBRACE inv = logic_expr RBRACE VARIANT LBRACE m = arith_expr RBRACE c = command END
+      { UWhile (inv, Some m, e, c) }
   | PRINT e = expr
       { UPrint e }
   | e = expr

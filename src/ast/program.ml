@@ -31,7 +31,8 @@ type cmd =
   | Let of string * int expr
   | Proc of string * int expr list
   | If of bool expr * cmd * cmd
-  | While of Logic.expr * bool expr * cmd
+  | While of Logic.expr * Logic.arith_expr option * bool expr * cmd
+    (* invariant, optional variant (decreasing measure), guard, body *)
   | Print of int expr
   | ArrMake of string * int expr (* a <- array(n) *)
   | ArrAssgn of string * int expr * int expr (* a[i] <- e *)
@@ -46,7 +47,7 @@ type ut_expr =
   | ULet of string * ut_expr
   | UProc of string * ut_expr list
   | UIf of ut_expr * ut_expr * ut_expr
-  | UWhile of Logic.expr * ut_expr * ut_expr
+  | UWhile of Logic.expr * Logic.arith_expr option * ut_expr * ut_expr
   | UPrint of ut_expr
   | UEq of ut_expr * ut_expr
   | UNeq of ut_expr * ut_expr
@@ -102,7 +103,7 @@ and t_cmd = function
   | ULet (s, e) -> Let (s, t_int_expr e)
   | UProc (f, ps) -> Proc (f, List.map ps ~f:t_int_expr)
   | UIf (e, c, c') -> If (t_bool_expr e, t_cmd c, t_cmd c')
-  | UWhile (inv, e, c) -> While (inv, t_bool_expr e, t_cmd c)
+  | UWhile (inv, variant, e, c) -> While (inv, variant, t_bool_expr e, t_cmd c)
   | UPrint e -> Print (t_int_expr e)
   | UArrMake (a, n) -> ArrMake (a, t_int_expr n)
   | UArrAssgn (a, i, e) -> ArrAssgn (a, t_int_expr i, t_int_expr e)

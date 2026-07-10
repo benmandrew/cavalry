@@ -21,6 +21,11 @@ let%test_unit "Main.exec while" =
 let%test_unit "Main.exec procedure call" =
   [%test_result: int] (Main.exec "exec_proc.cav") ~expect:7
 
+(* A loop [variant] is verification-only: the interpreter ignores it and the
+   loop runs normally, summing 0..4 = 10. *)
+let%test_unit "Main.exec variant is ignored at runtime" =
+  [%test_result: int] (Main.exec "exec_variant.cav") ~expect:10
+
 (* Two nested loops each running 3 times -> 9 increments. *)
 let%test_unit "Main.exec nested while" =
   [%test_result: int] (Main.exec "exec_nested_while.cav") ~expect:9
@@ -153,9 +158,49 @@ let%test_unit "Main.verify true nested while" =
 let%test_unit "Main.verify true if local guard" =
   check_verify "verify_true_if_local_guard.cav" Valid
 
+(* Total correctness: a [variant] measure that is non-negative and strictly
+   decreases each iteration proves the loop terminates. *)
+let%test_unit "Main.verify true variant (total correctness)" =
+  check_verify "verify_true_variant.cav" Valid
+
+(* Partial correctness is the default (no variant): a non-terminating loop makes
+   any postcondition -- here [1 = 2] -- vacuously provable, because the loop
+   never reaches the exit. This is exactly what a variant rules out. *)
+let%test_unit "Main.verify true non-terminating loop (partial, vacuous)" =
+  check_verify "verify_true_nonterminating_partial.cav" Valid
+
+(* A variant inside a procedure body: the measure resolves through the
+   procedure's locals, and its termination obligation is discharged there. *)
+let%test_unit "Main.verify true variant in procedure" =
+  check_verify "verify_true_variant_proc.cav" Valid
+
+(* A variant whose measure is array-based ([len(a) - i]): variants compose with
+   arrays and the [len]/element machinery. *)
+let%test_unit "Main.verify true variant with array measure" =
+  check_verify "verify_true_variant_array.cav" Valid
+
 (* ===== verify: expected Invalid ===== *)
 
 let%test_unit "Main.verify false" = check_verify "verify_false.cav" Invalid
+
+(* A provided variant that does not decrease (here the measure [i] increases)
+   is rejected even though the loop does terminate: the given measure fails to
+   prove it. *)
+let%test_unit "Main.verify false variant does not decrease" =
+  check_verify "verify_false_variant.cav" Invalid
+
+(* The same non-terminating loop as the partial-correctness fixture, but with a
+   variant: total correctness now demands termination, which cannot be proved,
+   so the (vacuous) triple is rejected. *)
+let%test_unit "Main.verify false non-terminating loop (total)" =
+  check_verify "verify_false_nonterminating_total.cav" Invalid
+
+(* Exercises the *bounded-below* half of the termination obligation (distinct
+   from [verify_false_variant], which fails the strict-decrease half): the
+   measure [0 - i] strictly decreases every iteration but is unbounded below, so
+   the loop need not terminate and [0 <= V] cannot be proved. *)
+let%test_unit "Main.verify false variant unbounded below" =
+  check_verify "verify_false_variant_unbounded.cav" Invalid
 
 (* Loop invariant that does not hold on entry. *)
 let%test_unit "Main.verify false invariant on entry" =

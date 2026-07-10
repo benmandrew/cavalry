@@ -87,6 +87,8 @@ rule main = parse
       { ENSURES }
   | "invariant"
       { INVARIANT }
+  | "variant"
+      { VARIANT }
   | "writes"
       { WRITES }
   | "forall"

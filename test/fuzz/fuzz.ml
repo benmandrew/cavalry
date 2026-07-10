@@ -182,7 +182,7 @@ let gen_while =
             (fun t e ->
               let decr = Assgn (c, Sub (Value (VarInst c), Value (Int 1))) in
               let guard = Gt (Value (VarInst c), Value (Int 0)) in
-              While (inv, guard, Seq (Assgn (t, e), decr)))
+              While (inv, None, guard, Seq (Assgn (t, e), decr)))
             (G.oneof_list others) (gen_int_expr 3)))
 
 (* Full command generator: adds shallow, rare [While] loops. Used for the
@@ -477,9 +477,14 @@ let rec cmd_to_cav c =
       Printf.sprintf "if %s then\n%s\nelse\n%s\nend" (expr_to_cav b)
         (indent 2 (cmd_to_cav c0))
         (indent 2 (cmd_to_cav c1))
-  | Program.While (inv, b, body) ->
-      Printf.sprintf "while %s do\n  invariant { %s }\n%s\nend" (expr_to_cav b)
-        (logic_to_cav inv)
+  | Program.While (inv, variant, b, body) ->
+      let variant_clause =
+        match variant with
+        | None -> ""
+        | Some m -> Printf.sprintf "  variant { %s }\n" (arith_to_cav m)
+      in
+      Printf.sprintf "while %s do\n  invariant { %s }\n%s%s\nend"
+        (expr_to_cav b) (logic_to_cav inv) variant_clause
         (indent 2 (cmd_to_cav body))
   | Program.Proc (f, ps) ->
       Printf.sprintf "%s(%s)" f (String.concat ", " (List.map expr_to_cav ps))
