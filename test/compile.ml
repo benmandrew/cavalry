@@ -178,19 +178,23 @@ let%test_unit "Compile e2e - Zarith binary matches interpreter" =
       "exec_nested_while.cav";
       "exec_proc.cav";
       "verify_true_fib_proc.cav";
-      (* a loop variant is verification-only; codegen must ignore it *)
-      "exec_variant.cav";
     ] ~f:(fun fixture ->
       let expect = Int.to_string (Cavalry.Main.exec fixture) in
       [%test_result: string] ~expect (compile_and_run fixture))
 
-(* Arrays compile and run identically to the interpreter under both backends
-   (these fixtures stay in bounds and never overflow, so all three agree). This
-   covers array creation, element read/write, [len], and -- via
-   [exec_array_proc] -- a procedure writing an array global. *)
-let%test_unit "Compile e2e - arrays match interpreter, both backends" =
-  List.iter [ "exec_array.cav"; "exec_array_len.cav"; "exec_array_proc.cav" ]
-    ~f:(fun fixture ->
+(* Arrays and variant loops compile and run identically to the interpreter under
+   both backends (these fixtures stay in bounds and never overflow, so all three
+   agree). Covers array creation, element read/write, [len], a procedure writing
+   an array global, and -- via [exec_variant] -- that a loop variant is ignored
+   by codegen in both backends. *)
+let%test_unit "Compile e2e - arrays and variants, both backends match interp" =
+  List.iter
+    [
+      "exec_array.cav";
+      "exec_array_len.cav";
+      "exec_array_proc.cav";
+      "exec_variant.cav";
+    ] ~f:(fun fixture ->
       let expect = Int.to_string (Cavalry.Main.exec fixture) in
       [%test_result: string] ~expect (compile_and_run fixture);
       [%test_result: string] ~expect (compile_and_run ~native_int:true fixture))

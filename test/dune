@@ -31,6 +31,9 @@
    verify_false_variant.cav
    verify_true_nonterminating_partial.cav
    verify_false_nonterminating_total.cav
+   verify_false_variant_unbounded.cav
+   verify_true_variant_proc.cav
+   verify_true_variant_array.cav
    verify_false.cav
    verify_false_inv_entry.cav
    verify_false_proc_ensures.cav

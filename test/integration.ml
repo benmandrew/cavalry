@@ -169,6 +169,16 @@ let%test_unit "Main.verify true variant (total correctness)" =
 let%test_unit "Main.verify true non-terminating loop (partial, vacuous)" =
   check_verify "verify_true_nonterminating_partial.cav" Valid
 
+(* A variant inside a procedure body: the measure resolves through the
+   procedure's locals, and its termination obligation is discharged there. *)
+let%test_unit "Main.verify true variant in procedure" =
+  check_verify "verify_true_variant_proc.cav" Valid
+
+(* A variant whose measure is array-based ([len(a) - i]): variants compose with
+   arrays and the [len]/element machinery. *)
+let%test_unit "Main.verify true variant with array measure" =
+  check_verify "verify_true_variant_array.cav" Valid
+
 (* ===== verify: expected Invalid ===== *)
 
 let%test_unit "Main.verify false" = check_verify "verify_false.cav" Invalid
@@ -184,6 +194,13 @@ let%test_unit "Main.verify false variant does not decrease" =
    so the (vacuous) triple is rejected. *)
 let%test_unit "Main.verify false non-terminating loop (total)" =
   check_verify "verify_false_nonterminating_total.cav" Invalid
+
+(* Exercises the *bounded-below* half of the termination obligation (distinct
+   from [verify_false_variant], which fails the strict-decrease half): the
+   measure [0 - i] strictly decreases every iteration but is unbounded below, so
+   the loop need not terminate and [0 <= V] cannot be proved. *)
+let%test_unit "Main.verify false variant unbounded below" =
+  check_verify "verify_false_variant_unbounded.cav" Invalid
 
 (* Loop invariant that does not hold on entry. *)
 let%test_unit "Main.verify false invariant on entry" =
