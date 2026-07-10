@@ -196,6 +196,11 @@ let%test_unit "Main.verify true recursion (total)" =
 let%test_unit "Main.verify true recursion (partial, vacuous)" =
   check_verify "verify_true_recursion_partial.cav" Valid
 
+(* Two recursive calls in one body ([fib(n-1)] and [fib(n-2)]): each call site
+   gets its own decrease obligation, both discharged in the [n >= 2] branch. *)
+let%test_unit "Main.verify true recursion (multiple calls)" =
+  check_verify "verify_true_recursion_multi.cav" Valid
+
 (* A variant whose measure is array-based ([len(a) - i]): variants compose with
    arrays and the [len]/element machinery. *)
 let%test_unit "Main.verify true variant with array measure" =
@@ -233,6 +238,12 @@ let%test_unit "Main.verify false recursion (variant does not decrease)" =
    total correctness demands termination, which cannot be proved. *)
 let%test_unit "Main.verify false recursion (total)" =
   check_verify "verify_false_recursion_total.cav" Invalid
+
+(* Bounded-below half of the recursion decrease obligation: [dive] recurses on
+   [n - 1] (which decreases) but with no lower bound on [n], so [0 <= n - 1]
+   cannot be proved -- the recursion need not terminate. *)
+let%test_unit "Main.verify false recursion (unbounded below)" =
+  check_verify "verify_false_recursion_unbounded.cav" Invalid
 
 (* Loop invariant that does not hold on entry. *)
 let%test_unit "Main.verify false invariant on entry" =

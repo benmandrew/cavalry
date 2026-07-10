@@ -39,6 +39,8 @@
    verify_true_recursion_partial.cav
    verify_false_recursion_total.cav
    verify_true_writes_global_not_in_main.cav
+   verify_false_recursion_unbounded.cav
+   verify_true_recursion_multi.cav
    verify_false.cav
    verify_false_inv_entry.cav
    verify_false_proc_ensures.cav

@@ -1,0 +1,12 @@
+procedure dive (n) =
+  requires { true }
+  ensures { true }
+  variant { n }
+  writes { r }
+  r <- n;
+  dive(n - 1)
+end
+
+{ true }
+dive(3)
+{ true }
