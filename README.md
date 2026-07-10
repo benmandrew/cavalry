@@ -10,16 +10,47 @@ Details about Cavalry and Hoare logic are in an article on my website [here](htt
 
 ## Requirements
 
+The recommended way to get a working toolchain is [Nix](https://nixos.org/) with
+[flakes enabled](https://nixos.wiki/wiki/Flakes): the bundled flake provisions
+opam and the native libraries the project builds against. Setting the toolchain
+up by hand instead needs:
+
 - OCaml >= 4.14 and opam
 - [Why3](https://www.why3.org/) with the [Alt-Ergo](https://alt-ergo.ocamlpro.com/) 2.4.3 SMT solver, used to discharge verification proof obligations
 
-## Running
+## Getting started
 
 ```bash
 git clone git@github.com:benmandrew/cavalry.git
 cd cavalry
+```
+
+### With Nix (recommended)
+
+```bash
+nix develop
+```
+
+Entering the dev shell for the first time bootstraps a local opam switch,
+installs the project dependencies, and runs `why3 config detect` so Why3 can
+find Alt-Ergo. A stamp file guards this so it only happens once per clone. If
+you use [direnv](https://direnv.net/), `direnv allow` enters the shell (and runs
+the bootstrap) automatically.
+
+### Without Nix
+
+Provision the opam switch and prover yourself:
+
+```bash
 opam install --deps-only --with-test .
 why3 config detect  # let Why3 find the Alt-Ergo prover
+```
+
+## Running
+
+Once the environment is ready, build the project and exercise a program:
+
+```bash
 dune build
 # Verify [example.cav]
 dune exec -- cav verify example.cav
