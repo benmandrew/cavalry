@@ -2,6 +2,7 @@
 %type <Ast.Triple.ut_t list> top
 %type <Ast.Triple.ut_t> main
 %type <Ast.Triple.ut_t> procedure
+%type <Ast.Logic.arith_expr option> variant_opt
 %type <string list> variable_list
 %type <Ast.Program.ut_expr> command
 %type <Ast.Program.ut_expr> expr
@@ -16,8 +17,14 @@ top:
       { [ m ] }
 ;
 procedure:
-  | PROCEDURE f = VAR LPAREN ps = variable_list RPAREN EQ REQUIRES LBRACE p = logic_expr RBRACE ENSURES LBRACE q = logic_expr RBRACE WRITES LBRACE ws = variable_list RBRACE u = command END
-      { { Ast.Triple.p; q; ws; f; ps; u } }
+  | PROCEDURE f = VAR LPAREN ps = variable_list RPAREN EQ REQUIRES LBRACE p = logic_expr RBRACE ENSURES LBRACE q = logic_expr RBRACE variant = variant_opt WRITES LBRACE ws = variable_list RBRACE u = command END
+      { { Ast.Triple.p; q; variant; ws; f; ps; u } }
+;
+variant_opt:
+  |
+      { None }
+  | VARIANT LBRACE m = arith_expr RBRACE
+      { Some m }
 ;
 variable_list:
   | p = VAR COMMA ps = variable_list
@@ -29,7 +36,7 @@ variable_list:
 ;
 main:
   | LBRACE p = logic_expr RBRACE u = command LBRACE q = logic_expr RBRACE
-      { { Ast.Triple.p; q; ws = []; f="main"; ps=[]; u } }
+      { { Ast.Triple.p; q; variant = None; ws = []; f="main"; ps=[]; u } }
 ;
 command:
   | v = VAR ASSGN ARRAY LPAREN n = expr RPAREN

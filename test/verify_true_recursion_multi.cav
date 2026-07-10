@@ -1,0 +1,17 @@
+procedure fib (n) =
+  requires { n >= 0 }
+  ensures { r >= 0 }
+  variant { n }
+  writes { r }
+  if n < 2 then
+    r <- n
+  else
+    fib(n - 1);
+    fib(n - 2)
+  end
+end
+
+{ true }
+r <- 0;
+fib(6)
+{ 0 <= r }

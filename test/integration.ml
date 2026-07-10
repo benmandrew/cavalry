@@ -26,6 +26,10 @@ let%test_unit "Main.exec procedure call" =
 let%test_unit "Main.exec variant is ignored at runtime" =
   [%test_result: int] (Main.exec "exec_variant.cav") ~expect:10
 
+(* A recursive procedure runs and terminates: sum_to(5) = 0+1+...+5 = 15. *)
+let%test_unit "Main.exec recursion" =
+  [%test_result: int] (Main.exec "verify_true_recursion.cav") ~expect:15
+
 (* Two nested loops each running 3 times -> 9 increments. *)
 let%test_unit "Main.exec nested while" =
   [%test_result: int] (Main.exec "exec_nested_while.cav") ~expect:9
@@ -90,6 +94,12 @@ let%test_unit "Main.verify true frame" =
 (* A procedure may read a global it does not declare in `writes`. *)
 let%test_unit "Main.verify true read global" =
   check_verify "verify_true_read_global.cav" Valid
+
+(* A procedure may `writes` a global that never appears in `main`: it is still
+   classified as a global (not a procedure-local), so the caller's havoc
+   resolves it. Previously this crashed with [Var_not_found]. *)
+let%test_unit "Main.verify true writes global absent from main" =
+  check_verify "verify_true_writes_global_not_in_main.cav" Valid
 
 (* Assertion operators absent from other fixtures: || , -> , != . *)
 let%test_unit "Main.verify true disjunction" =
@@ -174,6 +184,29 @@ let%test_unit "Main.verify true non-terminating loop (partial, vacuous)" =
 let%test_unit "Main.verify true variant in procedure" =
   check_verify "verify_true_variant_proc.cav" Valid
 
+(* Total-correctness recursion: [sum_to] calls itself with a decreasing variant
+   [n], verified inductively (its own contract is the hypothesis for the
+   recursive call). Lifts the old bottom-up ordering restriction. *)
+let%test_unit "Main.verify true recursion (total)" =
+  check_verify "verify_true_recursion.cav" Valid
+
+(* Partial correctness allows recursion with no variant: a non-terminating
+   recursive procedure makes [ensures { false }] -- and hence the whole triple --
+   vacuously provable, just like a non-terminating loop. *)
+let%test_unit "Main.verify true recursion (partial, vacuous)" =
+  check_verify "verify_true_recursion_partial.cav" Valid
+
+(* Two recursive calls in one body ([fib(n-1)] and [fib(n-2)]): each call site
+   gets its own decrease obligation, both discharged in the [n >= 2] branch. *)
+let%test_unit "Main.verify true recursion (multiple calls)" =
+  check_verify "verify_true_recursion_multi.cav" Valid
+
+(* Recursion over an array: [fill] writes [a\[i\]] and recurses with a
+   [len(a) - i] measure, exercising the array bounds obligation and the array
+   havoc across a recursive call together. *)
+let%test_unit "Main.verify true recursion over an array" =
+  check_verify "verify_true_recursion_array.cav" Valid
+
 (* A variant whose measure is array-based ([len(a) - i]): variants compose with
    arrays and the [len]/element machinery. *)
 let%test_unit "Main.verify true variant with array measure" =
@@ -201,6 +234,22 @@ let%test_unit "Main.verify false non-terminating loop (total)" =
    the loop need not terminate and [0 <= V] cannot be proved. *)
 let%test_unit "Main.verify false variant unbounded below" =
   check_verify "verify_false_variant_unbounded.cav" Invalid
+
+(* Recursion with a variant that does not decrease across the recursive call
+   ([loops(n)] recurses on the same [n]) is rejected: [n < n] is false. *)
+let%test_unit "Main.verify false recursion (variant does not decrease)" =
+  check_verify "verify_false_recursion.cav" Invalid
+
+(* The same non-terminating recursion as the partial fixture, now with a variant:
+   total correctness demands termination, which cannot be proved. *)
+let%test_unit "Main.verify false recursion (total)" =
+  check_verify "verify_false_recursion_total.cav" Invalid
+
+(* Bounded-below half of the recursion decrease obligation: [dive] recurses on
+   [n - 1] (which decreases) but with no lower bound on [n], so [0 <= n - 1]
+   cannot be proved -- the recursion need not terminate. *)
+let%test_unit "Main.verify false recursion (unbounded below)" =
+  check_verify "verify_false_recursion_unbounded.cav" Invalid
 
 (* Loop invariant that does not hold on entry. *)
 let%test_unit "Main.verify false invariant on entry" =

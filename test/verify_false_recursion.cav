@@ -1,0 +1,13 @@
+procedure loops (n) =
+  requires { n >= 0 }
+  ensures { true }
+  variant { n }
+  writes { r }
+  r <- n;
+  loops(n)
+end
+
+{ true }
+r <- 0;
+loops(3)
+{ 0 <= r }

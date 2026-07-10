@@ -261,7 +261,9 @@ let emit_proc ~ops ((t : Triple.t), _vars) : string =
     match t.ps with [] -> "()" | ps -> List.map lname ps |> String.concat " "
   in
   let locals = Str_set.of_list t.ps in
-  Printf.sprintf "let %s %s =\n%s" (pname t.f) params
+  (* [let rec] so a self-recursive procedure can call itself. (Mutual recursion
+     would additionally need [... and ...]; it is not supported.) *)
+  Printf.sprintf "let rec %s %s =\n%s" (pname t.f) params
     (emit_cmd ~ops ~locals t.c)
 
 let emit ?(native_int = false) (program : (Triple.t * Vars.t) list) : string =

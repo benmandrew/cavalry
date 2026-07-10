@@ -5,7 +5,7 @@ open Ast.Program
 (* Build a [(Triple.t * Vars.t) list] the way [Main.get_ast] would, from a
    hand-written [main] body, and emit OCaml for it. *)
 let triple ?(f = "main") ?(ps = []) ?(ws = []) (c : cmd) : Triple.t =
-  { p = Logic.Bool true; q = Logic.Bool true; ws; f; ps; c }
+  { p = Logic.Bool true; q = Logic.Bool true; variant = None; ws; f; ps; c }
 
 let emit_main (c : cmd) : string =
   Var_collection.collect [ triple c ] |> Cavalry.Compile.emit
@@ -97,7 +97,7 @@ let%test_unit "Compile.emit - procedure: formals are locals, Assgn hits global"
   let out = Var_collection.collect [ proc; main ] |> Cavalry.Compile.emit in
   List.iter
     [
-      "let p_f l_a =";
+      "let rec p_f l_a =";
       (* formal [a] read as a local *)
       "l_a";
       (* the [<-] target is the shared global, not the formal *)
@@ -113,7 +113,7 @@ let%test_unit "Compile.emit - zero-arg procedure takes unit" =
   let proc = triple ~f:"f" (Assgn ("y", Value (Int 1))) in
   let main = triple (Proc ("f", [])) in
   let out = Var_collection.collect [ proc; main ] |> Cavalry.Compile.emit in
-  List.iter [ "let p_f () ="; "(p_f ())" ] ~f:(fun substring ->
+  List.iter [ "let rec p_f () ="; "(p_f ())" ] ~f:(fun substring ->
       [%test_pred: string] (contains ~substring) out)
 
 let%test_unit "Compile.emit - arrays: array ref, make, and indexed get/set" =
@@ -194,6 +194,8 @@ let%test_unit "Compile e2e - arrays and variants, both backends match interp" =
       "exec_array_len.cav";
       "exec_array_proc.cav";
       "exec_variant.cav";
+      (* a self-recursive procedure -- exercises the [let rec] codegen *)
+      "verify_true_recursion.cav";
     ] ~f:(fun fixture ->
       let expect = Int.to_string (Cavalry.Main.exec fixture) in
       [%test_result: string] ~expect (compile_and_run fixture);

@@ -71,3 +71,14 @@ let%test_unit "machine-int: arrays verify" =
     (is_valid (verify "verify_true_array_machine_int.cav"));
   [%test_result: bool] ~expect:true
     (is_valid (verify ~machine_int:true "verify_true_array_machine_int.cav"))
+
+(* Recursion coexists with machine-int mode: a bounded recursive procedure
+   ([0 <= n <= 100]) never overflows in its argument, measure, or writes, so the
+   overflow obligations at the recursive call and in its body discharge. Valid
+   under both models. *)
+let%test_unit "machine-int: recursion verifies" =
+  [%test_result: bool] ~expect:true
+    (is_valid (verify "verify_true_recursion_machine_int.cav"));
+  [%test_result: bool] ~expect:true
+    (is_valid
+       (verify ~machine_int:true "verify_true_recursion_machine_int.cav"))

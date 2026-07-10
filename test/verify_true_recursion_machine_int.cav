@@ -1,0 +1,17 @@
+procedure count (n) =
+  requires { 0 <= n && n <= 100 }
+  ensures { true }
+  variant { n }
+  writes { r }
+  if n = 0 then
+    r <- 0
+  else
+    r <- n;
+    count(n - 1)
+  end
+end
+
+{ true }
+r <- 0;
+count(10)
+{ true }
