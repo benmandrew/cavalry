@@ -13,6 +13,10 @@ module Runtime = struct
 
   type t = {
     global_vars : int BoundVars.t;
+    (* Arrays are always globals (created by [a <- array(n)], written by
+       [a\[i\] <- e]). Stored functionally, copy-on-write, so threading an
+       environment mirrors scalar assignment and the map-based WLP semantics. *)
+    global_arrays : int array BoundVars.t;
     local_vars : int BoundVars.t;
     procs : BoundProcs.t;
     proc_map : (string, proc_t) Hashtbl.t;
@@ -20,6 +24,14 @@ module Runtime = struct
 
   let add_global_var ({ global_vars; _ } as t) x v =
     { t with global_vars = BoundVars.add x v global_vars }
+
+  let add_global_array ({ global_arrays; _ } as t) x a =
+    { t with global_arrays = BoundVars.add x a global_arrays }
+
+  let find_array { global_arrays; _ } x =
+    match BoundVars.find_opt x global_arrays with
+    | None -> raise (UnboundError x)
+    | Some a -> a
 
   let add_local_var ({ local_vars; _ } as t) x v =
     { t with local_vars = BoundVars.add x v local_vars }
@@ -44,6 +56,7 @@ module Runtime = struct
   let empty =
     {
       global_vars = BoundVars.empty;
+      global_arrays = BoundVars.empty;
       local_vars = BoundVars.empty;
       procs = BoundProcs.empty;
       proc_map = Hashtbl.create 32;
@@ -108,6 +121,8 @@ let rec exec_expr : type a. Runtime.t -> a expr -> a =
   | Mod (a, b) ->
       let v1, v2 = binary_app r a b in
       v1 mod v2
+  | Get (a, i) -> (Runtime.find_array r a).(exec_expr r i)
+  | Len a -> Array.length (Runtime.find_array r a)
   | Eq (a, b) ->
       let v1, v2 = binary_app r a b in
       v1 = v2
@@ -149,8 +164,14 @@ and exec_cmd ?(fuel = ref max_int) r c : int * Runtime.t =
             let r_fun = List.fold_left2 Runtime.add_local_var r fps ps in
             exec_cmd r_fun c
       in
-      (* Ignore changes to procedure-local context *)
-      (v, { r with global_vars = r_proc.global_vars })
+      (* Ignore changes to procedure-local context, but keep global scalar and
+         array writes. *)
+      ( v,
+        {
+          r with
+          global_vars = r_proc.global_vars;
+          global_arrays = r_proc.global_arrays;
+        } )
   | If (e, c, c') ->
       let b = exec_expr r e in
       if b then exec_cmd r c else exec_cmd r c'
@@ -165,6 +186,17 @@ and exec_cmd ?(fuel = ref max_int) r c : int * Runtime.t =
   | Print e ->
       Printf.printf "%d\n" (exec_expr r e);
       (0, r)
+  | ArrMake (a, n) ->
+      let arr = Array.make (exec_expr r n) 0 in
+      (0, Runtime.add_global_array r a arr)
+  | ArrAssgn (a, i, e) ->
+      let idx = exec_expr r i in
+      let v = exec_expr r e in
+      (* Copy-on-write keeps each environment's array independent, matching the
+         functional threading used for scalars. *)
+      let arr = Array.copy (Runtime.find_array r a) in
+      arr.(idx) <- v;
+      (v, Runtime.add_global_array r a arr)
   | IntExpr v -> (exec_expr r v, r)
 
 let exec (ast : proc_t list) =

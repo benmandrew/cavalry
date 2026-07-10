@@ -15,6 +15,10 @@
       { Or (e0, e1) }
   | e0 = logic_expr IMPL e1 = logic_expr
       { Impl (e0, e1) }
+  | FORALL x = VAR DOT e = logic_expr
+      { Forall (x, e) }
+  | EXISTS x = VAR DOT e = logic_expr
+      { Exists (x, e) }
   | e0 = arith_expr EQ e1 = arith_expr
       { Eq (e0, e1) }
   | e0 = arith_expr NEQ e1 = arith_expr
@@ -33,6 +37,10 @@ arith_expr:
       { Int (i) }
   | v = VAR
       { Var (v) }
+  | a = VAR LBRACKET i = arith_expr RBRACKET
+      { Get (a, i) }
+  | LEN LPAREN a = VAR RPAREN
+      { Len (a) }
   | e0 = arith_expr PLUS e1 = arith_expr
       { Plus (e0, e1) }
   | e0 = arith_expr SUB e1 = arith_expr

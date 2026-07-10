@@ -420,6 +420,8 @@ let rec expr_to_cav : type a. a Program.expr -> string =
   | Program.Leq (a, b) -> bin "<=" a b
   | Program.Gt (a, b) -> bin ">" a b
   | Program.Geq (a, b) -> bin ">=" a b
+  | Program.Get (a, i) -> Printf.sprintf "%s[%s]" a (expr_to_cav i)
+  | Program.Len a -> Printf.sprintf "len(%s)" a
 
 let rec arith_to_cav = function
   | Logic.Int i -> string_of_int i
@@ -434,6 +436,8 @@ let rec arith_to_cav = function
       Printf.sprintf "(%s / %s)" (arith_to_cav a) (arith_to_cav b)
   | Logic.Mod (a, b) ->
       Printf.sprintf "(%s %% %s)" (arith_to_cav a) (arith_to_cav b)
+  | Logic.Get (a, i) -> Printf.sprintf "%s[%s]" a (arith_to_cav i)
+  | Logic.Len a -> Printf.sprintf "len(%s)" a
 
 (* The grammar has no parenthesised-[logic_expr] rule (only [arith_expr] can be
    parenthesised), so boolean connectives and comparisons are emitted bare and
@@ -461,6 +465,8 @@ let rec logic_to_cav = function
       Printf.sprintf "%s > %s" (arith_to_cav a) (arith_to_cav b)
   | Logic.Geq (a, b) ->
       Printf.sprintf "%s >= %s" (arith_to_cav a) (arith_to_cav b)
+  | Logic.Forall (x, e) -> Printf.sprintf "forall %s . %s" x (logic_to_cav e)
+  | Logic.Exists (x, e) -> Printf.sprintf "exists %s . %s" x (logic_to_cav e)
 
 let rec cmd_to_cav c =
   match c with
@@ -479,6 +485,9 @@ let rec cmd_to_cav c =
       Printf.sprintf "%s(%s)" f (String.concat ", " (List.map expr_to_cav ps))
   | Program.IntExpr e -> expr_to_cav e
   | Program.Print e -> Printf.sprintf "print %s" (expr_to_cav e)
+  | Program.ArrMake (a, n) -> Printf.sprintf "%s <- array(%s)" a (expr_to_cav n)
+  | Program.ArrAssgn (a, i, e) ->
+      Printf.sprintf "%s[%s] <- %s" a (expr_to_cav i) (expr_to_cav e)
 
 let proc_to_cav (t : Triple.t) =
   Printf.sprintf

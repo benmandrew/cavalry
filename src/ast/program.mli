@@ -18,6 +18,8 @@ type _ expr =
   | Mul : int expr * int expr -> int expr
   | Div : int expr * int expr -> int expr
   | Mod : int expr * int expr -> int expr
+  | Get : string * int expr -> int expr
+  | Len : string -> int expr
 [@@deriving sexp_of]
 
 type cmd =
@@ -29,6 +31,8 @@ type cmd =
   | If of bool expr * cmd * cmd
   | While of Logic.expr * bool expr * cmd
   | Print of int expr
+  | ArrMake of string * int expr
+  | ArrAssgn of string * int expr * int expr
 [@@deriving sexp_of]
 
 (* Untyped AST to play nice with the Menhir parser generator *)
@@ -54,6 +58,10 @@ type ut_expr =
   | UMul of ut_expr * ut_expr
   | UDiv of ut_expr * ut_expr
   | UMod of ut_expr * ut_expr
+  | UGet of string * ut_expr
+  | ULen of string
+  | UArrMake of string * ut_expr
+  | UArrAssgn of string * ut_expr * ut_expr
 [@@deriving sexp_of, show]
 
 exception TypeError of string

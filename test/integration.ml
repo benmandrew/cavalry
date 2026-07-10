@@ -33,6 +33,10 @@ let%test_unit "Main.exec negative" =
 let%test_unit "Main.exec div and mod" =
   [%test_result: int] (Main.exec "exec_div.cav") ~expect:32
 
+(* Arrays: create, write two cells, read them back: 42 + 8. *)
+let%test_unit "Main.exec array" =
+  [%test_result: int] (Main.exec "exec_array.cav") ~expect:50
+
 (* Reading an unbound variable at runtime raises (preconditions do not
    initialize variables; they are assertions only). *)
 let%test_unit "Main.exec unbound raises" =
@@ -86,6 +90,27 @@ let%test_unit "Main.verify true neq" = check_verify "verify_true_neq.cav" Valid
    divisor-non-zero obligation is discharged from the precondition [y > 0]. *)
 let%test_unit "Main.verify true div" = check_verify "verify_true_div.cav" Valid
 
+(* Arrays: writes update the addressed cell and frame the rest ([a\[3\]]/[a\[5\]]
+   independent), [len] is preserved, and every index is in bounds. *)
+let%test_unit "Main.verify true array write" =
+  check_verify "verify_true_array_write.cav" Valid
+
+(* [array(n)] yields a length-[n] all-zeros array: a universally quantified
+   postcondition over every in-bounds index. *)
+let%test_unit "Main.verify true array init" =
+  check_verify "verify_true_array_init.cav" Valid
+
+(* Flagship: a loop filling an array, carrying a quantified invariant over the
+   prefix written so far, establishes a quantified postcondition. Exercises
+   array havoc, the quantifier, and the index-bounds obligation together. *)
+let%test_unit "Main.verify true array fill" =
+  check_verify "verify_true_array_fill.cav" Valid
+
+(* Existential in a postcondition: some in-bounds index holds 5 (witness k = 1,
+   which the prover can find -- unlike a bare arithmetic existential). *)
+let%test_unit "Main.verify true exists" =
+  check_verify "verify_true_exists.cav" Valid
+
 (* Negative results reasoned about via `0 - n`. *)
 let%test_unit "Main.verify true negative" =
   check_verify "verify_true_negative.cav" Valid
@@ -131,6 +156,16 @@ let%test_unit "Main.verify false nonlinear incompleteness" =
    the timeout, which the pipeline reports as Invalid.) *)
 let%test_unit "Main.verify false div by zero" =
   check_verify "verify_false_div_by_zero.cav" Invalid
+
+(* Array bounds: an out-of-range element write ([a\[20\]] into a length-10
+   array) fails its [0 <= i < len(a)] obligation. *)
+let%test_unit "Main.verify false array write out of bounds" =
+  check_verify "verify_false_array_write_oob.cav" Invalid
+
+(* Array bounds: an out-of-range element *read* fails the same obligation,
+   imposed on reads via [defined]. *)
+let%test_unit "Main.verify false array read out of bounds" =
+  check_verify "verify_false_array_read_oob.cav" Invalid
 
 (* ===== Type errors: get_ast raises during translation ===== *)
 

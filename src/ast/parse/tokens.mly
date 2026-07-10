@@ -12,9 +12,12 @@
 %token EQ NEQ LT LEQ GT GEQ
 %token AND OR IMPL NOT
 %token LPAREN RPAREN
+%token LBRACKET RBRACKET DOT
+%token FORALL EXISTS LEN ARRAY
 
 %left SEMICOLON
 
+%nonassoc FORALL EXISTS DOT
 %left IMPL
 %left OR
 %left AND

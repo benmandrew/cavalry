@@ -16,6 +16,8 @@ let collect_logic e =
     | Int _ -> Str_set.empty
     | Plus (e, e') | Sub (e, e') | Mul (e, e') | Div (e, e') | Mod (e, e') ->
         Str_set.union (collect_arith_expr e) (collect_arith_expr e')
+    | Get (a, e) -> Str_set.add a (collect_arith_expr e)
+    | Len a -> Str_set.singleton a
   in
   let rec collect_logic_expr = function
     | Bool _ -> Str_set.empty
@@ -29,6 +31,8 @@ let collect_logic e =
     | Gt (e, e')
     | Geq (e, e') ->
         Str_set.union (collect_arith_expr e) (collect_arith_expr e')
+    (* [x] is bound by the quantifier, not a program variable, so drop it. *)
+    | Forall (x, e) | Exists (x, e) -> Str_set.remove x (collect_logic_expr e)
   in
   collect_logic_expr e
 
@@ -52,6 +56,8 @@ let collect_program c =
     | Gt (e, e')
     | Geq (e, e') ->
         Str_set.union (collect_expr e) (collect_expr e')
+    | Get (a, e) -> Str_set.add a (collect_expr e)
+    | Len a -> Str_set.singleton a
   in
   let rec collect_cmd = function
     | IntExpr e -> collect_expr e
@@ -65,10 +71,79 @@ let collect_program c =
     | If (b, e, e') ->
         Str_set.union (collect_expr b)
           (Str_set.union (collect_cmd e) (collect_cmd e'))
-    | While (_, b, c) -> Str_set.union (collect_expr b) (collect_cmd c)
+    | While (inv, b, c) ->
+        Str_set.union (collect_logic inv)
+          (Str_set.union (collect_expr b) (collect_cmd c))
     | Print e -> collect_expr e
+    | ArrMake (a, n) -> Str_set.add a (collect_expr n)
+    | ArrAssgn (a, i, e) ->
+        Str_set.add a (Str_set.union (collect_expr i) (collect_expr e))
   in
   collect_cmd c
+
+(* Names used as arrays: anything indexed ([a\[i\]]), measured ([len(a)]),
+   created ([a <- array(n)]), or element-assigned ([a\[i\] <- e]). A name is
+   array-typed iff it appears in one of these positions; every other name is a
+   scalar integer. Array names get a [map int int] vsymbol plus a companion
+   length variable (see [str_set_to_vars]). *)
+let arrays_logic e =
+  let open Logic in
+  let rec arith = function
+    | Get (a, e) -> Str_set.add a (arith e)
+    | Len a -> Str_set.singleton a
+    | Plus (a, b) | Sub (a, b) | Mul (a, b) | Div (a, b) | Mod (a, b) ->
+        Str_set.union (arith a) (arith b)
+    | Int _ | Var _ -> Str_set.empty
+  in
+  let rec logic = function
+    | Bool _ -> Str_set.empty
+    | Not e | Forall (_, e) | Exists (_, e) -> logic e
+    | And (a, b) | Or (a, b) | Impl (a, b) -> Str_set.union (logic a) (logic b)
+    | Eq (a, b) | Neq (a, b) | Lt (a, b) | Leq (a, b) | Gt (a, b) | Geq (a, b)
+      ->
+        Str_set.union (arith a) (arith b)
+  in
+  logic e
+
+let arrays_program c =
+  let open Program in
+  let rec expr : type a. a expr -> Str_set.t = function
+    | Value _ -> Str_set.empty
+    | Get (a, e) -> Str_set.add a (expr e)
+    | Len a -> Str_set.singleton a
+    | Plus (a, b)
+    | Sub (a, b)
+    | Mul (a, b)
+    | Div (a, b)
+    | Mod (a, b)
+    | Eq (a, b)
+    | Neq (a, b)
+    | Lt (a, b)
+    | Leq (a, b)
+    | Gt (a, b)
+    | Geq (a, b) ->
+        Str_set.union (expr a) (expr b)
+  in
+  let rec cmd = function
+    | IntExpr e | Print e | Assgn (_, e) | Let (_, e) -> expr e
+    | Seq (a, b) -> Str_set.union (cmd a) (cmd b)
+    | If (b, c, c') -> Str_set.union (expr b) (Str_set.union (cmd c) (cmd c'))
+    | While (inv, b, c) ->
+        Str_set.union (arrays_logic inv) (Str_set.union (expr b) (cmd c))
+    | Proc (_, ps) ->
+        List.fold_left (fun s e -> Str_set.union s (expr e)) Str_set.empty ps
+    | ArrMake (a, n) -> Str_set.add a (expr n)
+    | ArrAssgn (a, i, e) -> Str_set.add a (Str_set.union (expr i) (expr e))
+  in
+  cmd c
+
+let all_arrays (program : Triple.t list) =
+  List.fold_left
+    (fun s (t : Triple.t) ->
+      Str_set.union s
+        (Str_set.union (arrays_logic t.p)
+           (Str_set.union (arrays_logic t.q) (arrays_program t.c))))
+    Str_set.empty program
 
 let collect_procedure globals (t : Triple.t) =
   let p_vars = collect_logic t.p in
@@ -78,21 +153,27 @@ let collect_procedure globals (t : Triple.t) =
   (* If global variables occur in the procedure, don't add them as local variables *)
   Str_set.fold (fun global vars -> Str_set.remove global vars) globals vars
 
-let str_set_to_vars vars =
+let str_set_to_vars ~arrays vars =
   let f x vs =
-    let symbol = Vars.create_fresh x in
-    Vars.add x symbol vs
+    if Str_set.mem x arrays then
+      (* An array contributes two symbols: its [map int int] element store and a
+         companion integer length under [Vars.len_key]. *)
+      Vars.add x
+        (Vars.create_fresh_array x)
+        (Vars.add (Vars.len_key x) (Vars.create_fresh (Vars.len_key x)) vs)
+    else Vars.add x (Vars.create_fresh x) vs
   in
   Str_set.fold f vars Vars.empty
 
 let collect (program : Triple.t list) =
   let procedures, main = split_last program in
+  let arrays = all_arrays program in
   let globals = collect_procedure Str_set.empty main in
   let procedures =
     List.map
       (fun proc ->
-        let vars = str_set_to_vars (collect_procedure globals proc) in
+        let vars = str_set_to_vars ~arrays (collect_procedure globals proc) in
         (proc, vars))
       procedures
   in
-  procedures @ [ (main, str_set_to_vars globals) ]
+  procedures @ [ (main, str_set_to_vars ~arrays globals) ]

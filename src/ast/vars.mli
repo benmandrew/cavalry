@@ -21,3 +21,14 @@ val union : t -> t -> t
 
 val fold : (string -> T.vsymbol -> 'a -> 'a) -> t -> 'a -> 'a
 val create_fresh : string -> Why3.Term.vsymbol
+
+val create_fresh_array : string -> Why3.Term.vsymbol
+(** A fresh array-valued ([map int int]) variable. *)
+
+val fresh_like : T.vsymbol -> Why3.Term.vsymbol
+(** A fresh variable of the same type as the argument, for havoc'ing a variable
+    without assuming it is an integer. *)
+
+val len_key : string -> string
+(** [len_key a] is the internal key under which array [a]'s length is stored. It
+    cannot clash with a source identifier. *)

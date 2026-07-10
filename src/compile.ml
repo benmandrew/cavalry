@@ -62,6 +62,10 @@ type ops = {
   gt : string;
   geq : string;
   to_string : string; (* int -> string, for printing *)
+  idx : string -> string;
+      (* a program integer -> a native [int] usable as an array index *)
+  len : string -> string;
+      (* a native [int] (an [Array.length]) -> a program integer *)
 }
 
 let zarith =
@@ -83,6 +87,8 @@ let zarith =
     gt = "Z.gt";
     geq = "Z.geq";
     to_string = "Z.to_string";
+    idx = (fun s -> Printf.sprintf "(Z.to_int %s)" s);
+    len = (fun s -> Printf.sprintf "(Z.of_int %s)" s);
   }
 
 let native =
@@ -101,15 +107,52 @@ let native =
     gt = "( > )";
     geq = "( >= )";
     to_string = "string_of_int";
+    idx = (fun s -> s);
+    len = (fun s -> s);
   }
 
-(* Globals to declare = every [Assgn] target anywhere in the program. *)
+(* Scalar globals to declare = every [Assgn] target. Array globals are handled
+   separately (see [arrays]) since they compile to an [array ref], not an
+   [int ref]. *)
 let rec assigned = function
   | Seq (c, c') -> Str_set.union (assigned c) (assigned c')
   | Assgn (x, _) -> Str_set.singleton x
   | If (_, c, c') -> Str_set.union (assigned c) (assigned c')
   | While (_, _, c) -> assigned c
-  | Let _ | Print _ | IntExpr _ | Proc _ -> Str_set.empty
+  | Let _ | Print _ | IntExpr _ | Proc _ | ArrMake _ | ArrAssgn _ ->
+      Str_set.empty
+
+(* Array globals to declare = every name used as an array anywhere in the
+   program bodies (created, element-written, indexed, or measured). *)
+let rec arrays_expr : type a. a expr -> Str_set.t = function
+  | Get (a, i) -> Str_set.add a (arrays_expr i)
+  | Len a -> Str_set.singleton a
+  | Value _ -> Str_set.empty
+  | Plus (a, b)
+  | Sub (a, b)
+  | Mul (a, b)
+  | Div (a, b)
+  | Mod (a, b)
+  | Eq (a, b)
+  | Neq (a, b)
+  | Lt (a, b)
+  | Leq (a, b)
+  | Gt (a, b)
+  | Geq (a, b) ->
+      Str_set.union (arrays_expr a) (arrays_expr b)
+
+let rec arrays = function
+  | Seq (c, c') -> Str_set.union (arrays c) (arrays c')
+  | If (_, c, c') -> Str_set.union (arrays c) (arrays c')
+  | While (_, _, c) -> arrays c
+  | Assgn (_, e) | Let (_, e) | Print e | IntExpr e -> arrays_expr e
+  | ArrMake (a, n) -> Str_set.add a (arrays_expr n)
+  | ArrAssgn (a, i, e) ->
+      Str_set.add a (Str_set.union (arrays_expr i) (arrays_expr e))
+  | Proc (_, ps) ->
+      List.fold_left
+        (fun s e -> Str_set.union s (arrays_expr e))
+        Str_set.empty ps
 
 (* [locals] is the set of program names currently bound in the local store
    (formals + in-scope [let]s). A read resolves local-first then global, the
@@ -134,6 +177,9 @@ let rec emit_int ~ops ~locals (e : int expr) : string =
   | Mul (a, b) -> bin ops.mul a b
   | Div (a, b) -> bin ops.div a b
   | Mod (a, b) -> bin ops.mod_ a b
+  | Get (a, i) ->
+      Printf.sprintf "(!%s).(%s)" (gref a) (ops.idx (emit_int ~ops ~locals i))
+  | Len a -> ops.len (Printf.sprintf "(Array.length !%s)" (gref a))
 
 let emit_bool ~ops ~locals (e : bool expr) : string =
   let cmp op a b =
@@ -169,6 +215,16 @@ let rec emit_cmd ~ops ~locals c : string =
   | Print e ->
       Printf.sprintf "(print_string (%s (%s)); print_newline (); %s)"
         ops.to_string (emit_int ~ops ~locals e) ops.zero
+  | ArrMake (a, n) ->
+      (* a <- array(n): fresh zero-filled array; command value is 0. *)
+      Printf.sprintf "(%s := Array.make (%s) %s; %s)" (gref a)
+        (ops.idx (emit_int ~ops ~locals n))
+        ops.zero ops.zero
+  | ArrAssgn (a, i, e) ->
+      (* a[i] <- e; command value is the assigned element. *)
+      Printf.sprintf "(let v = %s in (!%s).(%s) <- v; v)"
+        (emit_int ~ops ~locals e) (gref a)
+        (ops.idx (emit_int ~ops ~locals i))
   | IntExpr e -> emit_int ~ops ~locals e
   | If (b, c, c') ->
       Printf.sprintf "(if %s then %s else %s)" (emit_bool ~ops ~locals b)
@@ -228,11 +284,25 @@ let emit ?(native_int = false) (program : (Triple.t * Vars.t) list) : string =
     |> List.map (fun x -> Printf.sprintf "let %s = ref %s" (gref x) ops.zero)
     |> String.concat "\n"
   in
+  (* Array globals start as an empty [array ref]; [a <- array(n)] replaces it
+     with a zero-filled array of the requested length. *)
+  let arr_refs =
+    List.fold_left
+      (fun acc (t, _) -> Str_set.union acc (arrays t.Triple.c))
+      Str_set.empty program
+  in
+  let arr_decls =
+    Str_set.elements arr_refs
+    |> List.map (fun x -> Printf.sprintf "let %s = ref [||]" (gref x))
+    |> String.concat "\n"
+  in
   let proc_defs = List.map (emit_proc ~ops) procs |> String.concat "\n\n" in
   let main_body =
     emit_block ~ops ~locals:Str_set.empty (flatten main.Triple.c)
   in
-  let sections = List.filter (fun s -> s <> "") [ decls; proc_defs ] in
+  let sections =
+    List.filter (fun s -> s <> "") [ decls; arr_decls; proc_defs ]
+  in
   Printf.sprintf
     "%s\n\n\
      let () =\n\

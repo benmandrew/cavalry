@@ -1,0 +1,3 @@
+{ n >= 0 }
+a <- array(n)
+{ len(a) = n && forall i . 0 <= i && i < len(a) -> a[i] = 0 }
