@@ -32,6 +32,10 @@ main:
       { { Ast.Triple.p; q; ws = []; f="main"; ps=[]; u } }
 ;
 command:
+  | v = VAR ASSGN ARRAY LPAREN n = expr RPAREN
+      { UArrMake (v, n) }
+  | a = VAR LBRACKET i = expr RBRACKET ASSGN e = expr
+      { UArrAssgn (a, i, e) }
   | v = VAR ASSGN e = expr
       { UAssgn (v, e) }
   | f = VAR LPAREN ps = expression_list RPAREN
@@ -54,6 +58,10 @@ expr:
       { UBool (b) }
   | v = VAR
       { UVar (v) }
+  | a = VAR LBRACKET i = expr RBRACKET
+      { UGet (a, i) }
+  | LEN LPAREN a = VAR RPAREN
+      { ULen (a) }
   | e0 = expr PLUS e1 = expr
       { UPlus (e0, e1) }
   | e0 = expr SUB e1 = expr

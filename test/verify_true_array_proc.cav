@@ -1,0 +1,11 @@
+procedure set_first (v) =
+  requires { len(a) > 0 }
+  ensures { a[0] = v }
+  writes { a }
+  a[0] <- v
+end
+
+{ true }
+a <- array(3);
+set_first(7)
+{ a[0] = 7 }

@@ -57,6 +57,12 @@ rule main = parse
       { LBRACE }
   | '}'
       { RBRACE }
+  | '['
+      { LBRACKET }
+  | ']'
+      { RBRACKET }
+  | '.'
+      { DOT }
   | ','
       { COMMA }
   | "print"
@@ -83,6 +89,14 @@ rule main = parse
       { INVARIANT }
   | "writes"
       { WRITES }
+  | "forall"
+      { FORALL }
+  | "exists"
+      { EXISTS }
+  | "len"
+      { LEN }
+  | "array"
+      { ARRAY }
   | (['a'-'z']|['A'-'Z']|'_')+
       { VAR (Lexing.lexeme lexbuf) }
   | eof

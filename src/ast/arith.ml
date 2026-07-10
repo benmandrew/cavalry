@@ -16,6 +16,25 @@ let sub_symbol = find_symbol int_theory "infix -"
 let mul_symbol = find_symbol int_theory "infix *"
 let div_symbol = find_symbol comp_div_theory "div"
 let mod_symbol = find_symbol comp_div_theory "mod"
+
+(* Arrays are Why3 [map.Map]s ([map int int]) for their elements, with each
+   array's length tracked separately as an ordinary integer variable (see
+   [Vars]). [map.Const] supplies the all-zeros map an [array(n)] starts from.
+   Element updates ([set]) leave the length variable untouched, so length is
+   preserved across writes for free. *)
+let map_theory : Theory.theory = Env.read_theory Smt.Prover.env [ "map" ] "Map"
+
+let const_theory : Theory.theory =
+  Env.read_theory Smt.Prover.env [ "map" ] "Const"
+
+let map_ts = Theory.ns_find_ts map_theory.Theory.th_export [ "map" ]
+let ty_int_map = Ty.ty_app map_ts [ Ty.ty_int; Ty.ty_int ]
+let get_symbol = find_symbol map_theory "get"
+let set_symbol = find_symbol map_theory "set"
+let const_symbol = find_symbol const_theory "const"
+let aget a i = T.t_app get_symbol [ a; i ] (Some Ty.ty_int)
+let aset a i v = T.t_app set_symbol [ a; i; v ] (Some ty_int_map)
+let azero = T.t_app const_symbol [ T.t_nat_const 0 ] (Some ty_int_map)
 let eq_symbol = find_symbol int_theory "infix ="
 let lt_symbol = find_symbol int_theory "infix <"
 let leq_symbol = find_symbol int_theory "infix <="
@@ -60,20 +79,37 @@ let base_task =
    only for goals that actually use division -- see [task_for]. *)
 let base_task_div = Task.use_export base_task comp_div_theory
 
-(* Whether [t] applies the truncated [div]/[mod] symbols anywhere in its tree. *)
-let uses_div_mod (t : T.term) : bool =
+let base_task_map =
+  List.fold_left Task.use_export base_task [ map_theory; const_theory ]
+
+(* Whether [t] applies any of [syms] anywhere in its tree. *)
+let uses_any (syms : Term.lsymbol list) (t : T.term) : bool =
   let rec check acc (t : T.term) =
     let acc =
       match t.T.t_node with
-      | T.Tapp (ls, _) ->
-          acc || T.ls_equal ls div_symbol || T.ls_equal ls mod_symbol
+      | T.Tapp (ls, _) -> acc || List.exists (T.ls_equal ls) syms
       | _ -> acc
     in
     T.t_fold check acc t
   in
   check false t
 
-(* Task to discharge [t] against: the plain integer theory, plus
-   [ComputerDivision] only when [t] needs its axioms. *)
-let task_for (t : T.term) : Task.task =
-  if uses_div_mod t then base_task_div else base_task
+let uses_div (t : T.term) : bool = uses_any [ div_symbol; mod_symbol ] t
+
+let uses_map (t : T.term) : bool =
+  uses_any [ get_symbol; set_symbol; const_symbol ] t
+
+(* The base task extended with [ComputerDivision] and/or the map theories,
+   included only when actually needed. Withholding unused theories keeps
+   Alt-Ergo from looping on axioms it does not need (see [base_task_div]). The
+   map theories must also be present whenever a [map]-typed *variable* occurs --
+   even with no [get]/[set] applied -- because [map] unfolds to the arrow type,
+   which the task must declare. *)
+let task ~div ~map : Task.task =
+  match (div, map) with
+  | false, false -> base_task
+  | true, false -> base_task_div
+  | false, true -> base_task_map
+  | true, true -> Task.use_export base_task_map comp_div_theory
+
+let task_for (t : T.term) : Task.task = task ~div:(uses_div t) ~map:(uses_map t)

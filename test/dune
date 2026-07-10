@@ -12,6 +12,20 @@
    exec_div.cav
    verify_true_div.cav
    verify_false_div_by_zero.cav
+   exec_array.cav
+   verify_true_array_write.cav
+   verify_true_array_init.cav
+   verify_true_array_fill.cav
+   verify_true_exists.cav
+   verify_false_array_write_oob.cav
+   verify_false_array_read_oob.cav
+   exec_array_len.cav
+   exec_array_proc.cav
+   verify_true_array_proc.cav
+   verify_false_array_negative_length.cav
+   verify_true_array_frame.cav
+   verify_true_nested_forall.cav
+   verify_true_array_machine_int.cav
    verify_false.cav
    verify_false_inv_entry.cav
    verify_false_proc_ensures.cav

@@ -115,6 +115,32 @@ let%test_unit "Compile.emit - zero-arg procedure takes unit" =
   List.iter [ "let p_f () ="; "(p_f ())" ] ~f:(fun substring ->
       [%test_pred: string] (contains ~substring) out)
 
+let%test_unit "Compile.emit - arrays: array ref, make, and indexed get/set" =
+  (* a <- array(3); a[1] <- 5; len(a) + a[1] *)
+  let body =
+    Seq
+      ( ArrMake ("a", Value (Int 3)),
+        Seq
+          ( ArrAssgn ("a", Value (Int 1), Value (Int 5)),
+            IntExpr (Plus (Len "a", Get ("a", Value (Int 1)))) ) )
+  in
+  let out = emit_main body in
+  List.iter
+    [
+      (* an array global is an [array ref], not an [int ref] *)
+      "let g_a = ref [||]";
+      "Array.make";
+      (* element access dereferences the ref and indexes with a native int *)
+      "(!g_a).(";
+      "Z.to_int";
+      (* [len] reads [Array.length] back into a program integer *)
+      "Array.length !g_a";
+      "Z.of_int";
+    ] ~f:(fun substring ->
+      if not (contains ~substring out) then
+        raise_s
+          [%message "missing fragment" (substring : string) (out : string)])
+
 (* --- end-to-end: actually build the binary and run it --- *)
 
 (* Compile [fixture] to a native binary (skipping the verification gate, which
@@ -154,6 +180,17 @@ let%test_unit "Compile e2e - Zarith binary matches interpreter" =
     ] ~f:(fun fixture ->
       let expect = Int.to_string (Cavalry.Main.exec fixture) in
       [%test_result: string] ~expect (compile_and_run fixture))
+
+(* Arrays compile and run identically to the interpreter under both backends
+   (these fixtures stay in bounds and never overflow, so all three agree). This
+   covers array creation, element read/write, [len], and -- via
+   [exec_array_proc] -- a procedure writing an array global. *)
+let%test_unit "Compile e2e - arrays match interpreter, both backends" =
+  List.iter [ "exec_array.cav"; "exec_array_len.cav"; "exec_array_proc.cav" ]
+    ~f:(fun fixture ->
+      let expect = Int.to_string (Cavalry.Main.exec fixture) in
+      [%test_result: string] ~expect (compile_and_run fixture);
+      [%test_result: string] ~expect (compile_and_run ~native_int:true fixture))
 
 (* On overflow the three semantics diverge, which is the whole reason Zarith is
    the default: the Zarith binary yields the true unbounded value (what the

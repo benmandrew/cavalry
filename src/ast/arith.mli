@@ -13,6 +13,20 @@ val modulo : Term.term -> Term.term -> Term.term
 (** Remainder consistent with {!div} (sign of the dividend), matching OCaml's
     native [mod]. Underspecified by a zero divisor. *)
 
+val ty_int_map : Ty.ty
+(** The Why3 type of an array's element store: [map int int]. *)
+
+val aget : Term.term -> Term.term -> Term.term
+(** [aget a i] is the element [a[i]] ([map.Map]'s [get]). *)
+
+val aset : Term.term -> Term.term -> Term.term -> Term.term
+(** [aset a i v] is the array [a] with index [i] updated to [v] ([map.Map]'s
+    [set]); other indices and the separately-tracked length are unchanged. *)
+
+val azero : Term.term
+(** The all-zeros element store an [array(n)] begins from ([map.Const]'s
+    [const 0]). *)
+
 val eq : Term.term -> Term.term -> Term.term
 val neq : Term.term -> Term.term -> Term.term
 val lt : Term.term -> Term.term -> Term.term
@@ -35,6 +49,18 @@ val base_task : Task.task
 
 val task_for : Term.term -> Task.task
 (** The proof task to discharge a goal against: the integer theory, plus Why3's
-    [int.ComputerDivision] iff the goal uses {!div}/{!modulo}. Those axioms are
-    withheld otherwise because Alt-Ergo can loop on them even when they are
-    irrelevant. *)
+    [int.ComputerDivision] and/or map theories iff the goal uses their symbols.
+    Those axioms are withheld otherwise because Alt-Ergo can loop on them even
+    when they are irrelevant. *)
+
+val uses_div : Term.term -> bool
+(** Whether a term applies the [div]/[mod] symbols. *)
+
+val uses_map : Term.term -> bool
+(** Whether a term applies the array [get]/[set]/[const] symbols. *)
+
+val task : div:bool -> map:bool -> Task.task
+(** [task ~div ~map] builds the proof task including the [ComputerDivision]
+    and/or map theories as requested. Use over {!task_for} when map support is
+    needed for a [map]-typed variable that the term never applies a symbol to
+    (the type still requires the theory to be present). *)

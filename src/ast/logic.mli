@@ -9,6 +9,8 @@ type arith_expr =
   | Mul of arith_expr * arith_expr
   | Div of arith_expr * arith_expr
   | Mod of arith_expr * arith_expr
+  | Get of string * arith_expr
+  | Len of string
 [@@deriving sexp_of, show]
 
 type logic_expr =
@@ -23,10 +25,14 @@ type logic_expr =
   | Leq of arith_expr * arith_expr
   | Gt of arith_expr * arith_expr
   | Geq of arith_expr * arith_expr
+  | Forall of string * logic_expr
+  | Exists of string * logic_expr
 [@@deriving sexp_of, show]
 
 type expr = logic_expr [@@deriving sexp_of, show]
 
-val translate_term : g_vars:Vars.t -> ?l_vars:Vars.t -> expr -> T.term
+val translate_term :
+  g_vars:Vars.t -> ?l_vars:Vars.t -> ?bound:Vars.t -> expr -> T.term
+
 val print_expr : expr -> unit
 val print_term : T.term -> unit

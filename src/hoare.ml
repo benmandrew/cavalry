@@ -45,6 +45,11 @@ let rec expr_to_term : type a.
     g_vars:Vars.t -> ?l_vars:Vars.t -> a expr -> T.term =
  fun ~g_vars ?l_vars e ->
   let f = expr_to_term ~g_vars ?l_vars in
+  let resolve x =
+    match l_vars with
+    | Some l_vars -> Vars.find_fallback x l_vars g_vars
+    | None -> Vars.find x g_vars
+  in
   let open Arith in
   match e with
   | Value v -> val_to_term ~g_vars ?l_vars v
@@ -59,6 +64,14 @@ let rec expr_to_term : type a.
   | Mul (e, e') -> mul (f e) (f e')
   | Div (e, e') -> div (f e) (f e')
   | Mod (e, e') -> modulo (f e) (f e')
+  | Get (a, i) -> aget (T.t_var (resolve a)) (f i)
+  | Len a -> T.t_var (resolve (Vars.len_key a))
+
+(* [0 <= i < len(a)]: the well-definedness obligation for accessing [a\[i\]],
+   shared by array reads (in [defined]) and element writes (in [Wlp.cmd]). *)
+let index_in_bounds ~g_vars ?l_vars a i_term =
+  let len = expr_to_term ~g_vars ?l_vars (Len a) in
+  T.t_and (Arith.leq (T.t_nat_const 0) i_term) (Arith.lt i_term len)
 
 (* Overflow-freedom obligation for an expression: the conjunction of
    [Arith.in_bounds] over every arithmetic *result* it computes (each
@@ -86,11 +99,18 @@ let rec safe : type a. g_vars:Vars.t -> ?l_vars:Vars.t -> a expr -> T.term =
       (* [a mod b] is bounded in magnitude by [b], so if the operands are in
          range the result is too -- no bound of its own. *)
       T.t_and_simp (self a) (self b)
+  | Get (_, i) ->
+      (* An element read is in range by the invariant that every stored value
+         was itself proven [safe] on write; only the index expression can
+         overflow. [Len] is a tracked variable, in range by assumption. *)
+      self i
+  | Len _ -> T.t_true
   | Eq (a, b) | Neq (a, b) | Lt (a, b) | Leq (a, b) | Gt (a, b) | Geq (a, b) ->
       T.t_and_simp (self a) (self b)
 
 (* Well-definedness obligation for an expression: the conjunction of
-   [divisor <> 0] over every [Div]/[Mod] node it contains. Unlike [safe] (which
+   [divisor <> 0] over every [Div]/[Mod] node it contains, and
+   [0 <= i < len(a)] over every array read [a\[i\]]. Unlike [safe] (which
    guards against overflow and is only imposed in machine-integer mode), this is
    *always* required -- [Arith.div]/[modulo] are left unspecified by a zero
    divisor and the interpreter/compiled binary would raise [Division_by_zero],
@@ -107,6 +127,12 @@ let rec defined : type a. g_vars:Vars.t -> ?l_vars:Vars.t -> a expr -> T.term =
         Arith.neq (expr_to_term ~g_vars ?l_vars b) (T.t_nat_const 0)
       in
       T.t_and_simp (T.t_and_simp (self a) (self b)) nonzero
+  | Get (a, i) ->
+      let bounds =
+        index_in_bounds ~g_vars ?l_vars a (expr_to_term ~g_vars ?l_vars i)
+      in
+      T.t_and_simp (self i) bounds
+  | Len _ -> T.t_true
   | Eq (a, b) | Neq (a, b) | Lt (a, b) | Leq (a, b) | Gt (a, b) | Geq (a, b) ->
       T.t_and_simp (self a) (self b)
 
@@ -124,6 +150,10 @@ let rec assigned_vars procs c =
       match Proc_map.find_opt f procs with
       | Some ((t : Triple.t), _) -> t.ws
       | None -> [])
+  (* An element write changes the array's map; [array(n)] also resets its
+     length, so both variables are modified. *)
+  | ArrAssgn (a, _, _) -> [ a ]
+  | ArrMake (a, _) -> [ a; Vars.len_key a ]
   | IntExpr _ | Print _ -> []
 
 (* https://en.wikipedia.org/wiki/Predicate_transformer_semantics *)
@@ -150,7 +180,12 @@ module Wlp = struct
     else
       let premise =
         List.fold_left
-          (fun acc y -> T.t_and_simp acc (Arith.in_bounds (T.t_var y)))
+          (fun acc y ->
+            (* Only integer havoc vars carry a machine-range constraint; an
+               array (map) variable has no such bound. *)
+            if Ty.ty_equal y.T.vs_ty Ty.ty_int then
+              T.t_and_simp acc (Arith.in_bounds (T.t_var y))
+            else acc)
           T.t_true ys
       in
       T.t_implies_simp premise body
@@ -171,10 +206,19 @@ module Wlp = struct
     (* p_f[x_i <- e_i] *)
     let pre = sub_params p_f in
     let sub_written_vars p =
-      let ys = List.map (fun _ -> Vars.create_fresh "y") t.ws in
-      let map =
-        List.map2 (fun w y -> (Vars.find w g_vars, T.t_var y)) t.ws ys
+      (* Writing an array havocs both its element map and its length (a callee
+         may re-create it with [array(n)]); a scalar havocs just itself. *)
+      let ws_syms =
+        List.concat_map
+          (fun w ->
+            let m = Vars.find w g_vars in
+            match Vars.find_opt (Vars.len_key w) g_vars with
+            | Some l -> [ m; l ]
+            | None -> [ m ])
+          t.ws
       in
+      let ys = List.map Vars.fresh_like ws_syms in
+      let map = List.map2 (fun w y -> (w, T.t_var y)) ws_syms ys in
       T.t_forall_close ys []
         (havoc_in_bounds ~machine_int ys (T.t_subst (T.Mvs.of_list map) p))
     in
@@ -214,6 +258,28 @@ module Wlp = struct
           T.(t_forall_close [ y ] [] (t_implies (t_equ y_t e_t) q_sub))
         in
         T.t_and_simp (safe_e e) assign
+    | ArrMake (a, n) ->
+        (* a <- array(n): length := n, elements := all zeros.
+           safe(n) /\ 0 <= n /\ q[ a <- const 0 ][ len(a) <- n ] *)
+        let n_t = expr_to_term ~g_vars ~l_vars n in
+        let a_v = Vars.find_fallback a l_vars g_vars in
+        let len_v = Vars.find_fallback (Vars.len_key a) l_vars g_vars in
+        let q_sub =
+          T.t_subst (T.Mvs.of_list [ (a_v, Arith.azero); (len_v, n_t) ]) q
+        in
+        let nonneg = Arith.leq (T.t_nat_const 0) n_t in
+        T.t_and_simp (safe_e n) (T.t_and_simp nonneg q_sub)
+    | ArrAssgn (a, i, e) ->
+        (* a[i] <- e: safe(i) /\ safe(e) /\ 0 <= i < len(a)
+           /\ q[ a <- set a i e ] *)
+        let i_t = expr_to_term ~g_vars ~l_vars i in
+        let e_t = expr_to_term ~g_vars ~l_vars e in
+        let a_v = Vars.find_fallback a l_vars g_vars in
+        let q_sub = T.t_subst_single a_v (Arith.aset (T.t_var a_v) i_t e_t) q in
+        let bounds = index_in_bounds ~g_vars ~l_vars a i_t in
+        T.t_and_simp
+          (T.t_and_simp (safe_e i) (safe_e e))
+          (T.t_and_simp bounds q_sub)
     | Proc (f, ps) ->
         (* safe(e_i) for each actual argument (evaluated in the caller's scope)
             /\ p_f[x_i <- e_i]
@@ -253,12 +319,11 @@ module Wlp = struct
         let iterate = T.(t_implies (t_and guard inv_t) s) in
         let postcond = T.(t_implies (t_and (t_not guard) inv_t) q) in
         let modified = List.sort_uniq String.compare (assigned_vars procs c) in
-        let ys = List.map (fun _ -> Vars.create_fresh "y") modified in
-        let map =
-          List.map2
-            (fun x y -> (Vars.find_fallback x l_vars g_vars, T.t_var y))
-            modified ys
+        let vss =
+          List.map (fun x -> Vars.find_fallback x l_vars g_vars) modified
         in
+        let ys = List.map Vars.fresh_like vss in
+        let map = List.map2 (fun vs y -> (vs, T.t_var y)) vss ys in
         let havoc p =
           T.t_forall_close ys []
             (havoc_in_bounds ~machine_int ys (T.t_subst (T.Mvs.of_list map) p))
@@ -295,13 +360,25 @@ let verify_procedure ?timeout ~machine_int ~is_main g_vars procs
   let antecedent =
     if machine_int then
       List.fold_left
-        (fun acc v -> T.t_and_simp acc (Arith.in_bounds (T.t_var v)))
+        (fun acc v ->
+          (* Only scalar (integer) variables carry a machine-range assumption;
+             array (map) variables have no such bound. *)
+          if Ty.ty_equal v.T.vs_ty Ty.ty_int then
+            T.t_and_simp acc (Arith.in_bounds (T.t_var v))
+          else acc)
         p merged_vars
     else p
   in
   debug_print t.f merged_vars p q p_gen;
   let goal = T.t_implies antecedent p_gen in
-  Smt.Prover.prove timeout (Arith.task_for goal) merged_vars goal
+  (* The map theory is also needed when a [map]-typed variable is quantified but
+     never has a symbol applied to it (e.g. a postcondition of [true]). *)
+  let uses_map =
+    Arith.uses_map goal
+    || List.exists (fun v -> Ty.ty_equal v.T.vs_ty Arith.ty_int_map) merged_vars
+  in
+  let task = Arith.task ~div:(Arith.uses_div goal) ~map:uses_map in
+  Smt.Prover.prove timeout task merged_vars goal
 
 exception Proc_invalid of string
 

@@ -9,6 +9,8 @@ type arith_expr =
   | Mul of arith_expr * arith_expr
   | Div of arith_expr * arith_expr
   | Mod of arith_expr * arith_expr
+  | Get of string * arith_expr (* array element a[i] *)
+  | Len of string (* array length len(a) *)
 [@@deriving sexp_of, show]
 
 type logic_expr =
@@ -23,30 +25,49 @@ type logic_expr =
   | Leq of arith_expr * arith_expr
   | Gt of arith_expr * arith_expr
   | Geq of arith_expr * arith_expr
+  | Forall of string * logic_expr (* forall x. body *)
+  | Exists of string * logic_expr (* exists x. body *)
 [@@deriving sexp_of, show]
 
 type expr = logic_expr [@@deriving sexp_of, show]
 
-let rec translate_arith_term ~g_vars ?l_vars e =
-  let f = translate_arith_term ~g_vars ?l_vars in
-  e |> function
-  | Int v -> T.t_nat_const v
-  | Var x -> (
+(* Resolve a source name to its Why3 variable. Quantifier-bound names ([bound])
+   shadow program variables; among program variables a global shadows a local
+   (the language's existing convention). *)
+let resolve ~g_vars ?l_vars ?(bound = Vars.empty) x =
+  match Vars.find_opt x bound with
+  | Some symbol -> symbol
+  | None -> (
       match l_vars with
       | Some l_vars -> (
           match Vars.find_opt x g_vars with
-          | Some symbol -> T.t_var symbol
-          | None -> T.t_var @@ Vars.find x l_vars)
-      | None -> T.t_var @@ Vars.find x g_vars)
+          | Some symbol -> symbol
+          | None -> Vars.find x l_vars)
+      | None -> Vars.find x g_vars)
+
+let rec translate_arith_term ~g_vars ?l_vars ?(bound = Vars.empty) e =
+  let f = translate_arith_term ~g_vars ?l_vars ~bound in
+  let var x = T.t_var (resolve ~g_vars ?l_vars ~bound x) in
+  e |> function
+  | Int v -> T.t_nat_const v
+  | Var x -> var x
   | Plus (e0, e1) -> Arith.plus (f e0) (f e1)
   | Sub (e0, e1) -> Arith.sub (f e0) (f e1)
   | Mul (e0, e1) -> Arith.mul (f e0) (f e1)
   | Div (e0, e1) -> Arith.div (f e0) (f e1)
   | Mod (e0, e1) -> Arith.modulo (f e0) (f e1)
+  | Get (a, i) -> Arith.aget (var a) (f i)
+  | Len a -> var (Vars.len_key a)
 
-let rec translate_term ~g_vars ?l_vars e =
-  let f_t = translate_term ~g_vars ?l_vars in
-  let f_a = translate_arith_term ~g_vars ?l_vars in
+let rec translate_term ~g_vars ?l_vars ?(bound = Vars.empty) e =
+  let f_t = translate_term ~g_vars ?l_vars ~bound in
+  let f_a = translate_arith_term ~g_vars ?l_vars ~bound in
+  (* Bind a fresh quantifier variable [x] and translate [body] under it. *)
+  let quant close x body =
+    let vs = Vars.create_fresh x in
+    close [ vs ] []
+      (translate_term ~g_vars ?l_vars ~bound:(Vars.add x vs bound) body)
+  in
   e |> function
   | Bool b -> if b then T.t_true else T.t_false
   | Not e -> T.t_not (f_t e)
@@ -59,6 +80,8 @@ let rec translate_term ~g_vars ?l_vars e =
   | Leq (e0, e1) -> Arith.leq (f_a e0) (f_a e1)
   | Gt (e0, e1) -> Arith.gt (f_a e0) (f_a e1)
   | Geq (e0, e1) -> Arith.geq (f_a e0) (f_a e1)
+  | Forall (x, body) -> quant T.t_forall_close x body
+  | Exists (x, body) -> quant T.t_exists_close x body
 
 let fmt = Format.formatter_of_out_channel stdout
 

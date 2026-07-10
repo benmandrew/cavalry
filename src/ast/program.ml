@@ -20,6 +20,8 @@ type _ expr =
   | Mul : int expr * int expr -> int expr
   | Div : int expr * int expr -> int expr
   | Mod : int expr * int expr -> int expr
+  | Get : string * int expr -> int expr (* array element a[i] *)
+  | Len : string -> int expr (* array length len(a) *)
 [@@deriving sexp_of]
 
 type cmd =
@@ -31,6 +33,8 @@ type cmd =
   | If of bool expr * cmd * cmd
   | While of Logic.expr * bool expr * cmd
   | Print of int expr
+  | ArrMake of string * int expr (* a <- array(n) *)
+  | ArrAssgn of string * int expr * int expr (* a[i] <- e *)
 [@@deriving sexp_of]
 
 type ut_expr =
@@ -55,6 +59,10 @@ type ut_expr =
   | UMul of ut_expr * ut_expr
   | UDiv of ut_expr * ut_expr
   | UMod of ut_expr * ut_expr
+  | UGet of string * ut_expr
+  | ULen of string
+  | UArrMake of string * ut_expr
+  | UArrAssgn of string * ut_expr * ut_expr
 [@@deriving sexp_of, show]
 
 exception TypeError of string
@@ -67,6 +75,8 @@ let rec t_int_expr = function
   | UMul (a, b) -> Mul (t_int_expr a, t_int_expr b)
   | UDiv (a, b) -> Div (t_int_expr a, t_int_expr b)
   | UMod (a, b) -> Mod (t_int_expr a, t_int_expr b)
+  | UGet (a, i) -> Get (a, t_int_expr i)
+  | ULen a -> Len a
   | e -> raise (TypeError (show_ut_expr e))
 
 and t_bool_expr = function
@@ -94,6 +104,8 @@ and t_cmd = function
   | UIf (e, c, c') -> If (t_bool_expr e, t_cmd c, t_cmd c')
   | UWhile (inv, e, c) -> While (inv, t_bool_expr e, t_cmd c)
   | UPrint e -> Print (t_int_expr e)
+  | UArrMake (a, n) -> ArrMake (a, t_int_expr n)
+  | UArrAssgn (a, i, e) -> ArrAssgn (a, t_int_expr i, t_int_expr e)
   | v -> expr_to_cmd v
 
 let translate_cmd = t_cmd
