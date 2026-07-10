@@ -29,7 +29,7 @@ type cmd =
   | Let of string * int expr
   | Proc of string * int expr list
   | If of bool expr * cmd * cmd
-  | While of Logic.expr * bool expr * cmd
+  | While of Logic.expr * Logic.arith_expr option * bool expr * cmd
   | Print of int expr
   | ArrMake of string * int expr
   | ArrAssgn of string * int expr * int expr
@@ -45,7 +45,7 @@ type ut_expr =
   | ULet of string * ut_expr
   | UProc of string * ut_expr list
   | UIf of ut_expr * ut_expr * ut_expr
-  | UWhile of Logic.expr * ut_expr * ut_expr
+  | UWhile of Logic.expr * Logic.arith_expr option * ut_expr * ut_expr
   | UPrint of ut_expr
   | UEq of ut_expr * ut_expr
   | UNeq of ut_expr * ut_expr

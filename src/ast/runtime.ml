@@ -175,7 +175,7 @@ and exec_cmd ?(fuel = ref max_int) r c : int * Runtime.t =
   | If (e, c, c') ->
       let b = exec_expr r e in
       if b then exec_cmd r c else exec_cmd r c'
-  | While (_, e, c) as loop ->
+  | While (_, _, e, c) as loop ->
       let b = exec_expr r e in
       if b then (
         if !fuel <= 0 then raise Out_of_fuel;

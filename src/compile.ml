@@ -118,7 +118,7 @@ let rec assigned = function
   | Seq (c, c') -> Str_set.union (assigned c) (assigned c')
   | Assgn (x, _) -> Str_set.singleton x
   | If (_, c, c') -> Str_set.union (assigned c) (assigned c')
-  | While (_, _, c) -> assigned c
+  | While (_, _, _, c) -> assigned c
   | Let _ | Print _ | IntExpr _ | Proc _ | ArrMake _ | ArrAssgn _ ->
       Str_set.empty
 
@@ -144,7 +144,7 @@ let rec arrays_expr : type a. a expr -> Str_set.t = function
 let rec arrays = function
   | Seq (c, c') -> Str_set.union (arrays c) (arrays c')
   | If (_, c, c') -> Str_set.union (arrays c) (arrays c')
-  | While (_, _, c) -> arrays c
+  | While (_, _, _, c) -> arrays c
   | Assgn (_, e) | Let (_, e) | Print e | IntExpr e -> arrays_expr e
   | ArrMake (a, n) -> Str_set.add a (arrays_expr n)
   | ArrAssgn (a, i, e) ->
@@ -229,7 +229,7 @@ let rec emit_cmd ~ops ~locals c : string =
   | If (b, c, c') ->
       Printf.sprintf "(if %s then %s else %s)" (emit_bool ~ops ~locals b)
         (emit_cmd ~ops ~locals c) (emit_cmd ~ops ~locals c')
-  | While (_, b, c) ->
+  | While (_, _, b, c) ->
       Printf.sprintf "(while %s do ignore (%s : %s) done; %s)"
         (emit_bool ~ops ~locals b) (emit_cmd ~ops ~locals c) ops.ty ops.zero
   | Proc (f, args) ->

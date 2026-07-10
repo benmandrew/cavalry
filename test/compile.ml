@@ -68,6 +68,7 @@ let%test_unit "Compile.emit - while emits a Zarith-guarded loop" =
   let body =
     While
       ( Logic.Bool true,
+        None,
         Lt (Value (VarInst "i"), Value (Int 10)),
         Assgn ("i", Plus (Value (VarInst "i"), Value (Int 1))) )
   in
@@ -177,6 +178,8 @@ let%test_unit "Compile e2e - Zarith binary matches interpreter" =
       "exec_nested_while.cav";
       "exec_proc.cav";
       "verify_true_fib_proc.cav";
+      (* a loop variant is verification-only; codegen must ignore it *)
+      "exec_variant.cav";
     ] ~f:(fun fixture ->
       let expect = Int.to_string (Cavalry.Main.exec fixture) in
       [%test_result: string] ~expect (compile_and_run fixture))

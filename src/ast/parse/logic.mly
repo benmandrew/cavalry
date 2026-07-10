@@ -32,7 +32,7 @@
   | e0 = arith_expr GEQ e1 = arith_expr
       { Geq (e0, e1) }
 ;
-arith_expr:
+%public arith_expr:
   | i = INT
       { Int (i) }
   | v = VAR
