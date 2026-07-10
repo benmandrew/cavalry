@@ -38,20 +38,29 @@
               export MACOSX_DEPLOYMENT_TARGET="$(sw_vers -productVersion | cut -d. -f1).0"
             fi
 
-            # One-time bootstrap: create the local opam switch if needed, install
-            # project deps, and let why3 detect the (opam-built) Alt-Ergo prover.
-            # Guarded by a stamp file so it only runs once per clone, not on
-            # every shell entry.
-            STAMP=.direnv/opam-bootstrap-done
-            if [ ! -f "$STAMP" ]; then
-              echo "cavalry dev shell: bootstrapping opam switch (one-time)..."
-              ( [ -d _opam ] || opam switch create . 5.5.0 -y ) \
-                && opam install --deps-only --with-test -y . \
+            # Create the local opam switch on first entry.
+            [ -d _opam ] || opam switch create . 5.5.0 -y
+
+            # Activate the switch *before* the steps below, so opam acts on it
+            # rather than the global default and so its binaries (why3,
+            # alt-ergo) are on PATH. This eval used to run last, which meant the
+            # bootstrap's `why3 config detect` fired before _opam/bin was on
+            # PATH and died with "why3: command not found".
+            eval "$(opam env --switch=. --set-switch 2>/dev/null)"
+
+            # Re-sync deps whenever the manifest changes, not just once per
+            # clone. The stamp records a checksum of cavalry.opam, so adding a
+            # dependency (say a new with-test library) re-triggers the install
+            # for existing clones instead of leaving them silently drifted.
+            STAMP=.direnv/opam-deps.stamp
+            WANT=$(cksum cavalry.opam | cut -d' ' -f1)
+            if [ "$(cat "$STAMP" 2>/dev/null)" != "$WANT" ]; then
+              echo "cavalry dev shell: syncing opam deps (manifest changed)..."
+              opam install --deps-only --with-test -y . \
                 && why3 config detect \
                 && mkdir -p .direnv \
-                && touch "$STAMP"
+                && printf '%s' "$WANT" > "$STAMP"
             fi
-            eval "$(opam env --switch=. --set-switch 2>/dev/null)"
           '';
         };
       }
