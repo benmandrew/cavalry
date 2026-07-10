@@ -1,6 +1,16 @@
+(** The verifier: the weakest-liberal-precondition calculus that turns each
+    Hoare triple [{p} c {q}] into a Why3 goal [p -> wlp(c, q)] and discharges it
+    through {!Smt.Prover}.
+
+    Procedures are verified bottom-up (a callee before any caller) and calls are
+    handled by substitution and havoc rather than inlining, so a procedure's
+    body is proven once against its own contract. *)
+
 module T = Why3.Term
 open Ast
 
+(** Procedures in scope during WLP, keyed by name, so a call site can look up
+    its callee's contract. *)
 module Proc_map : sig
   type 'a t
 end

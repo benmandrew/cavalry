@@ -1,3 +1,14 @@
+(** The executable program AST, in both of its forms: the untyped {!ut_expr} the
+    parser produces, and the GADT-typed {!value}/{!expr}/{!cmd} that
+    {!translate_cmd} type-checks it into. The typed AST is the shared input to
+    both consumers -- {!Runtime}'s interpreter and [Hoare]'s WLP calculus.
+
+    Program {e assertions} live separately in {!Logic}; this module is the code
+    that runs. *)
+
+(** Leaf values, GADT-indexed by their OCaml type. [VarInst] is a variable
+    occurrence (always integer-valued, hence [int value]); it names a binding
+    resolved later against the {!Vars} environment. *)
 type _ value =
   | Unit : unit -> unit value
   | Int : int -> int value
@@ -5,6 +16,9 @@ type _ value =
   | VarInst : string -> int value
 [@@deriving sexp_of]
 
+(** Pure expressions, indexed by result type so the type system rules out
+    ill-typed combinations (e.g. adding a comparison): comparisons yield
+    [bool expr], arithmetic and the array projections yield [int expr]. *)
 type _ expr =
   | Value : 'a value -> 'a expr
   | Eq : int expr * int expr -> bool expr
@@ -22,6 +36,10 @@ type _ expr =
   | Len : string -> int expr
 [@@deriving sexp_of]
 
+(** Commands (statements). [Let] introduces a local binding, [Assgn] mutates an
+    existing variable, [Proc] is a call by name. [While] carries its loop
+    invariant and optional variant (decreasing measure) alongside guard and
+    body. [ArrMake] is [a <- array(n)] and [ArrAssgn] is [a[i] <- e]. *)
 type cmd =
   | IntExpr of int expr
   | Seq of cmd * cmd
@@ -36,6 +54,9 @@ type cmd =
 [@@deriving sexp_of]
 
 (* Untyped AST to play nice with the Menhir parser generator *)
+
+(** The untyped AST the parser emits, with expressions and commands in one flat
+    variant. {!translate_cmd} resolves it into the typed {!cmd}. *)
 type ut_expr =
   | UInt of int
   | UBool of bool
@@ -65,5 +86,12 @@ type ut_expr =
 [@@deriving sexp_of, show]
 
 exception TypeError of string
+(** Raised by {!translate_cmd} on an untyped tree that does not type-check --
+    e.g. a boolean where an integer is required, or an expression used where a
+    command is expected. Carries the offending node, rendered by [show]. *)
 
 val translate_cmd : ut_expr -> cmd
+(** Type-check and translate the untyped parser output into the typed {!cmd}
+    AST.
+
+    @raise TypeError on malformed input. *)

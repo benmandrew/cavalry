@@ -1,8 +1,20 @@
+(** The Why3 encoding of Cavalry's integer and array theory: term constructors
+    for every arithmetic and comparison operator, the machine-int bounds used
+    for overflow reasoning, and the proof-task builders that pull in the right
+    background theories for a given goal.
+
+    Everything downstream ([Logic.translate_term], [Hoare]) compiles source
+    expressions into Why3 [Term.term]s through these combinators. *)
+
 open Why3
 
 val plus : Term.term -> Term.term -> Term.term
 val sub : Term.term -> Term.term -> Term.term
+
 val mul : Term.term -> Term.term -> Term.term
+(** [plus]/[sub]/[mul] build the integer [+]/[-]/[*] application terms over
+    Why3's unbounded [int] theory. Overflow, when it matters, is a separate
+    obligation ([Hoare.safe]) rather than a property of these terms. *)
 
 val div : Term.term -> Term.term -> Term.term
 (** Truncated (round-towards-zero) integer division, matching OCaml's native
@@ -32,7 +44,10 @@ val neq : Term.term -> Term.term -> Term.term
 val lt : Term.term -> Term.term -> Term.term
 val leq : Term.term -> Term.term -> Term.term
 val gt : Term.term -> Term.term -> Term.term
+
 val geq : Term.term -> Term.term -> Term.term
+(** The six integer comparison predicates ([=], [<>], [<], [<=], [>], [>=]),
+    each building a proposition term from two integer terms. *)
 
 val min_int : Term.term
 (** The smallest representable machine integer, [-2^62] (OCaml 63-bit [int]). *)
@@ -46,6 +61,9 @@ val in_bounds : Term.term -> Term.term
 *)
 
 val base_task : Task.task
+(** The proof task seeded with only the base integer theory, before any
+    goal-specific theories ([ComputerDivision], maps) are layered on. Prefer
+    {!task_for}, which selects those automatically. *)
 
 val task_for : Term.term -> Task.task
 (** The proof task to discharge a goal against: the integer theory, plus Why3's
