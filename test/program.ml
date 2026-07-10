@@ -192,6 +192,7 @@ let%test_unit "Ast.Runtime.exec - function" =
             UAssgn ("x", UPlus (UVar "x", UVar "y")) );
       p = Logic.(Leq (Int 0, Int 0));
       q = Logic.(Leq (Int 0, Int 0));
+      variant = None;
       ws = [];
     }
   in
@@ -207,6 +208,7 @@ let%test_unit "Ast.Runtime.exec - function" =
           );
       p = Logic.(Leq (Int 0, Int 0));
       q = Logic.(Leq (Int 0, Int 0));
+      variant = None;
       ws = [];
     }
   in

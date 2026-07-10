@@ -230,8 +230,12 @@ module Wlp = struct
     (* p_f[x_i <- e_i] /\ forall y. (q_f[x_i <- e_i][x_i <- y_i][x_i@old <- x_i] -> q[x_i <- y_i]) *)
     T.(t_and pre q_sub)
 
-  let rec cmd procs ~machine_int ~g_vars ~l_vars c q =
-    let cmd = cmd procs ~machine_int ~g_vars ~l_vars in
+  (* [self] identifies the procedure whose body is being verified: its name and
+     optional variant. A call back to that name is recursive; if the procedure
+     declares a variant it must strictly decrease across the call (see the [Proc]
+     case). *)
+  let rec cmd procs ~machine_int ~self ~g_vars ~l_vars c q =
+    let cmd = cmd procs ~machine_int ~self ~g_vars ~l_vars in
     (* Well-definedness obligations for an expression evaluated by [c]. The
        divisor-non-zero part ([defined]) is always imposed; the overflow-freedom
        part ([safe]) only in machine-integer mode. In the default (unbounded,
@@ -290,8 +294,33 @@ module Wlp = struct
           List.fold_left (fun acc e -> T.t_and_simp acc (safe_e e)) T.t_true ps
         in
         let triple, callee_l_vars = Proc_map.find f procs in
-        T.t_and_simp args_safe
-          (proc ~machine_int g_vars q callee_l_vars ps triple)
+        (* Termination of recursion: if this call targets the enclosing
+           procedure and it declares a variant [V], the measure at the actual
+           arguments must be non-negative and strictly below its value at the
+           enclosing formals -- [0 <= V[e_i] < V[x_i]]. This is the variant rule
+           applied across a recursive call instead of a loop back-edge. Without a
+           variant the recursion is only checked for partial correctness. *)
+        let decrease =
+          match self with
+          | self_name, Some measure when String.equal f self_name ->
+              let v_formals =
+                Logic.translate_arith_term ~g_vars ~l_vars measure
+              in
+              let sub =
+                List.map2
+                  (fun fp e ->
+                    (Vars.find fp callee_l_vars, expr_to_term ~g_vars ~l_vars e))
+                  triple.Triple.ps ps
+              in
+              let v_actuals = T.t_subst (T.Mvs.of_list sub) v_formals in
+              T.t_and
+                (Arith.leq (T.t_nat_const 0) v_actuals)
+                (Arith.lt v_actuals v_formals)
+          | _ -> T.t_true
+        in
+        T.t_and_simp decrease
+          (T.t_and_simp args_safe
+             (proc ~machine_int g_vars q callee_l_vars ps triple))
     | If (b, c, c') ->
         (* safe(b) /\ ( b -> wlp(c, q) ) /\ ( ~b -> wlp(c', q) ) *)
         let t = expr_to_term ~g_vars ~l_vars b in
@@ -367,7 +396,7 @@ let verify_procedure ?timeout ~machine_int ~is_main g_vars procs
   let p_gen =
     Wlp.(
       sub_old_vars ~g_vars ~l_vars t.ws
-      @@ cmd procs ~machine_int ~g_vars ~l_vars t.c q)
+      @@ cmd procs ~machine_int ~self:(t.f, t.variant) ~g_vars ~l_vars t.c q)
   in
   let merged_vars =
     List.fold_left merge_in (Vars.union l_vars g_vars) t.ps |> list_of_var_map
@@ -417,13 +446,18 @@ let verify ?debug:d ?timeout ?(machine_int = false) program =
   let procs, (main, globals) = split_last program in
   let f ~is_main procs proc =
     let (t : Triple.t) = fst proc in
+    (* Register the procedure in [procs] *before* verifying its body, so a
+       self-recursive call resolves to its own contract (the inductive
+       hypothesis). This lifts the earlier bottom-up ordering restriction. main
+       is never a callee, so it is not registered. *)
+    let procs = if is_main then procs else Proc_map.add t.f proc procs in
     let result =
       if (not is_main) && not (writes_are_declared globals procs t) then
         Smt.Prover.Invalid
       else verify_procedure ?timeout ~machine_int ~is_main globals procs proc
     in
     match result with
-    | Valid -> Proc_map.add t.f proc procs
+    | Valid -> procs
     | Invalid | Failed _ -> raise (Proc_invalid t.f)
   in
   try

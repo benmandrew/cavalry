@@ -1,0 +1,16 @@
+procedure sum_to (n) =
+  requires { n >= 0 }
+  ensures { s >= 0 }
+  variant { n }
+  writes { s }
+  if n = 0 then
+    s <- 0
+  else
+    sum_to(n - 1);
+    s <- s + n
+  end
+end
+
+{ true }
+sum_to(5)
+{ s >= 0 }

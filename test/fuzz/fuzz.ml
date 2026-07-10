@@ -251,7 +251,8 @@ let build_true_q env =
     (fun x v acc -> Logic.And (acc, Logic.Eq (Logic.Var x, logic_int v)))
     env (Logic.Bool true)
 
-let main_triple ~p ~q ~c : Triple.t = { p; q; ws = []; f = "main"; ps = []; c }
+let main_triple ~p ~q ~c : Triple.t =
+  { p; q; variant = None; ws = []; f = "main"; ps = []; c }
 
 let verify_program (triples : Triple.t list) =
   Hoare.verify ?timeout:(Some verify_timeout) (Var_collection.collect triples)
@@ -321,6 +322,7 @@ let framing_triples (s0, hidden, kh, roles) : Triple.t list =
     {
       p = Logic.Bool true;
       q = Logic.Bool true;
+      variant = None;
       ws = framing_writes roles;
       f = "f";
       ps = [];

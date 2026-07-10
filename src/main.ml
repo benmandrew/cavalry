@@ -9,10 +9,7 @@ let get_ast path =
   let lexbuf = Lexing.from_channel file in
   let ut_ast = Parser.top Lexer.main lexbuf in
   In_channel.close file;
-  let f { Triple.p; q; ws; f; ps; u } =
-    { Triple.p; q; ws; f; ps; c = Program.translate_cmd u }
-  in
-  List.map f ut_ast |> Var_collection.collect
+  List.map Triple.translate ut_ast |> Var_collection.collect
 
 let verify = Hoare.verify
 

@@ -157,15 +157,17 @@ let all_arrays (program : Triple.t list) =
   List.fold_left
     (fun s (t : Triple.t) ->
       Str_set.union s
-        (Str_set.union (arrays_logic t.p)
-           (Str_set.union (arrays_logic t.q) (arrays_program t.c))))
+        (Str_set.union (arrays_measure t.variant)
+           (Str_set.union (arrays_logic t.p)
+              (Str_set.union (arrays_logic t.q) (arrays_program t.c)))))
     Str_set.empty program
 
 let collect_procedure globals (t : Triple.t) =
   let p_vars = collect_logic t.p in
   let q_vars = collect_logic t.q in
   let c_vars = collect_program t.c in
-  let vars = Str_set.(union p_vars (union q_vars c_vars)) in
+  let v_vars = collect_measure t.variant in
+  let vars = Str_set.(union v_vars (union p_vars (union q_vars c_vars))) in
   (* If global variables occur in the procedure, don't add them as local variables *)
   Str_set.fold (fun global vars -> Str_set.remove global vars) globals vars
 
