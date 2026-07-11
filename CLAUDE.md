@@ -29,9 +29,28 @@ dune exec -- cav verify -d <file.cav>      # verify with debug output (prints WL
 
 There's no per-test filter wired up; `dune runtest` runs the whole
 `test/integration.ml` + `test/program.ml` suite together against the `.cav`
-fixtures in `test/`. CI (`.github/workflows/`) runs `why3 config detect`,
-`dune build @fmt`, `dune build`, `dune build @runtest`, and `dune build @doc`
-on ocaml 5.5.0.
+fixtures in `test/`. CI (`.github/workflows/`) provisions Z3 4.16.0, then runs
+`why3 config detect`, `dune build @fmt`, `dune build`, `dune build @runtest`,
+and `dune build @doc`, plus a step that `cav verify`s every README example, and
+a `snippets` job. Note Z3 diverges on nonlinear integer div/mod goals (e.g.
+deriving `q = x / y` from a `x = q*y + r` loop invariant); prefer the
+multiplicative postcondition. `cav verify --timeout` (default 10s) bounds each
+obligation so such a goal reports a failure instead of hanging.
+
+### README code snippets (regeneration flow)
+
+The README embeds syntax-highlighted **SVGs** of the example programs, rendered
+from `docs/readme-snippets/snippets/<slug>.cav` into
+`docs/snippet-<slug>-{light,dark}.svg`. After editing any snippet `.cav` (or the
+grammar / `.vscode/settings.json`), regenerate or CI's `snippets` job and the
+pre-commit hook fail:
+
+```bash
+cd docs/readme-snippets && npm install && npm run build   # re-render SVGs + README blocks
+npm run check                                             # what CI runs (exit 1 if stale)
+```
+
+See `docs/readme-snippets/README.md` for the full mechanism.
 
 ## Architecture
 
