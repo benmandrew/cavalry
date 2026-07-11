@@ -488,6 +488,52 @@ let merge_in vm x =
   | None -> Vars.(add x (create_fresh x)) vm
   | Some _ -> vm
 
+module CST = Why3.Model_parser
+
+(* Turn the raw counterexample model into user-facing [(name, value)] strings.
+   Scalars print directly; an array (a Why3 [FunctionLiteral] over the integer
+   domain) is expanded into a concrete list [\[v0, v1, ...\]] indexed [0..len-1],
+   where [len] comes from the companion [#len#<name>] model entry -- the [Vars]
+   naming convention the [smt] layer does not know. Without the length a map
+   literal like [\[|_ => 0|\]] would leak Why3 syntax and hide the size. The
+   [#len#] entries are left in (as scalars) for [format_counterexample] to hide
+   alongside the other internal symbols. *)
+let render_counterexample (ce : (string * CST.concrete_syntax_term) list) :
+    (string * string) list =
+  let print t = Format.asprintf "%a" CST.print_concrete_term t in
+  let int_of_concrete = function
+    | CST.Const (CST.Integer _) as t ->
+        int_of_string_opt (String.trim (print t))
+    | _ -> None
+  in
+  (* Longest array expanded into an explicit list; a larger, negative, or
+     unknown length falls back to the raw map rendering. *)
+  let max_len = 64 in
+  let render_value name = function
+    | CST.FunctionLiteral fl as t -> (
+        match List.assoc_opt (Vars.len_key name) ce with
+        | Some len_t -> (
+            match int_of_concrete len_t with
+            | Some len when len >= 0 && len <= max_len ->
+                let value_at i =
+                  match
+                    List.find_opt
+                      (fun (e : CST.concrete_syntax_funlit_elts) ->
+                        Option.equal Int.equal
+                          (int_of_concrete e.CST.elts_index)
+                          (Some i))
+                      fl.CST.elts
+                  with
+                  | Some e -> print e.CST.elts_value
+                  | None -> print fl.CST.others
+                in
+                "[" ^ String.concat ", " (List.init len value_at) ^ "]"
+            | _ -> print t)
+        | None -> print t)
+    | t -> print t
+  in
+  List.map (fun (n, t) -> (n, render_value n t)) ce
+
 let verify_procedure ?timeout ~machine_int ~is_main g_vars procs
     ((t : Triple.t), l_vars) =
   let p, q =
@@ -550,7 +596,10 @@ let verify_procedure ?timeout ~machine_int ~is_main g_vars procs
         match Smt.Prover.prove_term_status timeout task f with
         | Smt.Prover.Valid, _ -> check rest
         | Smt.Prover.Invalid, status ->
-            let ce = Smt.Prover.counterexample timeout task merged_vars f in
+            let ce =
+              render_counterexample
+                (Smt.Prover.counterexample timeout task merged_vars f)
+            in
             ( Smt.Prover.Invalid,
               reason_of_expl expl,
               Option.map Loc.of_why3 loc,

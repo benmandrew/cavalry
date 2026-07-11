@@ -179,7 +179,10 @@ let skolemise f =
    assigns the *source* variables named in [expose]. Z3 also surfaces the WLP's
    internal havoc/frozen-variant vars (introduced existentially in the negation);
    those, and any not named among [expose], are dropped. Empty if no CE prover is
-   configured or no model was produced. *)
+   configured or no model was produced. Values are returned as raw Why3
+   [concrete_syntax_term]s (not printed strings) so the caller can, for example,
+   expand an array literal into a concrete list using its length -- which lives
+   in a separate [#len#] model entry the AST layer knows how to pair up. *)
 let counterexample timeout base_task expose f =
   match z3_ce with
   | None -> []
@@ -209,8 +212,7 @@ let counterexample timeout base_task expose f =
           Model_parser.get_model_elements model
           |> List.map ~f:(fun (e : Model_parser.model_element) ->
               ( Model_parser.get_lsymbol_or_model_trace_name e,
-                Format.asprintf "%a" Model_parser.print_concrete_term
-                  e.Model_parser.me_concrete_value ))
+                e.Model_parser.me_concrete_value ))
           |> List.filter ~f:(fun (n, _) -> Set.mem expose_names n)
           |> List.dedup_and_sort ~compare:(fun (a, _) (b, _) ->
               String.compare a b))

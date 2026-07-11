@@ -341,6 +341,22 @@ let%test_unit "counterexample: hides internal variables" =
     (ce_value "verify_false_variant.cav" "variant")
     ~expect:None
 
+(* An array witness is expanded into a concrete list of its (model) length, not
+   left as Why3 map syntax. The fixture pins [len(a) = 3] on entry and writes out
+   of bounds, so the array is a three-element list; its entries are unconstrained
+   and Z3 fills them with the map default 0. *)
+let%test_unit "counterexample: an array is a concrete list" =
+  [%test_result: string option]
+    (ce_value "verify_false_array_oob_len.cav" "a")
+    ~expect:(Some "[0, 0, 0]")
+
+(* An out-of-bounds access on an array reassigned inside the body leaves the
+   entry-state array empty (length 0): a clean [[]], not [[|_ => 0|]]. *)
+let%test_unit "counterexample: an empty array renders as []" =
+  [%test_result: string option]
+    (ce_value "verify_false_array_read_oob.cav" "a")
+    ~expect:(Some "[]")
+
 (* An [Invalid] verdict records its confidence. Z3 answers [unknown "sat"] on
    these quantified WLP goals, so a genuine failure is reported as a candidate
    rather than a confirmed disproof; a successful verification carries no

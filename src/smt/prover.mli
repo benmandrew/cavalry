@@ -61,10 +61,12 @@ val counterexample :
   Task.task ->
   Term.vsymbol list ->
   Term.term ->
-  (string * string) list
+  (string * Model_parser.concrete_syntax_term) list
 (** [counterexample timeout task expose f] asks Z3's counterexamples driver for
     a model of a failed obligation [f] (a subgoal from {!split_obligations}, on
     [task]'s theories), returning the [(variable, value)] pairs it assigns the
-    variables in [expose] (the procedure's entry-state variables). Best-effort
-    and advisory: [[]] if no CE prover is configured or no model was produced,
-    so it never affects the verdict. *)
+    variables in [expose] (the procedure's entry-state variables). Values are
+    raw [Model_parser.concrete_syntax_term]s so the caller can shape them for
+    display -- notably expanding an array's map literal into a concrete list.
+    Best-effort and advisory: [[]] if no CE prover is configured or no model was
+    produced, so it never affects the verdict. *)

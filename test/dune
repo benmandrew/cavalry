@@ -24,6 +24,7 @@
    exec_array_proc.cav
    verify_true_array_proc.cav
    verify_false_array_negative_length.cav
+   verify_false_array_oob_len.cav
    verify_true_array_frame.cav
    verify_true_nested_forall.cav
    verify_true_array_machine_int.cav
