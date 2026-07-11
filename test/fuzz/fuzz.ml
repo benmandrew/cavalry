@@ -472,6 +472,7 @@ let rec logic_to_cav = function
 
 let rec cmd_to_cav c =
   match c with
+  | Program.Located (_, c) -> cmd_to_cav c
   | Program.Assgn (x, e) -> Printf.sprintf "%s <- %s" x (expr_to_cav e)
   | Program.Let (x, e) -> Printf.sprintf "%s <- %s" x (expr_to_cav e)
   | Program.Seq (a, b) -> Printf.sprintf "%s;\n%s" (cmd_to_cav a) (cmd_to_cav b)

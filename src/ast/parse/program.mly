@@ -5,6 +5,7 @@
 %type <Ast.Logic.arith_expr option> variant_opt
 %type <string list> variable_list
 %type <Ast.Program.ut_expr> command
+%type <Ast.Program.ut_expr> command_desc
 %type <Ast.Program.ut_expr> expr
 %type <Ast.Program.ut_expr list> expression_list
 
@@ -39,6 +40,10 @@ main:
       { { Ast.Triple.p; q; variant = None; ws = []; f="main"; ps=[]; u } }
 ;
 command:
+  | c = command_desc
+      { ULoc (Ast.Loc.of_span $loc, c) }
+;
+command_desc:
   | v = VAR ASSGN ARRAY LPAREN n = expr RPAREN
       { UArrMake (v, n) }
   | a = VAR LBRACKET i = expr RBRACKET ASSGN e = expr

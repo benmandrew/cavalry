@@ -221,6 +221,96 @@ let%test_unit "Main.verify true variant with array measure" =
 
 let%test_unit "Main.verify false" = check_verify "verify_false.cav" Invalid
 
+(* A rejected program reports which procedure failed to verify (main included,
+   under the name "main"). *)
+let check_failing_proc path expect =
+  [%test_result: string option]
+    (Main.verify_report ~debug ?timeout:(Some 5.) (Main.get_ast path))
+      .failing_proc ~expect
+
+let%test_unit "Main.verify_report names the failing procedure" =
+  check_failing_proc "verify_false_proc_ensures.cav" (Some "f")
+
+let%test_unit "Main.verify_report names an undeclared-writes procedure" =
+  check_failing_proc "verify_false_writes_undeclared.cav" (Some "f")
+
+let%test_unit "Main.verify_report names main when main fails" =
+  check_failing_proc "verify_false.cav" (Some "main")
+
+let%test_unit "Main.verify_report reports no procedure on success" =
+  check_failing_proc "verify_true_if.cav" None
+
+(* A rejected program is classified by *why* the obligation failed. Each fixture
+   below is engineered to fail exactly one kind of obligation, so the reported
+   reason pins down the fault. *)
+let check_reason ?(machine_int = false) path expect =
+  [%test_result: Hoare.reason option]
+    (Main.verify_report ~debug ~machine_int ?timeout:(Some 5.)
+       (Main.get_ast path))
+      .reason
+    ~expect:(Some expect)
+
+let%test_unit "reason: postcondition" =
+  check_reason "verify_false.cav" Postcondition
+
+let%test_unit "reason: procedure violates its own ensures" =
+  check_reason "verify_false_proc_ensures.cav" Postcondition
+
+let%test_unit "reason: callee precondition" =
+  check_reason "verify_false_proc_requires.cav" Call_precondition
+
+let%test_unit "reason: divisor may be zero" =
+  check_reason "verify_false_div_by_zero.cav" Nonzero_divisor
+
+let%test_unit "reason: array index out of bounds (write)" =
+  check_reason "verify_false_array_write_oob.cav" Array_bounds
+
+let%test_unit "reason: array index out of bounds (read)" =
+  check_reason "verify_false_array_read_oob.cav" Array_bounds
+
+let%test_unit "reason: array length negative" =
+  check_reason "verify_false_array_negative_length.cav" Array_length_nonneg
+
+let%test_unit "reason: loop invariant on entry" =
+  check_reason "verify_false_inv_entry.cav" Loop_invariant_init
+
+let%test_unit "reason: loop variant does not decrease" =
+  check_reason "verify_false_variant.cav" Loop_variant
+
+let%test_unit "reason: recursive variant does not decrease" =
+  check_reason "verify_false_recursion.cav" Recursive_variant
+
+let%test_unit "reason: undeclared write" =
+  check_reason "verify_false_writes_undeclared.cav" Undeclared_write
+
+(* Overflow-freedom is only an obligation under machine-integer verification. *)
+let%test_unit "reason: arithmetic may overflow (machine int)" =
+  check_reason ~machine_int:true "verify_boundary_overflow.cav" No_overflow
+
+(* A construct-level failure points at the source line of the offending command;
+   a whole-procedure obligation (a plain postcondition) carries no location. *)
+let loc_line path =
+  match
+    (Main.verify_report ~debug ?timeout:(Some 5.) (Main.get_ast path)).loc
+  with
+  | Some (l : Main.Ast.Loc.t) -> Some l.line
+  | None -> None
+
+let check_loc_line path expect =
+  [%test_result: int option] (loc_line path) ~expect
+
+let%test_unit "location: divide-by-zero points at the division's line" =
+  check_loc_line "verify_false_div_by_zero.cav" (Some 2)
+
+let%test_unit "location: out-of-bounds write points at the write's line" =
+  check_loc_line "verify_false_array_write_oob.cav" (Some 3)
+
+let%test_unit "location: recursive variant points at the call's line" =
+  check_loc_line "verify_false_recursion.cav" (Some 7)
+
+let%test_unit "location: a plain postcondition has no location" =
+  check_loc_line "verify_false.cav" None
+
 (* A provided variant that does not decrease (here the measure [i] increases)
    is rejected even though the loop does terminate: the given measure fails to
    prove it. *)

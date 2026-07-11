@@ -7,11 +7,15 @@ let get_ast path =
   let open Stdio in
   let file = In_channel.create path in
   let lexbuf = Lexing.from_channel file in
+  (* Record the filename so source locations attached to the AST (and, through
+     the WLP, to proof obligations) can be printed as [file:line:col]. *)
+  lexbuf.Lexing.lex_curr_p <- { lexbuf.Lexing.lex_curr_p with pos_fname = path };
   let ut_ast = Parser.top Lexer.main lexbuf in
   In_channel.close file;
   List.map Triple.translate ut_ast |> Var_collection.collect
 
 let verify = Hoare.verify
+let verify_report = Hoare.verify_report
 
 let exec path =
   get_ast path |> List.map (fun p -> fst p |> Runtime.to_proc_t) |> Runtime.exec
@@ -37,11 +41,26 @@ let compile ?(debug = false) ?(verify = true) ?(native_int = false) ~output path
     =
   let ast = get_ast path in
   (if verify then
-     match Hoare.verify ~machine_int:native_int ast with
-     | Smt.Prover.Valid -> ()
-     | Smt.Prover.Invalid ->
-         raise (Verification_failed "precondition does not imply postcondition")
-     | Smt.Prover.Failed s ->
+     match Hoare.verify_report ~machine_int:native_int ast with
+     | { result = Smt.Prover.Valid; _ } -> ()
+     | { result = Smt.Prover.Invalid; failing_proc; reason; loc } ->
+         let where =
+           match failing_proc with
+           | Some p -> Printf.sprintf "procedure '%s': " p
+           | None -> ""
+         in
+         let at =
+           match loc with
+           | Some l -> Printf.sprintf "%s: " (Ast.Loc.to_string l)
+           | None -> ""
+         in
+         let what =
+           match reason with
+           | Some r -> Hoare.expl_of_reason r
+           | None -> "precondition does not imply postcondition"
+         in
+         raise (Verification_failed (where ^ at ^ what))
+     | { result = Smt.Prover.Failed s; _ } ->
          raise (Verification_failed ("internal failure: " ^ s)));
   let ocaml = Compile.emit ~native_int ast in
   if debug then (

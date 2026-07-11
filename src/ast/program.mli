@@ -51,6 +51,7 @@ type cmd =
   | Print of int expr
   | ArrMake of string * int expr
   | ArrAssgn of string * int expr * int expr
+  | Located of Loc.t * cmd
 [@@deriving sexp_of]
 
 (* Untyped AST to play nice with the Menhir parser generator *)
@@ -83,6 +84,7 @@ type ut_expr =
   | ULen of string
   | UArrMake of string * ut_expr
   | UArrAssgn of string * ut_expr * ut_expr
+  | ULoc of Loc.t * ut_expr
 [@@deriving sexp_of, show]
 
 exception TypeError of string

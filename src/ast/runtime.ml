@@ -145,6 +145,7 @@ let rec exec_expr : type a. Runtime.t -> a expr -> a =
 and exec_cmd ?(fuel = ref max_int) r c : int * Runtime.t =
   let exec_cmd r c = exec_cmd ~fuel r c in
   match c with
+  | Located (_, c) -> exec_cmd r c
   | Seq (c, c') ->
       let _, r' = exec_cmd r c in
       exec_cmd r' c'

@@ -47,21 +47,54 @@ let result_of_answer ~output (answer : Call_provers.prover_answer) : result =
   | Timeout | OutOfMemory | StepLimitExceeded | HighFailure _ | Failure _ ->
       Failed output
 
-let prove timeout base_task term =
-  let goal_id = Decl.create_prsymbol (Ident.id_fresh "goal") in
-  let task = Task.add_prop_decl base_task Decl.Pgoal goal_id term in
+(* Run Alt-Ergo on a task whose goal is already in place, returning its raw
+   result. Shared by the whole-goal [prove] and the per-obligation [prove_term]. *)
+let run_prover timeout task =
   let limit =
     match timeout with
     | None -> Call_provers.empty_limits
     | Some limit_time ->
         { Call_provers.limit_time; limit_mem = -1; limit_steps = -1 }
   in
-  let result =
-    Driver.prove_task ~limits:limit ~config:main
-      ~command:alt_ergo.Whyconf.command alt_ergo_driver task
-    |> Call_provers.wait_on_call
-  in
+  Driver.prove_task ~limits:limit ~config:main ~command:alt_ergo.Whyconf.command
+    alt_ergo_driver task
+  |> Call_provers.wait_on_call
+
+let prove_term timeout base_task term =
+  let goal_id = Decl.create_prsymbol (Ident.id_fresh "goal") in
+  let task = Task.add_prop_decl base_task Decl.Pgoal goal_id term in
+  let result = run_prover timeout task in
   result_of_answer ~output:result.pr_output result.pr_answer
 
 let prove timeout base_task vars t =
-  Term.t_forall_close vars [] t |> prove timeout base_task
+  Term.t_forall_close vars [] t |> prove_term timeout base_task
+
+(* Split the closed goal into one already-closed subgoal formula per obligation,
+   each paired with its explanation attribute (the string the caller attached
+   via an [expl:] attribute). Purely structural -- no prover is run -- so the
+   caller can build a minimal per-subgoal task before discharging it. Splitting
+   here rather than proving the whole conjunction at once is also what lets a
+   failure be pinned to a single obligation. *)
+(* First located node in a top-down traversal. A split subgoal has the shape
+   [hypotheses -> obligation]; the obligation's atoms carry the source location
+   (set by the caller on every node) while the [->]/hypotheses do not, so the
+   first location found is the obligation's. *)
+let rec first_loc t =
+  match t.Term.t_loc with
+  | Some _ as l -> l
+  | None ->
+      Term.t_fold
+        (fun acc sub -> match acc with Some _ -> acc | None -> first_loc sub)
+        None t
+
+let split_obligations base_task vars t =
+  let goal_id = Decl.create_prsymbol (Ident.id_fresh "goal") in
+  let task =
+    Task.add_prop_decl base_task Decl.Pgoal goal_id
+      (Term.t_forall_close vars [] t)
+  in
+  Trans.apply Split_goal.split_goal_right task
+  |> List.map ~f:(fun st ->
+      let _, expl, _ = Termcode.goal_expl_task ~root:false st in
+      let f = Task.task_goal_fmla st in
+      (f, expl, first_loc f))

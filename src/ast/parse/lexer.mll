@@ -7,7 +7,9 @@ exception Error of error
 }
 
 rule main = parse
-  | [' ' '\t' '\n']
+  | '\n'
+      { Lexing.new_line lexbuf; main lexbuf }
+  | [' ' '\t']
       { main lexbuf }
   | "//"
       { comment lexbuf }
@@ -113,7 +115,7 @@ rule main = parse
 (* A [//] line comment runs to the next newline (or eof). *)
 and comment = parse
   | '\n'
-      { main lexbuf }
+      { Lexing.new_line lexbuf; main lexbuf }
   | eof
       { EOF }
   | _

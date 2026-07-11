@@ -36,6 +36,9 @@ type cmd =
   | Print of int expr
   | ArrMake of string * int expr (* a <- array(n) *)
   | ArrAssgn of string * int expr * int expr (* a[i] <- e *)
+  | Located of Loc.t * cmd
+    (* a command annotated with its source location, used to point error
+       messages at the construct whose obligation failed *)
 [@@deriving sexp_of]
 
 type ut_expr =
@@ -64,6 +67,7 @@ type ut_expr =
   | ULen of string
   | UArrMake of string * ut_expr
   | UArrAssgn of string * ut_expr * ut_expr
+  | ULoc of Loc.t * ut_expr (* a command tagged with its source location *)
 [@@deriving sexp_of, show]
 
 exception TypeError of string
@@ -98,6 +102,7 @@ and expr_to_cmd = function
   | e -> raise (TypeError (show_ut_expr e))
 
 and t_cmd = function
+  | ULoc (loc, e) -> Located (loc, t_cmd e)
   | USeq (c, c') -> Seq (t_cmd c, t_cmd c')
   | UAssgn (s, e) -> Assgn (s, t_int_expr e)
   | ULet (s, e) -> Let (s, t_int_expr e)

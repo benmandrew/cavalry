@@ -22,3 +22,19 @@ val prove :
 (** [prove timeout task vars goal] universally closes [goal] over [vars], adds
     it to [task] as the goal, and runs Alt-Ergo. [timeout] is a per-goal time
     limit in seconds ([None] for unlimited). *)
+
+val prove_term : float option -> Task.task -> Term.term -> result
+(** As {!prove} but for a term that is already the goal (no universal closure).
+    Used to discharge an individual split obligation. *)
+
+val split_obligations :
+  Task.task ->
+  Term.vsymbol list ->
+  Term.term ->
+  (Term.term * string * Loc.position option) list
+(** [split_obligations task vars goal] closes [goal] over [vars] and splits it
+    with [split_goal_right] into one already-closed subgoal per obligation, each
+    paired with its explanation attribute and its source location (the first
+    located node in the subgoal, [None] if the obligation was untagged). No
+    prover is run: the caller builds a suitable per-subgoal task (e.g.
+    minimising theory inclusion) and discharges it with {!prove_term}. *)

@@ -68,6 +68,7 @@ let collect_program c =
     | Len a -> Str_set.singleton a
   in
   let rec collect_cmd = function
+    | Located (_, c) -> collect_cmd c
     | IntExpr e -> collect_expr e
     | Seq (c, c') -> Str_set.union (collect_cmd c) (collect_cmd c')
     | Assgn (x, e) | Let (x, e) ->
@@ -139,6 +140,7 @@ let arrays_program c =
         Str_set.union (expr a) (expr b)
   in
   let rec cmd = function
+    | Located (_, c) -> cmd c
     | IntExpr e | Print e | Assgn (_, e) | Let (_, e) -> expr e
     | Seq (a, b) -> Str_set.union (cmd a) (cmd b)
     | If (b, c, c') -> Str_set.union (expr b) (Str_set.union (cmd c) (cmd c'))
