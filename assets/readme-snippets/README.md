@@ -19,15 +19,15 @@ settings, the images stay in step with what the extension shows — change the
 grammar, re-run, and every image updates.
 
 Each snippet has a *slug* (`euclidean-division`) shared by three things: its
-source `snippets/<slug>.cav`, its two `docs/snippet-<slug>-{light,dark}.svg`
+source `snippets/<slug>.cav`, its two `assets/snippet-<slug>-{light,dark}.svg`
 images, and a marker block in the README that the generator owns:
 
 ```html
 <!-- snippet: euclidean-division -->
-<a href="docs/readme-snippets/snippets/euclidean-division.cav">
+<a href="assets/readme-snippets/snippets/euclidean-division.cav">
   <picture>
-    <source media="(prefers-color-scheme: dark)" srcset="docs/snippet-euclidean-division-dark.svg">
-    <img alt="Cavalry code snippet" src="docs/snippet-euclidean-division-light.svg">
+    <source media="(prefers-color-scheme: dark)" srcset="assets/snippet-euclidean-division-dark.svg">
+    <img alt="Cavalry code snippet" src="assets/snippet-euclidean-division-light.svg">
   </picture>
 </a>
 <!-- /snippet -->

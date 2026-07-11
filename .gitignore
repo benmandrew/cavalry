@@ -33,7 +33,7 @@ _opam/
 # direnv cache
 .direnv/
 
-# Node deps for the README snippet renderer (docs/readme-snippets)
+# Node deps for the README snippet renderer (assets/readme-snippets)
 node_modules/
 
 .vscode/*

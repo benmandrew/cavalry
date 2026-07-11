@@ -1,6 +1,6 @@
 # Cavalry
 
-![](docs/cavalry-banner.png)
+![](assets/cavalry-banner.png)
 
 Cavalry is a mini programming language of my own design where written programs can be "verified", i.e. the implementation of the program can be rigorously checked against its logical specification for correctness, without ever running the code.
 
@@ -76,7 +76,7 @@ dune runtest
 ## Example programs
 
 Each example below is a standalone program in
-[`docs/readme-snippets/snippets/`](docs/readme-snippets/snippets); verify any of
+[`assets/readme-snippets/snippets/`](assets/readme-snippets/snippets); verify any of
 them yourself with `dune exec -- cav verify <file>`.
 
 ### A Hoare triple
@@ -86,10 +86,10 @@ before command `c` runs, postcondition `Q` holds afterwards. The simplest
 programs are straight-line assignments, with no loops or procedures.
 
 <!-- snippet: hoare-triple -->
-<a href="docs/readme-snippets/snippets/hoare-triple.cav">
+<a href="assets/readme-snippets/snippets/hoare-triple.cav">
   <picture>
-    <source media="(prefers-color-scheme: dark)" srcset="docs/snippet-hoare-triple-dark.svg">
-    <img alt="Cavalry code snippet" src="docs/snippet-hoare-triple-light.svg">
+    <source media="(prefers-color-scheme: dark)" srcset="assets/snippet-hoare-triple-dark.svg">
+    <img alt="Cavalry code snippet" src="assets/snippet-hoare-triple-light.svg">
   </picture>
 </a>
 <!-- /snippet -->
@@ -101,10 +101,10 @@ optional `variant` — a non-negative measure that strictly decreases each
 iteration — proves termination, giving total correctness.
 
 <!-- snippet: triangle-numbers -->
-<a href="docs/readme-snippets/snippets/triangle-numbers.cav">
+<a href="assets/readme-snippets/snippets/triangle-numbers.cav">
   <picture>
-    <source media="(prefers-color-scheme: dark)" srcset="docs/snippet-triangle-numbers-dark.svg">
-    <img alt="Cavalry code snippet" src="docs/snippet-triangle-numbers-light.svg">
+    <source media="(prefers-color-scheme: dark)" srcset="assets/snippet-triangle-numbers-dark.svg">
+    <img alt="Cavalry code snippet" src="assets/snippet-triangle-numbers-light.svg">
   </picture>
 </a>
 <!-- /snippet -->
@@ -118,10 +118,10 @@ modulo `%` are part of the logic, so the postcondition can name the result
 directly.
 
 <!-- snippet: euclidean-division -->
-<a href="docs/readme-snippets/snippets/euclidean-division.cav">
+<a href="assets/readme-snippets/snippets/euclidean-division.cav">
   <picture>
-    <source media="(prefers-color-scheme: dark)" srcset="docs/snippet-euclidean-division-dark.svg">
-    <img alt="Cavalry code snippet" src="docs/snippet-euclidean-division-light.svg">
+    <source media="(prefers-color-scheme: dark)" srcset="assets/snippet-euclidean-division-dark.svg">
+    <img alt="Cavalry code snippet" src="assets/snippet-euclidean-division-light.svg">
   </picture>
 </a>
 <!-- /snippet -->
@@ -133,10 +133,10 @@ Bounded arrays are created with `array(n)` (zero-initialised), indexed with
 of every element filled so far.
 
 <!-- snippet: array-fill -->
-<a href="docs/readme-snippets/snippets/array-fill.cav">
+<a href="assets/readme-snippets/snippets/array-fill.cav">
   <picture>
-    <source media="(prefers-color-scheme: dark)" srcset="docs/snippet-array-fill-dark.svg">
-    <img alt="Cavalry code snippet" src="docs/snippet-array-fill-light.svg">
+    <source media="(prefers-color-scheme: dark)" srcset="assets/snippet-array-fill-dark.svg">
+    <img alt="Cavalry code snippet" src="assets/snippet-array-fill-light.svg">
   </picture>
 </a>
 <!-- /snippet -->
@@ -147,10 +147,10 @@ Where `forall` constrains every element, `exists` asserts that some element has
 a property — here, that a value written into the array is still present.
 
 <!-- snippet: array-exists -->
-<a href="docs/readme-snippets/snippets/array-exists.cav">
+<a href="assets/readme-snippets/snippets/array-exists.cav">
   <picture>
-    <source media="(prefers-color-scheme: dark)" srcset="docs/snippet-array-exists-dark.svg">
-    <img alt="Cavalry code snippet" src="docs/snippet-array-exists-light.svg">
+    <source media="(prefers-color-scheme: dark)" srcset="assets/snippet-array-exists-dark.svg">
+    <img alt="Cavalry code snippet" src="assets/snippet-array-exists-light.svg">
   </picture>
 </a>
 <!-- /snippet -->
@@ -161,10 +161,10 @@ Procedures may call themselves. A `variant` on the procedure — decreasing acro
 each recursive call — proves the recursion terminates, just as it does for a loop.
 
 <!-- snippet: recursive-procedure -->
-<a href="docs/readme-snippets/snippets/recursive-procedure.cav">
+<a href="assets/readme-snippets/snippets/recursive-procedure.cav">
   <picture>
-    <source media="(prefers-color-scheme: dark)" srcset="docs/snippet-recursive-procedure-dark.svg">
-    <img alt="Cavalry code snippet" src="docs/snippet-recursive-procedure-light.svg">
+    <source media="(prefers-color-scheme: dark)" srcset="assets/snippet-recursive-procedure-dark.svg">
+    <img alt="Cavalry code snippet" src="assets/snippet-recursive-procedure-light.svg">
   </picture>
 </a>
 <!-- /snippet -->
@@ -176,10 +176,10 @@ the obligation it could not prove instead of accepting the program. The same
 check catches arithmetic overflow under `--machine-int` (see [Running](#running)).
 
 <!-- snippet: failing-spec -->
-<a href="docs/readme-snippets/snippets/failing-spec.cav">
+<a href="assets/readme-snippets/snippets/failing-spec.cav">
   <picture>
-    <source media="(prefers-color-scheme: dark)" srcset="docs/snippet-failing-spec-dark.svg">
-    <img alt="Cavalry code snippet" src="docs/snippet-failing-spec-light.svg">
+    <source media="(prefers-color-scheme: dark)" srcset="assets/snippet-failing-spec-dark.svg">
+    <img alt="Cavalry code snippet" src="assets/snippet-failing-spec-light.svg">
   </picture>
 </a>
 <!-- /snippet -->

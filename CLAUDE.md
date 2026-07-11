@@ -40,17 +40,17 @@ obligation so such a goal reports a failure instead of hanging.
 ### README code snippets (regeneration flow)
 
 The README embeds syntax-highlighted **SVGs** of the example programs, rendered
-from `docs/readme-snippets/snippets/<slug>.cav` into
-`docs/snippet-<slug>-{light,dark}.svg`. After editing any snippet `.cav` (or the
+from `assets/readme-snippets/snippets/<slug>.cav` into
+`assets/snippet-<slug>-{light,dark}.svg`. After editing any snippet `.cav` (or the
 grammar / `.vscode/settings.json`), regenerate or CI's `snippets` job and the
 pre-commit hook fail:
 
 ```bash
-cd docs/readme-snippets && npm install && npm run build   # re-render SVGs + README blocks
+cd assets/readme-snippets && npm install && npm run build   # re-render SVGs + README blocks
 npm run check                                             # what CI runs (exit 1 if stale)
 ```
 
-See `docs/readme-snippets/README.md` for the full mechanism.
+See `assets/readme-snippets/README.md` for the full mechanism.
 
 ## Architecture
 

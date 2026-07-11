@@ -78,7 +78,7 @@ jobs:
       # failing-spec.cav, which must be rejected.
       - name: Verify README example programs
         run: |
-          for f in docs/readme-snippets/snippets/*.cav; do
+          for f in assets/readme-snippets/snippets/*.cav; do
             case "$f" in
               *failing-spec.cav)
                 if opam exec -- dune exec -- cav verify "$f"; then
@@ -104,7 +104,7 @@ jobs:
 
   # Verifies the README's generated snippet SVGs are in sync with their .cav
   # sources and the TextMate grammar. `gen.mjs --check` re-renders in memory and
-  # fails if anything committed is stale (see docs/readme-snippets/README.md).
+  # fails if anything committed is stale (see assets/readme-snippets/README.md).
   # Independent of the OCaml toolchain, so it runs as its own lightweight job.
   snippets:
     runs-on: ubuntu-latest
@@ -118,11 +118,11 @@ jobs:
           node-version: "20"
 
       - name: Install dependencies
-        working-directory: docs/readme-snippets
+        working-directory: assets/readme-snippets
         run: npm ci
 
       - name: Check README snippets are up to date
-        working-directory: docs/readme-snippets
+        working-directory: assets/readme-snippets
         run: npm run check
 
   # Runs concurrently with the build matrix (no `needs`) so the odoc build

@@ -1,9 +1,9 @@
 {0 Cavalry}
 
-Cavalry is a toy imperative language with Hoare-logic verification. A program
+Cavalry is an imperative language with Hoare-logic verification. A program
 carries its own specification -- preconditions, postconditions, and loop
 invariants -- and is proven to meet it by a {e satisfiability-modulo-theories}
-(SMT) solver, Alt-Ergo, driven through Why3. Nothing is executed to establish
+(SMT) solver, Z3, driven through Why3. Nothing is executed to establish
 correctness; the proof is discharged over the program text.
 
 The surface syntax is shown in [example.cav]; the theory is described in the
@@ -38,7 +38,7 @@ The stages, in order:
 
 - {!Cavalry.Hoare} -- the WLP calculus and top-level [verify].
 - {!Ast.Arith} -- the Why3 encoding of the integer and array theory.
-- {!Smt.Prover} -- the Why3/Alt-Ergo backend.
+- {!Smt.Prover} -- the Why3/Z3 backend.
 
 {2 Support}
 

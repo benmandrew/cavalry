@@ -3,11 +3,11 @@
 #
 # Enable once per clone:   git config core.hooksPath .githooks
 #
-# Runs docs/readme-snippets/gen.mjs --check, but only when a staged change could
+# Runs assets/readme-snippets/gen.mjs --check, but only when a staged change could
 # affect the generated snippets, so unrelated commits pay nothing.
 
-if git diff --cached --name-only | grep -qE '^(docs/readme-snippets/|docs/snippet-.*\.svg$|editors/vscode/syntaxes/cavalry\.tmLanguage\.json$|\.vscode/settings\.json$|README\.md$)'; then
-  dir="docs/readme-snippets"
+if git diff --cached --name-only | grep -qE '^(assets/readme-snippets/|assets/snippet-.*\.svg$|editors/vscode/syntaxes/cavalry\.tmLanguage\.json$|\.vscode/settings\.json$|README\.md$)'; then
+  dir="assets/readme-snippets"
   if [ ! -d "$dir/node_modules" ]; then
     echo "pre-commit: $dir/node_modules is missing — run 'npm ci' in $dir first." >&2
     exit 1

@@ -83,10 +83,10 @@ ${lines}
 // The README block for a snippet: a link to the source .cav wrapping a
 // theme-aware <picture>. Emitted verbatim so re-running is a no-op.
 const block = slug => `<!-- snippet: ${slug} -->
-<a href="docs/readme-snippets/snippets/${slug}.cav">
+<a href="assets/readme-snippets/snippets/${slug}.cav">
   <picture>
-    <source media="(prefers-color-scheme: dark)" srcset="docs/snippet-${slug}-dark.svg">
-    <img alt="Cavalry code snippet" src="docs/snippet-${slug}-light.svg">
+    <source media="(prefers-color-scheme: dark)" srcset="assets/snippet-${slug}-dark.svg">
+    <img alt="Cavalry code snippet" src="assets/snippet-${slug}-light.svg">
   </picture>
 </a>
 <!-- /snippet -->`
@@ -121,7 +121,7 @@ if (CHECK) {
     .filter(([p, content]) => !existsSync(p) || readFileSync(p, 'utf8') !== content)
     .map(([p]) => p.replace(`${ROOT}/`, ''))
   if (stale.length) {
-    console.error('gen.mjs: out of date. Run `npm run build` in docs/readme-snippets and commit:')
+    console.error('gen.mjs: out of date. Run `npm run build` in assets/readme-snippets and commit:')
     for (const p of stale) console.error(`  - ${p}`)
     process.exit(1)
   }
