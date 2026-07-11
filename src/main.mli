@@ -37,6 +37,7 @@ exception Verification_failed of string
 val compile :
   ?debug:bool ->
   ?verify:bool ->
+  ?timeout:float ->
   ?native_int:bool ->
   output:string ->
   string ->
@@ -48,5 +49,7 @@ val compile :
     binary computes in 63-bit machine [int] rather than the default unbounded
     Zarith integers; the gate then verifies against 63-bit integers too, proving
     overflow-freedom, so the faster native-int binary is still sound (only
-    [verify = false] forfeits that). May raise [Verification_failed],
-    [Compile.Unsupported], or [Compile.Toolchain_error]. *)
+    [verify = false] forfeits that). [timeout] bounds each proof obligation, in
+    seconds ([None], the default, is unbounded). May raise
+    [Verification_failed], [Compile.Unsupported], or [Compile.Toolchain_error].
+*)

@@ -37,11 +37,11 @@ exception Verification_failed of string
    for [native_int]. That pairing is what makes native-int codegen *sound* --
    the gate rejects any program whose arithmetic could overflow. Skipping the
    gate ([verify = false]) with [native_int] forfeits that guarantee. *)
-let compile ?(debug = false) ?(verify = true) ?(native_int = false) ~output path
-    =
+let compile ?(debug = false) ?(verify = true) ?timeout ?(native_int = false)
+    ~output path =
   let ast = get_ast path in
   (if verify then
-     match Hoare.verify_report ~machine_int:native_int ast with
+     match Hoare.verify_report ?timeout ~machine_int:native_int ast with
      | { result = Smt.Prover.Valid; _ } -> ()
      | {
       result = Smt.Prover.Invalid;
