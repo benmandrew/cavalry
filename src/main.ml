@@ -12,6 +12,7 @@ let get_ast path =
   List.map Triple.translate ut_ast |> Var_collection.collect
 
 let verify = Hoare.verify
+let verify_report = Hoare.verify_report
 
 let exec path =
   get_ast path |> List.map (fun p -> fst p |> Runtime.to_proc_t) |> Runtime.exec
@@ -37,11 +38,18 @@ let compile ?(debug = false) ?(verify = true) ?(native_int = false) ~output path
     =
   let ast = get_ast path in
   (if verify then
-     match Hoare.verify ~machine_int:native_int ast with
-     | Smt.Prover.Valid -> ()
-     | Smt.Prover.Invalid ->
-         raise (Verification_failed "precondition does not imply postcondition")
-     | Smt.Prover.Failed s ->
+     match Hoare.verify_report ~machine_int:native_int ast with
+     | { result = Smt.Prover.Valid; _ } -> ()
+     | { result = Smt.Prover.Invalid; failing_proc } ->
+         let where =
+           match failing_proc with
+           | Some p -> Printf.sprintf "procedure '%s': " p
+           | None -> ""
+         in
+         raise
+           (Verification_failed
+              (where ^ "precondition does not imply postcondition"))
+     | { result = Smt.Prover.Failed s; _ } ->
          raise (Verification_failed ("internal failure: " ^ s)));
   let ocaml = Compile.emit ~native_int ast in
   if debug then (

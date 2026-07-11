@@ -30,3 +30,17 @@ val verify :
     integers: each arithmetic operation must be proven not to overflow (see
     [safe]/[Arith.in_bounds]), including inside loops and across procedure
     calls. The default reasons over unbounded integers. *)
+
+type report = { result : Smt.Prover.result; failing_proc : string option }
+(** A whole-program verification outcome. [failing_proc] names the first
+    procedure ([main] included, under the name ["main"]) whose body failed to
+    verify, and is [None] iff [result] is [Valid]. *)
+
+val verify_report :
+  ?debug:bool ->
+  ?timeout:float ->
+  ?machine_int:bool ->
+  (Triple.t * Vars.t) list ->
+  report
+(** As {!verify}, but also reports which procedure was rejected. {!verify} is
+    [(verify_report ...).result]. *)

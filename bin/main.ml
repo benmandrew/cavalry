@@ -5,12 +5,18 @@ let exec source_file = Printf.printf "%d\n" (Main.exec source_file)
 let verify debug machine_int source_file =
   let program = Main.get_ast source_file in
   let open Smt.Prover in
-  match Main.verify ~debug ~machine_int program with
-  | Valid -> Printf.printf "verification successful\n"
-  | Invalid ->
+  match Main.verify_report ~debug ~machine_int program with
+  | { result = Valid; _ } -> Printf.printf "verification successful\n"
+  | { result = Invalid; failing_proc } ->
+      let where =
+        match failing_proc with
+        | Some p -> Printf.sprintf " in procedure '%s'" p
+        | None -> ""
+      in
       Printf.printf
-        "verification unsuccessful: precondition does not imply postcondition\n"
-  | Failed s -> Printf.printf "internal failure: %s\n" s
+        "verification unsuccessful%s: precondition does not imply postcondition\n"
+        where
+  | { result = Failed s; _ } -> Printf.printf "internal failure: %s\n" s
 
 let compile debug no_verify native_int output source_file =
   let output =

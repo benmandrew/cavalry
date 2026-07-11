@@ -221,6 +221,25 @@ let%test_unit "Main.verify true variant with array measure" =
 
 let%test_unit "Main.verify false" = check_verify "verify_false.cav" Invalid
 
+(* A rejected program reports which procedure failed to verify (main included,
+   under the name "main"). *)
+let check_failing_proc path expect =
+  [%test_result: string option]
+    (Main.verify_report ~debug ?timeout:(Some 5.) (Main.get_ast path))
+      .failing_proc ~expect
+
+let%test_unit "Main.verify_report names the failing procedure" =
+  check_failing_proc "verify_false_proc_ensures.cav" (Some "f")
+
+let%test_unit "Main.verify_report names an undeclared-writes procedure" =
+  check_failing_proc "verify_false_writes_undeclared.cav" (Some "f")
+
+let%test_unit "Main.verify_report names main when main fails" =
+  check_failing_proc "verify_false.cav" (Some "main")
+
+let%test_unit "Main.verify_report reports no procedure on success" =
+  check_failing_proc "verify_true_if.cav" None
+
 (* A provided variant that does not decrease (here the measure [i] increases)
    is rejected even though the loop does terminate: the given measure fails to
    prove it. *)

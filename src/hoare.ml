@@ -441,7 +441,13 @@ let writes_are_declared globals procs (t : Triple.t) =
       | None -> true
       | Some _ -> List.mem x t.ws)
 
-let verify ?debug:d ?timeout ?(machine_int = false) program =
+(* The outcome of verifying a whole program: the prover verdict, plus -- when
+   the program is rejected -- the name of the first procedure ([main] included)
+   whose body failed to verify. [failing_proc] is [None] iff [result] is [Valid].
+   Later milestones enrich this with the failure's reason and source location. *)
+type report = { result : Smt.Prover.result; failing_proc : string option }
+
+let verify_report ?debug:d ?timeout ?(machine_int = false) program =
   debug := Option.value ~default:false d;
   let procs, (main, globals) = split_last program in
   let f ~is_main procs proc =
@@ -465,7 +471,9 @@ let verify ?debug:d ?timeout ?(machine_int = false) program =
     let (_ : (Triple.t * Vars.t) Proc_map.t) =
       f ~is_main:true proc_map (main, globals)
     in
-    Smt.Prover.Valid
+    { result = Smt.Prover.Valid; failing_proc = None }
   with Proc_invalid s ->
-    if !debug then Printf.printf "Procedure '%s' cannot be verified\n" s;
-    Smt.Prover.Invalid
+    { result = Smt.Prover.Invalid; failing_proc = Some s }
+
+let verify ?debug ?timeout ?machine_int program =
+  (verify_report ?debug ?timeout ?machine_int program).result

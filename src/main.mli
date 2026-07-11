@@ -18,6 +18,15 @@ val verify :
 (** Verify a parsed program. See {!Hoare.verify} for [machine_int] and the other
     parameters. *)
 
+val verify_report :
+  ?debug:bool ->
+  ?timeout:float ->
+  ?machine_int:bool ->
+  (Triple.t * Vars.t) list ->
+  Hoare.report
+(** As {!verify}, but also reports which procedure was rejected. Backs the
+    [cav verify] CLI so it can name the failing procedure. *)
+
 val exec : string -> int
 (** Parse and interpret the source file at the given path, returning [main]'s
     result. Backs [cav run]. *)
