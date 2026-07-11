@@ -287,6 +287,30 @@ let%test_unit "reason: undeclared write" =
 let%test_unit "reason: arithmetic may overflow (machine int)" =
   check_reason ~machine_int:true "verify_boundary_overflow.cav" No_overflow
 
+(* A construct-level failure points at the source line of the offending command;
+   a whole-procedure obligation (a plain postcondition) carries no location. *)
+let loc_line path =
+  match
+    (Main.verify_report ~debug ?timeout:(Some 5.) (Main.get_ast path)).loc
+  with
+  | Some (l : Main.Ast.Loc.t) -> Some l.line
+  | None -> None
+
+let check_loc_line path expect =
+  [%test_result: int option] (loc_line path) ~expect
+
+let%test_unit "location: divide-by-zero points at the division's line" =
+  check_loc_line "verify_false_div_by_zero.cav" (Some 2)
+
+let%test_unit "location: out-of-bounds write points at the write's line" =
+  check_loc_line "verify_false_array_write_oob.cav" (Some 3)
+
+let%test_unit "location: recursive variant points at the call's line" =
+  check_loc_line "verify_false_recursion.cav" (Some 7)
+
+let%test_unit "location: a plain postcondition has no location" =
+  check_loc_line "verify_false.cav" None
+
 (* A provided variant that does not decrease (here the measure [i] increases)
    is rejected even though the loop does terminate: the given measure fails to
    prove it. *)

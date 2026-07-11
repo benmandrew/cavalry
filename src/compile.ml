@@ -115,6 +115,7 @@ let native =
    separately (see [arrays]) since they compile to an [array ref], not an
    [int ref]. *)
 let rec assigned = function
+  | Located (_, c) -> assigned c
   | Seq (c, c') -> Str_set.union (assigned c) (assigned c')
   | Assgn (x, _) -> Str_set.singleton x
   | If (_, c, c') -> Str_set.union (assigned c) (assigned c')
@@ -142,6 +143,7 @@ let rec arrays_expr : type a. a expr -> Str_set.t = function
       Str_set.union (arrays_expr a) (arrays_expr b)
 
 let rec arrays = function
+  | Located (_, c) -> arrays c
   | Seq (c, c') -> Str_set.union (arrays c) (arrays c')
   | If (_, c, c') -> Str_set.union (arrays c) (arrays c')
   | While (_, _, _, c) -> arrays c
@@ -197,7 +199,10 @@ let emit_bool ~ops ~locals (e : bool expr) : string =
 
 (* Flatten the (possibly unbalanced) [Seq] tree into left-to-right statement
    order, so a [Let] can scope over everything sequenced after it. *)
-let rec flatten = function Seq (c, c') -> flatten c @ flatten c' | c -> [ c ]
+let rec flatten = function
+  | Seq (c, c') -> flatten c @ flatten c'
+  | Located (_, c) -> flatten c
+  | c -> [ c ]
 
 (* Each command compiles to an OCaml expression of the backend int type whose
    evaluation performs its effects and yields its *value* -- the int the
@@ -207,6 +212,7 @@ let rec flatten = function Seq (c, c') -> flatten c @ flatten c' | c -> [ c ]
    [Seq] -> its last. *)
 let rec emit_cmd ~ops ~locals c : string =
   match c with
+  | Located (_, c) -> emit_cmd ~ops ~locals c
   | Seq _ -> emit_block ~ops ~locals (flatten c)
   | Assgn (x, e) ->
       Printf.sprintf "(%s := %s; %s)" (gref x) (emit_int ~ops ~locals e)

@@ -75,6 +75,18 @@ let prove timeout base_task vars t =
    caller can build a minimal per-subgoal task before discharging it. Splitting
    here rather than proving the whole conjunction at once is also what lets a
    failure be pinned to a single obligation. *)
+(* First located node in a top-down traversal. A split subgoal has the shape
+   [hypotheses -> obligation]; the obligation's atoms carry the source location
+   (set by the caller on every node) while the [->]/hypotheses do not, so the
+   first location found is the obligation's. *)
+let rec first_loc t =
+  match t.Term.t_loc with
+  | Some _ as l -> l
+  | None ->
+      Term.t_fold
+        (fun acc sub -> match acc with Some _ -> acc | None -> first_loc sub)
+        None t
+
 let split_obligations base_task vars t =
   let goal_id = Decl.create_prsymbol (Ident.id_fresh "goal") in
   let task =
@@ -84,4 +96,5 @@ let split_obligations base_task vars t =
   Trans.apply Split_goal.split_goal_right task
   |> List.map ~f:(fun st ->
       let _, expl, _ = Termcode.goal_expl_task ~root:false st in
-      (Task.task_goal_fmla st, expl))
+      let f = Task.task_goal_fmla st in
+      (f, expl, first_loc f))

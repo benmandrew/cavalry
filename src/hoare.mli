@@ -15,7 +15,12 @@ module Proc_map : sig
   type 'a t
 end
 
-val safe : g_vars:Vars.t -> ?l_vars:Vars.t -> 'a Program.expr -> T.term
+val safe :
+  g_vars:Vars.t ->
+  ?l_vars:Vars.t ->
+  ?loc:Why3.Loc.position ->
+  'a Program.expr ->
+  T.term
 (** [safe e] is the overflow-freedom obligation for [e]: the conjunction of
     [Arith.in_bounds] over every arithmetic result [e] computes. It is [true]
     for expressions built only from literals, variables, and comparisons. *)
@@ -54,12 +59,15 @@ type report = {
   result : Smt.Prover.result;
   failing_proc : string option;
   reason : reason option;
+  loc : Ast.Loc.t option;
 }
 (** A whole-program verification outcome. [failing_proc] names the first
     procedure ([main] included, under the name ["main"]) whose body failed to
     verify, and is [None] iff [result] is [Valid]. [reason] classifies the
     failure when the prover isolated it to one obligation ([None] if it could
-    not, e.g. an internal [Failed]). *)
+    not, e.g. an internal [Failed]). [loc] points at the offending construct,
+    and is [None] for whole-procedure obligations (a plain postcondition) and
+    static rejections. *)
 
 val verify_report :
   ?debug:bool ->
