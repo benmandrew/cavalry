@@ -61,6 +61,7 @@ type report = {
   reason : reason option;
   loc : Ast.Loc.t option;
   counterexample : (string * string) list;
+  status : Smt.Prover.status option;
 }
 (** A whole-program verification outcome. [failing_proc] names the first
     procedure ([main] included, under the name ["main"]) whose body failed to
@@ -69,11 +70,16 @@ type report = {
     not, e.g. an internal [Failed]). [loc] points at the offending construct,
     and is [None] for whole-procedure obligations (a plain postcondition) and
     static rejections. [counterexample] is a best-effort [(variable, value)]
-    entry-state witness from Z3 ([[]] when none was produced). *)
+    entry-state witness from Z3 ([[]] when none was produced). [status] records
+    whether an [Invalid] failure is a confirmed [Disproved] or only a
+    [Candidate] (set iff [result] is [Invalid]). *)
 
-val format_counterexample : (string * string) list -> string
+val format_counterexample :
+  ?status:Smt.Prover.status -> (string * string) list -> string
 (** Render a {!report}'s [counterexample] as an indented display block (empty
-    string if nothing user-facing remains after hiding internal symbols). *)
+    string if nothing user-facing remains after hiding internal symbols).
+    [status] qualifies the witness -- a [Candidate] one is flagged unconfirmed.
+*)
 
 val verify_report :
   ?debug:bool ->

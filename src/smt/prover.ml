@@ -63,6 +63,17 @@ let z3_ce =
 
 type result = Valid | Invalid | Failed of string [@@deriving sexp_of, ord]
 
+(* Confidence in an [Invalid] verdict. Z3's plain driver reports a genuine
+   counter-model as [Unknown "sat"], not [Invalid]: on quantified goals (arrays,
+   loop invariants) a [sat] can rest on incomplete quantifier instantiation, so
+   the model may be spurious. Only a hard [Invalid] answer is therefore
+   [Disproved] (the goal is definitely false); every [Unknown] is a [Candidate]
+   whose witness is advisory. Meaningful only alongside an [Invalid] result. *)
+type status = Disproved | Candidate [@@deriving sexp_of, compare]
+
+let status_of_answer (answer : Call_provers.prover_answer) : status =
+  match answer with Invalid -> Disproved | _ -> Candidate
+
 (* Maps a prover's raw answer onto our tri-state result. Factored out of
    [prove] so the [Failed] branch can be tested with a stubbed answer rather
    than by provoking a real (slow, flaky) timeout. *)
@@ -86,11 +97,15 @@ let run_prover timeout task =
     z3_driver task
   |> Call_provers.wait_on_call
 
-let prove_term timeout base_task term =
+let prove_term_status timeout base_task term =
   let goal_id = Decl.create_prsymbol (Ident.id_fresh "goal") in
   let task = Task.add_prop_decl base_task Decl.Pgoal goal_id term in
   let result = run_prover timeout task in
-  result_of_answer ~output:result.pr_output result.pr_answer
+  ( result_of_answer ~output:result.pr_output result.pr_answer,
+    status_of_answer result.pr_answer )
+
+let prove_term timeout base_task term =
+  fst (prove_term_status timeout base_task term)
 
 let prove timeout base_task vars t =
   Term.t_forall_close vars [] t |> prove_term timeout base_task

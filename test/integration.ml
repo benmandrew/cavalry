@@ -341,6 +341,30 @@ let%test_unit "counterexample: hides internal variables" =
     (ce_value "verify_false_variant.cav" "variant")
     ~expect:None
 
+(* An [Invalid] verdict records its confidence. Z3 answers [unknown "sat"] on
+   these quantified WLP goals, so a genuine failure is reported as a candidate
+   rather than a confirmed disproof; a successful verification carries no
+   status. *)
+let status_of path =
+  (Main.verify_report ~debug ?timeout:(Some 5.) (Main.get_ast path)).status
+
+let%test_unit "status: a failed obligation is a candidate" =
+  [%test_result: Smt.Prover.status option]
+    (status_of "verify_false_div_by_zero.cav")
+    ~expect:(Some Smt.Prover.Candidate)
+
+(* A static writes-clause rejection never reaches the prover, so it is a
+   confirmed disproof rather than a candidate. *)
+let%test_unit "status: a static rejection is disproved" =
+  [%test_result: Smt.Prover.status option]
+    (status_of "verify_false_writes_undeclared.cav")
+    ~expect:(Some Smt.Prover.Disproved)
+
+let%test_unit "status: a valid program has none" =
+  [%test_result: Smt.Prover.status option]
+    (status_of "verify_true_nonlinear.cav")
+    ~expect:None
+
 (* A provided variant that does not decrease (here the measure [i] increases)
    is rejected even though the loop does terminate: the given measure fails to
    prove it. *)
@@ -440,6 +464,21 @@ let%test_unit "Prover.result_of_answer mapping" =
   [%test_result: result]
     (f Why3.Call_provers.OutOfMemory)
     ~expect:(Failed "boom")
+
+(* Only a hard [Invalid] answer is a confirmed disproof; every other answer that
+   still yields an [Invalid] result (Z3's [Unknown "sat"] on a quantified goal)
+   is a candidate whose model may be spurious. *)
+let%test_unit "Prover.status_of_answer mapping" =
+  let open Smt.Prover in
+  [%test_result: status]
+    (status_of_answer Why3.Call_provers.Invalid)
+    ~expect:Disproved;
+  [%test_result: status]
+    (status_of_answer (Why3.Call_provers.Unknown "sat"))
+    ~expect:Candidate;
+  [%test_result: status]
+    (status_of_answer (Why3.Call_provers.Unknown ""))
+    ~expect:Candidate
 
 (* ===== Soundness regressions (previously unsound, now fixed) ===== *)
 

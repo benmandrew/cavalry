@@ -13,9 +13,21 @@ val env : Env.env
     carrying the raw prover output. *)
 type result = Valid | Invalid | Failed of string [@@deriving sexp_of, ord]
 
+(** Confidence in an {!Invalid} verdict: [Disproved] (a hard [Invalid] answer --
+    the goal is definitely false) or [Candidate] (an [unknown]/[sat] answer
+    whose model may be spurious under incomplete quantifier reasoning). Z3's
+    plain driver reports even a genuine refutation as [Unknown "sat"], so a
+    verified counterexample is in practice a [Candidate]. Meaningful only
+    alongside an [Invalid] {!result}. *)
+type status = Disproved | Candidate [@@deriving sexp_of, compare]
+
 val result_of_answer : output:string -> Call_provers.prover_answer -> result
 (** Maps a prover's raw answer onto {!result}. Exposed so the [Failed] branch
     can be exercised with a stubbed answer instead of a real timeout. *)
+
+val status_of_answer : Call_provers.prover_answer -> status
+(** Classifies a raw answer's confidence for {!type-status}. Exposed for the
+    same stubbed-answer testing as {!result_of_answer}. *)
 
 val prove :
   float option -> Task.task -> Term.vsymbol list -> Term.term -> result
@@ -26,6 +38,11 @@ val prove :
 val prove_term : float option -> Task.task -> Term.term -> result
 (** As {!prove} but for a term that is already the goal (no universal closure).
     Used to discharge an individual split obligation. *)
+
+val prove_term_status :
+  float option -> Task.task -> Term.term -> result * status
+(** As {!prove_term}, but also reports the {!type-status} of the verdict so a
+    caller can tell a confirmed refutation from a candidate one. *)
 
 val split_obligations :
   Task.task ->

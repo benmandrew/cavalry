@@ -49,6 +49,7 @@ let compile ?(debug = false) ?(verify = true) ?(native_int = false) ~output path
       reason;
       loc;
       counterexample;
+      status;
      } ->
          let where =
            match failing_proc with
@@ -66,7 +67,7 @@ let compile ?(debug = false) ?(verify = true) ?(native_int = false) ~output path
            | None -> "precondition does not imply postcondition"
          in
          let ce =
-           match Hoare.format_counterexample counterexample with
+           match Hoare.format_counterexample ?status counterexample with
            | "" -> ""
            | block -> "\n" ^ block
          in
