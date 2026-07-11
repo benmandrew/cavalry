@@ -8,6 +8,7 @@
     { "include": "#keywords" },
     { "include": "#constants" },
     { "include": "#builtins" },
+    { "include": "#function-calls" },
     { "include": "#numbers" },
     { "include": "#operators" },
     { "include": "#punctuation" },
@@ -38,11 +39,15 @@
       "patterns": [
         {
           "name": "keyword.control.cavalry",
-          "match": "\\b(if|then|else|while|do|end)\\b"
-        },
+          "match": "\\b(if|then|else|while|do|end|procedure)\\b"
+        }
+      ]
+    },
+    "function-calls": {
+      "patterns": [
         {
-          "name": "keyword.other.cavalry",
-          "match": "\\b(procedure|print)\\b"
+          "name": "entity.name.function.cavalry",
+          "match": "\\b[A-Za-z_][A-Za-z0-9_]*(?=\\s*\\()"
         }
       ]
     },

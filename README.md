@@ -79,48 +79,28 @@ A loop's `invariant` holds on entry and after every iteration, while its
 optional `variant` — a non-negative measure that strictly decreases each
 iteration — proves termination, giving total correctness.
 
-```
-{ x = 0 && i = 0 && n >= 0 }
-while i < n do
-  invariant { 2 * x = i * (i - 1) && 0 <= i && i <= n }
-  variant { n - i }
-  x <- x + i;
-  i <- i + 1
-end;
-x
-{ 2 * x = n * (n - 1) }
-```
+<!-- snippet: triangle-numbers -->
+<a href="docs/readme-snippets/snippets/triangle-numbers.cav">
+  <picture>
+    <source media="(prefers-color-scheme: dark)" srcset="docs/snippet-triangle-numbers-dark.svg">
+    <img alt="Cavalry code snippet" src="docs/snippet-triangle-numbers-light.svg">
+  </picture>
+</a>
+<!-- /snippet -->
 
 ### Euclidean division procedure
 
 Division `/` and modulo `%` are part of the logic, so the postcondition can
 specify the loop's result directly in terms of them.
 
-```
-procedure euclidean_div () =
-  requires { x >= 0 && y > 0 }
-  ensures { q = x / y && r = x % y }
-  writes { q, r }
-  q <- 0;
-  r <- x;
-  while r >= y do
-    invariant { x = q * y + r && 0 <= r }
-    variant { r }
-    r <- r - y;
-    q <- q + 1
-  end
-end
-
-{ true }
-x <- 42;
-y <- 17;
-q <- 0;
-r <- 0;
-euclidean_div();
-print(q);
-print(r)
-{ q = 2 && r = 8 }
-```
+<!-- snippet: euclidean-division -->
+<a href="docs/readme-snippets/snippets/euclidean-division.cav">
+  <picture>
+    <source media="(prefers-color-scheme: dark)" srcset="docs/snippet-euclidean-division-dark.svg">
+    <img alt="Cavalry code snippet" src="docs/snippet-euclidean-division-light.svg">
+  </picture>
+</a>
+<!-- /snippet -->
 
 ### Filling an array
 
@@ -128,39 +108,25 @@ Bounded arrays are created with `array(n)` (zero-initialised), indexed with
 `a[i]`, and sized with `len(a)`. Specifications quantify over their contents
 with `forall` and `exists`.
 
-```
-{ n >= 0 }
-a <- array(n);
-i <- 0;
-while i < len(a) do
-  invariant { 0 <= i && i <= len(a) && forall j . 0 <= j && j < i -> a[j] = 5 }
-  variant { len(a) - i }
-  a[i] <- 5;
-  i <- i + 1
-end
-{ forall j . 0 <= j && j < len(a) -> a[j] = 5 }
-```
+<!-- snippet: array-fill -->
+<a href="docs/readme-snippets/snippets/array-fill.cav">
+  <picture>
+    <source media="(prefers-color-scheme: dark)" srcset="docs/snippet-array-fill-dark.svg">
+    <img alt="Cavalry code snippet" src="docs/snippet-array-fill-light.svg">
+  </picture>
+</a>
+<!-- /snippet -->
 
 ### Recursive procedure
 
 Procedures may call themselves. A `variant` on the procedure — decreasing
 across each recursive call — proves the recursion terminates.
 
-```
-procedure sum_to (n) =
-  requires { n >= 0 }
-  ensures { s >= 0 }
-  variant { n }
-  writes { s }
-  if n = 0 then
-    s <- 0
-  else
-    sum_to(n - 1);
-    s <- s + n
-  end
-end
-
-{ true }
-sum_to(5)
-{ s >= 0 }
-```
+<!-- snippet: recursive-procedure -->
+<a href="docs/readme-snippets/snippets/recursive-procedure.cav">
+  <picture>
+    <source media="(prefers-color-scheme: dark)" srcset="docs/snippet-recursive-procedure-dark.svg">
+    <img alt="Cavalry code snippet" src="docs/snippet-recursive-procedure-light.svg">
+  </picture>
+</a>
+<!-- /snippet -->
