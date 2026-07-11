@@ -24,8 +24,11 @@ let verify debug machine_int source_file =
         | None -> "precondition does not imply postcondition"
       in
       Printf.printf "verification unsuccessful%s%s: %s\n" where at what;
-      print_string (Hoare.format_counterexample ?status counterexample)
-  | { result = Failed s; _ } -> Printf.printf "internal failure: %s\n" s
+      print_string (Hoare.format_counterexample ?status counterexample);
+      exit 1
+  | { result = Failed s; _ } ->
+      Printf.printf "internal failure: %s\n" s;
+      exit 2
 
 let compile debug no_verify native_int output source_file =
   let output =

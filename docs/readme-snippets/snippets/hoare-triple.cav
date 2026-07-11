@@ -1,0 +1,6 @@
+// A Hoare triple {P} c {Q}: if P holds before c runs, Q holds
+// after — a fact proved without executing the code.
+{ x >= 0 }
+y <- x + 1;
+z <- 2 * y
+{ z = 2 * x + 2 }

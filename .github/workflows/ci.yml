@@ -72,6 +72,24 @@ jobs:
       - name: Run tests
         run: opam exec -- dune build @runtest
 
+      # Prove the README's example programs against their specifications, so a
+      # snippet can't drift out of sync with the language. `cav verify` exits 0
+      # on success and non-zero on failure, so every snippet must verify except
+      # failing-spec.cav, which must be rejected.
+      - name: Verify README example programs
+        run: |
+          for f in docs/readme-snippets/snippets/*.cav; do
+            case "$f" in
+              *failing-spec.cav)
+                if opam exec -- dune exec -- cav verify "$f"; then
+                  echo "::error::$f was expected to fail verification but passed"
+                  exit 1
+                fi ;;
+              *)
+                opam exec -- dune exec -- cav verify "$f" ;;
+            esac
+          done
+
       # zanuda is a typedtree-based linter tightly coupled to the OCaml
       # compiler; its releases don't support 5.5.0, so this runs only on the
       # 4.14 leg. It reports via OCaml alerts and doesn't fail on findings, so
@@ -83,6 +101,29 @@ jobs:
           opam install zanuda -y
           opam exec -- dune build @check
           opam exec -- zanuda -dir . -del-prefix "$(pwd)"
+
+  # Verifies the README's generated snippet SVGs are in sync with their .cav
+  # sources and the TextMate grammar. `gen.mjs --check` re-renders in memory and
+  # fails if anything committed is stale (see docs/readme-snippets/README.md).
+  # Independent of the OCaml toolchain, so it runs as its own lightweight job.
+  snippets:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+
+      - name: Install dependencies
+        working-directory: docs/readme-snippets
+        run: npm ci
+
+      - name: Check README snippets are up to date
+        working-directory: docs/readme-snippets
+        run: npm run check
 
   # Runs concurrently with the build matrix (no `needs`) so the odoc build
   # doesn't extend the critical path. Doc generation only compiles the modules,

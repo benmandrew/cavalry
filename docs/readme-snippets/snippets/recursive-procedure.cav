@@ -1,0 +1,18 @@
+// A procedure may call itself. The `variant` strictly decreases across each
+// recursive call, which is what proves the recursion terminates.
+procedure sum_to (n) =
+  requires { n >= 0 }
+  ensures { s >= 0 }
+  variant { n }
+  writes { s }
+  if n = 0 then
+    s <- 0
+  else
+    sum_to(n - 1);
+    s <- s + n
+  end
+end
+
+{ true }
+sum_to(5)
+{ s >= 0 }
