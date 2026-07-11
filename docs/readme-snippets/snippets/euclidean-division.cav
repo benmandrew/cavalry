@@ -1,3 +1,5 @@
+// A procedure carries a contract: `requires` is its precondition, `ensures` its
+// postcondition, and `writes` frames which globals it is allowed to modify.
 procedure euclidean_div () =
   requires { x >= 0 && y > 0 }
   ensures { q = x / y && r = x % y }
@@ -20,4 +22,4 @@ r <- 0;
 euclidean_div();
 print(q);
 print(r)
-{ q = 2 && r = 8 }
+{ q = 2 && r = 8 } // 42 = 2 * 17 + 8

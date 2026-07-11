@@ -45,7 +45,10 @@ const withRules = t => ({ ...t, name: `cav-${t.name}`, tokenColors: [...(t.token
 const LIGHT = withRules(lightPlus), DARK = withRules(darkPlus)
 
 const FONT = 'ui-monospace, "SF Mono", Menlo, Consolas, monospace'
-const SIZE = 14, LINE = 21, ADV = SIZE * 0.6, PADX = 18, PADY = 16
+// ADV is the per-character advance for width/layout. 0.62em leaves a small
+// margin over the ~0.6em of typical monospace fonts so the widest line never
+// clips the right edge in fonts that run slightly wider (e.g. macOS preview).
+const SIZE = 14, LINE = 21, ADV = SIZE * 0.62, PADX = 18, PADY = 16
 const esc = s => s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
 
 const hl = await createHighlighter({

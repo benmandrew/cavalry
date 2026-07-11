@@ -1,0 +1,6 @@
+// `exists` asserts that some element satisfies a property; here,
+// index 0 witnesses that a 7 is present after the write.
+{ n > 0 }
+a <- array(n);
+a[0] <- 7
+{ exists j . 0 <= j && j < len(a) && a[j] = 7 }
