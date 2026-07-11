@@ -1,6 +1,6 @@
-(** The SMT backend: a thin wrapper over Why3 driving Alt-Ergo. The prover
-    (pinned to 2.4.3) and its driver are loaded once at module initialisation,
-    failing fast with [exit 1] if [why3 config detect] has not found it. *)
+(** The SMT backend: a thin wrapper over Why3 driving Z3. The prover (pinned to
+    4.16.0) and its driver are loaded once at module initialisation, failing
+    fast with [exit 1] if [why3 config detect] has not found it. *)
 
 open Why3
 

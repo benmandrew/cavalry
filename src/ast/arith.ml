@@ -73,10 +73,12 @@ let base_task =
     (fun task theory -> Task.use_export task theory)
     task [ int_theory ]
 
-(* [ComputerDivision]'s axioms are quantified, and Alt-Ergo's matching loop can
-   diverge on them (ignoring the time limit) even for goals that never mention
-   [div]/[mod]. So we keep them out of the shared [base_task] and splice them in
-   only for goals that actually use division -- see [task_for]. *)
+(* [ComputerDivision]'s axioms are quantified. The former Alt-Ergo backend's
+   matching loop could diverge on them (ignoring the time limit) even for goals
+   that never mention [div]/[mod], so they are kept out of the shared [base_task]
+   and spliced in only for goals that actually use division (see [task_for]).
+   The split is retained under Z3: it costs nothing, and the per-obligation
+   proving in [Hoare] already picks a minimal task per subgoal. *)
 let base_task_div = Task.use_export base_task comp_div_theory
 
 let base_task_map =

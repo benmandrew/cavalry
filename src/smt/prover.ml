@@ -10,29 +10,38 @@ let config =
 
 let main = Whyconf.get_main config
 
-(* Pinned to match the [alt-ergo] constraint in dune-project/cavalry.opam.
-   The filter is versioned so that a why3 config pointing at a different
-   Alt-Ergo (e.g. a stray 2.6.2 on PATH) fails fast here rather than silently
-   discharging goals against a prover we haven't vetted. *)
-let alt_ergo_version = "2.4.3"
+(* Pinned to match the [z3] constraint in dune-project/cavalry.opam. The filter
+   is versioned so that a why3 config pointing at a different Z3 fails fast here
+   rather than silently discharging goals against a prover we haven't vetted.
+   Z3 is used both for the yes/no verdict and (a later milestone) for the
+   counterexample models Alt-Ergo could not produce usefully. *)
+let z3_version = "4.16.0"
 
-let alt_ergo =
+let z3 =
   let open Printf in
-  let fp = Whyconf.parse_filter_prover ("Alt-Ergo," ^ alt_ergo_version) in
+  let fp = Whyconf.parse_filter_prover ("Z3," ^ z3_version) in
   let provers = Whyconf.filter_provers config fp in
-  if Whyconf.Mprover.is_empty provers then (
-    eprintf "Prover Alt-Ergo %s not installed or not configured\n"
-      alt_ergo_version;
+  (* [filter_provers] also matches Z3's alternative configurations, e.g. "Z3
+     (counterexamples)" and "Z3 (noBV)"; pin the plain build (empty [altern])
+     for a deterministic verdict prover. *)
+  let base =
+    Whyconf.Mprover.filter
+      (fun p _ -> String.is_empty p.Whyconf.prover_altern)
+      provers
+  in
+  let chosen = if Whyconf.Mprover.is_empty base then provers else base in
+  if Whyconf.Mprover.is_empty chosen then (
+    eprintf "Prover Z3 %s not installed or not configured\n" z3_version;
     exit 1);
-  snd (Whyconf.Mprover.max_binding provers)
+  snd (Whyconf.Mprover.max_binding chosen)
 
 let env = Env.create_env (Whyconf.loadpath main)
 
-let alt_ergo_driver =
+let z3_driver =
   let open Format in
-  try Driver.load_driver_for_prover main env alt_ergo
+  try Driver.load_driver_for_prover main env z3
   with e ->
-    eprintf "Failed to load driver for alt-ergo: %a\n" Exn_printer.exn_printer e;
+    eprintf "Failed to load driver for Z3: %a\n" Exn_printer.exn_printer e;
     exit 1
 
 type result = Valid | Invalid | Failed of string [@@deriving sexp_of, ord]
@@ -47,8 +56,8 @@ let result_of_answer ~output (answer : Call_provers.prover_answer) : result =
   | Timeout | OutOfMemory | StepLimitExceeded | HighFailure _ | Failure _ ->
       Failed output
 
-(* Run Alt-Ergo on a task whose goal is already in place, returning its raw
-   result. Shared by the whole-goal [prove] and the per-obligation [prove_term]. *)
+(* Run Z3 on a task whose goal is already in place, returning its raw result.
+   Shared by the whole-goal [prove] and the per-obligation [prove_term]. *)
 let run_prover timeout task =
   let limit =
     match timeout with
@@ -56,8 +65,8 @@ let run_prover timeout task =
     | Some limit_time ->
         { Call_provers.limit_time; limit_mem = -1; limit_steps = -1 }
   in
-  Driver.prove_task ~limits:limit ~config:main ~command:alt_ergo.Whyconf.command
-    alt_ergo_driver task
+  Driver.prove_task ~limits:limit ~config:main ~command:z3.Whyconf.command
+    z3_driver task
   |> Call_provers.wait_on_call
 
 let prove_term timeout base_task term =

@@ -538,11 +538,11 @@ let verify_procedure ?timeout ~machine_int ~is_main g_vars procs
   let split_task = Arith.task ~div:(Arith.uses_div goal) ~map:uses_map in
   let obligations = Smt.Prover.split_obligations split_task merged_vars goal in
   (* Discharge each obligation on its own task, detecting division per subgoal:
-     a subgoal that does not mention [div]/[mod] must not carry the
-     ComputerDivision axioms, on which Alt-Ergo's matching loop can diverge even
-     while ignoring the time limit (see [Arith]). Map inclusion is harmless, so
-     the whole-goal [uses_map] is reused. The first failing obligation
-     determines the reported reason and location. *)
+     a subgoal that does not mention [div]/[mod] need not carry the
+     ComputerDivision axioms (a conservative split inherited from the Alt-Ergo
+     backend, whose matching loop could diverge on them -- see [Arith]). Map
+     inclusion is harmless, so the whole-goal [uses_map] is reused. The first
+     failing obligation determines the reported reason and location. *)
   let rec check = function
     | [] -> (Smt.Prover.Valid, None, None)
     | (f, expl, loc) :: rest -> (

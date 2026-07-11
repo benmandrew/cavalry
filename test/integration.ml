@@ -164,6 +164,11 @@ let%test_unit "Main.verify true negative" =
 let%test_unit "Main.verify true bigmul" =
   check_verify "verify_true_bigmul.cav" Valid
 
+(* A true nonlinear fact (x,y >= 2 => x*y > x && x*y > y). Z3 discharges the
+   nonlinear reasoning that the former Alt-Ergo backend could not. *)
+let%test_unit "Main.verify true nonlinear" =
+  check_verify "verify_true_nonlinear.cav" Valid
+
 (* Nested loops each carrying their own invariant. *)
 let%test_unit "Main.verify true nested while" =
   check_verify "verify_true_nested_while.cav" Valid
@@ -357,11 +362,6 @@ let%test_unit "Main.verify false procedure ensures" =
 (* Caller does not establish the callee's `requires` (needs x >= 10). *)
 let%test_unit "Main.verify false procedure requires" =
   check_verify "verify_false_proc_requires.cav" Invalid
-
-(* Prover incompleteness: a *true* nonlinear fact (x,y >= 2 => x*y > x)
-   that Alt-Ergo cannot discharge, so verify reports Invalid, not Valid. *)
-let%test_unit "Main.verify false nonlinear incompleteness" =
-  check_verify "verify_false_nonlinear.cav" Invalid
 
 (* Well-definedness: [q <- x / y] with an unconstrained divisor cannot discharge
    the [y <> 0] obligation, so verification fails even though the postcondition
