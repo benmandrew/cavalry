@@ -44,6 +44,19 @@ jobs:
       - name: Install dependencies
         run: opam install . --deps-only --with-test --with-doc
 
+      # Z3 is the SMT backend and must be on PATH before `why3 config detect`
+      # can register it. It is not an opam package (the dev shell gets it from
+      # Nix), so provision the pinned 4.16.0 release binary directly: apt's Z3
+      # is too old for the pin. The x64-glibc-2.39 build matches ubuntu-latest
+      # (24.04); glibc is backward-compatible, so it keeps working on newer
+      # runner images.
+      - name: Install Z3 4.16.0
+        run: |
+          curl -fsSL -o "$RUNNER_TEMP/z3.zip" \
+            https://github.com/Z3Prover/z3/releases/download/z3-4.16.0/z3-4.16.0-x64-glibc-2.39.zip
+          unzip -q "$RUNNER_TEMP/z3.zip" -d "$RUNNER_TEMP"
+          echo "$RUNNER_TEMP/z3-4.16.0-x64-glibc-2.39/bin" >> "$GITHUB_PATH"
+
       - name: Detect why3 provers
         run: opam exec -- why3 config detect
 
