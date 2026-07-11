@@ -14,13 +14,18 @@
         pkgs = import nixpkgs { inherit system; };
       in
       {
-        # OCaml/why3/alt-ergo themselves stay opam-managed (see README) so the
-        # exact versions pinned in cavalry.opam are what actually get built;
-        # this shell only provides opam plus the native libs/tools it needs
-        # to build those packages from source.
+        # OCaml and why3 stay opam-managed (see README) so the exact versions
+        # pinned in cavalry.opam are what actually get built; this shell provides
+        # opam plus the native libs/tools it needs to build those from source.
+        # The Z3 prover, by contrast, is a plain binary and not an opam package,
+        # so nix supplies it (pinned via flake.lock to 4.16.0, the version
+        # [Smt.Prover] checks for); [why3 config detect] then finds it. It is
+        # deliberately absent from cavalry.opam's depends -- opam installs no
+        # prover.
         devShells.default = pkgs.mkShell {
           packages = with pkgs; [
             opam
+            z3
             m4
             pkg-config
             gmp
@@ -42,8 +47,8 @@
             [ -d _opam ] || opam switch create . 5.5.0 -y
 
             # Activate the switch *before* the steps below, so opam acts on it
-            # rather than the global default and so its binaries (why3,
-            # alt-ergo) are on PATH. This eval used to run last, which meant the
+            # rather than the global default and so its binaries (why3) are on
+            # PATH. This eval used to run last, which meant the
             # bootstrap's `why3 config detect` fired before _opam/bin was on
             # PATH and died with "why3: command not found".
             eval "$(opam env --switch=. --set-switch 2>/dev/null)"

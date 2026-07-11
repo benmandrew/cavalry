@@ -16,7 +16,7 @@ opam and the native libraries the project builds against. Setting the toolchain
 up by hand instead needs:
 
 - OCaml >= 4.14 and opam
-- [Why3](https://www.why3.org/) with the [Alt-Ergo](https://alt-ergo.ocamlpro.com/) 2.4.3 SMT solver, used to discharge verification proof obligations
+- [Why3](https://www.why3.org/) with the [Z3](https://github.com/Z3Prover/z3) 4.16.0 SMT solver, used to discharge verification proof obligations (the Nix dev shell supplies Z3; without Nix, install it yourself, e.g. `brew install z3`)
 
 ## Getting started
 
@@ -33,17 +33,19 @@ nix develop
 
 Entering the dev shell for the first time bootstraps a local opam switch,
 installs the project dependencies, and runs `why3 config detect` so Why3 can
-find Alt-Ergo. A stamp file guards this so it only happens once per clone. If
+find Z3 (which the shell provides). A stamp file guards this so it only happens
+once per clone. If
 you use [direnv](https://direnv.net/), `direnv allow` enters the shell (and runs
 the bootstrap) automatically.
 
 ### Without Nix
 
-Provision the opam switch and prover yourself:
+Provision the opam switch and prover yourself (install Z3 4.16.0 first, e.g.
+`brew install z3`):
 
 ```bash
 opam install --deps-only --with-test .
-why3 config detect  # let Why3 find the Alt-Ergo prover
+why3 config detect  # let Why3 find the Z3 prover
 ```
 
 ## Running

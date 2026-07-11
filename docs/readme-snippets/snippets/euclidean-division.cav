@@ -2,7 +2,7 @@
 // postcondition, and `writes` frames which globals it is allowed to modify.
 procedure euclidean_div () =
   requires { x >= 0 && y > 0 }
-  ensures { q = x / y && r = x % y }
+  ensures { x = q * y + r && 0 <= r && r < y }
   writes { q, r }
   q <- 0;
   r <- x;

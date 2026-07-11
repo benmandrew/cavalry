@@ -49,3 +49,6 @@ val fresh_like : T.vsymbol -> Why3.Term.vsymbol
 val len_key : string -> string
 (** [len_key a] is the internal key under which array [a]'s length is stored. It
     cannot clash with a source identifier. *)
+
+val is_len_key : string -> bool
+(** Whether a name is a {!len_key} (used to hide it from user-facing output). *)

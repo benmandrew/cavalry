@@ -488,6 +488,52 @@ let merge_in vm x =
   | None -> Vars.(add x (create_fresh x)) vm
   | Some _ -> vm
 
+module CST = Why3.Model_parser
+
+(* Turn the raw counterexample model into user-facing [(name, value)] strings.
+   Scalars print directly; an array (a Why3 [FunctionLiteral] over the integer
+   domain) is expanded into a concrete list [\[v0, v1, ...\]] indexed [0..len-1],
+   where [len] comes from the companion [#len#<name>] model entry -- the [Vars]
+   naming convention the [smt] layer does not know. Without the length a map
+   literal like [\[|_ => 0|\]] would leak Why3 syntax and hide the size. The
+   [#len#] entries are left in (as scalars) for [format_counterexample] to hide
+   alongside the other internal symbols. *)
+let render_counterexample (ce : (string * CST.concrete_syntax_term) list) :
+    (string * string) list =
+  let print t = Format.asprintf "%a" CST.print_concrete_term t in
+  let int_of_concrete = function
+    | CST.Const (CST.Integer _) as t ->
+        int_of_string_opt (String.trim (print t))
+    | _ -> None
+  in
+  (* Longest array expanded into an explicit list; a larger, negative, or
+     unknown length falls back to the raw map rendering. *)
+  let max_len = 64 in
+  let render_value name = function
+    | CST.FunctionLiteral fl as t -> (
+        match List.assoc_opt (Vars.len_key name) ce with
+        | Some len_t -> (
+            match int_of_concrete len_t with
+            | Some len when len >= 0 && len <= max_len ->
+                let value_at i =
+                  match
+                    List.find_opt
+                      (fun (e : CST.concrete_syntax_funlit_elts) ->
+                        Option.equal Int.equal
+                          (int_of_concrete e.CST.elts_index)
+                          (Some i))
+                      fl.CST.elts
+                  with
+                  | Some e -> print e.CST.elts_value
+                  | None -> print fl.CST.others
+                in
+                "[" ^ String.concat ", " (List.init len value_at) ^ "]"
+            | _ -> print t)
+        | None -> print t)
+    | t -> print t
+  in
+  List.map (fun (n, t) -> (n, render_value n t)) ce
+
 let verify_procedure ?timeout ~machine_int ~is_main g_vars procs
     ((t : Triple.t), l_vars) =
   let p, q =
@@ -538,25 +584,39 @@ let verify_procedure ?timeout ~machine_int ~is_main g_vars procs
   let split_task = Arith.task ~div:(Arith.uses_div goal) ~map:uses_map in
   let obligations = Smt.Prover.split_obligations split_task merged_vars goal in
   (* Discharge each obligation on its own task, detecting division per subgoal:
-     a subgoal that does not mention [div]/[mod] must not carry the
-     ComputerDivision axioms, on which Alt-Ergo's matching loop can diverge even
-     while ignoring the time limit (see [Arith]). Map inclusion is harmless, so
-     the whole-goal [uses_map] is reused. The first failing obligation
-     determines the reported reason and location. *)
+     a subgoal that does not mention [div]/[mod] need not carry the
+     ComputerDivision axioms (a conservative split inherited from the Alt-Ergo
+     backend, whose matching loop could diverge on them -- see [Arith]). Map
+     inclusion is harmless, so the whole-goal [uses_map] is reused. The first
+     failing obligation determines the reported reason and location. *)
   let rec check = function
-    | [] -> (Smt.Prover.Valid, None, None)
+    | [] -> (Smt.Prover.Valid, None, None, [], None)
     | (f, expl, loc) :: rest -> (
         let task = Arith.task ~div:(Arith.uses_div f) ~map:uses_map in
-        match Smt.Prover.prove_term timeout task f with
-        | Smt.Prover.Valid -> check rest
-        | Smt.Prover.Invalid ->
-            (Smt.Prover.Invalid, reason_of_expl expl, Option.map Loc.of_why3 loc)
-        | Smt.Prover.Failed s -> (Smt.Prover.Failed s, None, None))
+        match Smt.Prover.prove_term_status timeout task f with
+        | Smt.Prover.Valid, _ -> check rest
+        | Smt.Prover.Invalid, status ->
+            let ce =
+              render_counterexample
+                (Smt.Prover.counterexample timeout task merged_vars f)
+            in
+            ( Smt.Prover.Invalid,
+              reason_of_expl expl,
+              Option.map Loc.of_why3 loc,
+              ce,
+              Some status )
+        | Smt.Prover.Failed s, _ -> (Smt.Prover.Failed s, None, None, [], None))
   in
   check obligations
 
 exception
-  Proc_invalid of string * Smt.Prover.result * reason option * Loc.t option
+  Proc_invalid of
+    string
+    * Smt.Prover.result
+    * reason option
+    * Loc.t option
+    * (string * string) list
+    * Smt.Prover.status option
 
 (* A procedure's [writes] clause must name every global it actually assigns;
    otherwise a caller's WLP would never havoc that global and could "prove"
@@ -580,6 +640,13 @@ type report = {
   failing_proc : string option;
   reason : reason option;
   loc : Loc.t option;
+  counterexample : (string * string) list;
+      (* [(variable, value)] entry-state witness from Z3, empty when none was
+         produced (best-effort). *)
+  status : Smt.Prover.status option;
+      (* Confidence in an [Invalid] verdict: whether the failure (and its
+         [counterexample]) is a confirmed [Disproved] or only a [Candidate]. Set
+         iff [result] is [Invalid]; [None] for [Valid]/[Failed]. *)
 }
 
 let verify_report ?debug:d ?timeout ?(machine_int = false) program =
@@ -592,14 +659,21 @@ let verify_report ?debug:d ?timeout ?(machine_int = false) program =
        hypothesis). This lifts the earlier bottom-up ordering restriction. main
        is never a callee, so it is not registered. *)
     let procs = if is_main then procs else Proc_map.add t.f proc procs in
-    let result, reason, loc =
+    let result, reason, loc, ce, status =
       if (not is_main) && not (writes_are_declared globals procs t) then
-        (Smt.Prover.Invalid, Some Undeclared_write, None)
+        (* A static rejection, not a prover verdict: the program definitely
+           violates its [writes] contract, so the failure is [Disproved]. *)
+        ( Smt.Prover.Invalid,
+          Some Undeclared_write,
+          None,
+          [],
+          Some Smt.Prover.Disproved )
       else verify_procedure ?timeout ~machine_int ~is_main globals procs proc
     in
     match result with
     | Valid -> procs
-    | Invalid | Failed _ -> raise (Proc_invalid (t.f, result, reason, loc))
+    | Invalid | Failed _ ->
+        raise (Proc_invalid (t.f, result, reason, loc, ce, status))
   in
   try
     let proc_map = List.fold_left (f ~is_main:false) Proc_map.empty procs in
@@ -611,9 +685,34 @@ let verify_report ?debug:d ?timeout ?(machine_int = false) program =
       failing_proc = None;
       reason = None;
       loc = None;
+      counterexample = [];
+      status = None;
     }
-  with Proc_invalid (s, result, reason, loc) ->
-    { result; failing_proc = Some s; reason; loc }
+  with Proc_invalid (s, result, reason, loc, ce, status) ->
+    { result; failing_proc = Some s; reason; loc; counterexample = ce; status }
 
 let verify ?debug ?timeout ?machine_int program =
   (verify_report ?debug ?timeout ?machine_int program).result
+
+(* Render a report's counterexample as an indented block for display, or the
+   empty string if there is nothing user-facing to show. Internal symbols the
+   WLP introduces -- [@old] snapshots ([_x]) and array length keys -- are hidden;
+   only source-level variables remain. [status] qualifies the witness: a
+   [Candidate] one (the usual case -- Z3 answers [unknown "sat"] on quantified
+   goals) is flagged as unconfirmed, since it may be spurious. *)
+let format_counterexample ?status ce =
+  let is_internal name =
+    String.length name = 0 || Char.equal name.[0] '_' || Vars.is_len_key name
+  in
+  let visible = List.filter (fun (n, _) -> not (is_internal n)) ce in
+  match visible with
+  | [] -> ""
+  | _ ->
+      let header =
+        match status with
+        | Some Smt.Prover.Candidate ->
+            "  counterexample (candidate; the prover could not confirm it):\n"
+        | Some Smt.Prover.Disproved | None -> "  counterexample:\n"
+      in
+      let line (n, v) = Printf.sprintf "    %s = %s\n" n v in
+      header ^ String.concat "" (List.map line visible)

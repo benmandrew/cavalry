@@ -28,6 +28,7 @@ let fresh_like (vs : T.vsymbol) =
    [#] cannot appear in a source identifier ([a-zA-Z_]+), so this never collides
    with a user variable. *)
 let len_key x = "#len#" ^ x
+let is_len_key s = String.starts_with ~prefix:"#len#" s
 
 let find_fallback s m0 m1 =
   match find_opt s m0 with Some v -> v | None -> find s m1

@@ -164,6 +164,11 @@ let%test_unit "Main.verify true negative" =
 let%test_unit "Main.verify true bigmul" =
   check_verify "verify_true_bigmul.cav" Valid
 
+(* A true nonlinear fact (x,y >= 2 => x*y > x && x*y > y). Z3 discharges the
+   nonlinear reasoning that the former Alt-Ergo backend could not. *)
+let%test_unit "Main.verify true nonlinear" =
+  check_verify "verify_true_nonlinear.cav" Valid
+
 (* Nested loops each carrying their own invariant. *)
 let%test_unit "Main.verify true nested while" =
   check_verify "verify_true_nested_while.cav" Valid
@@ -311,6 +316,71 @@ let%test_unit "location: recursive variant points at the call's line" =
 let%test_unit "location: a plain postcondition has no location" =
   check_loc_line "verify_false.cav" None
 
+(* The counterexample is a concrete failing state, projected back onto source
+   variables. Values are forced by the fixture, so they are stable: the divisor
+   must be 0 to fail, and the precondition pins x,y. *)
+let ce_value path name =
+  List.Assoc.find ~equal:String.equal
+    (Main.verify_report ~debug ?timeout:(Some 5.) (Main.get_ast path))
+      .counterexample name
+
+let%test_unit "counterexample: the divisor is zero" =
+  [%test_result: string option]
+    (ce_value "verify_false_div_by_zero.cav" "y")
+    ~expect:(Some "0")
+
+let%test_unit "counterexample: the precondition values that break the goal" =
+  [%test_result: string option]
+    (ce_value "verify_false.cav" "y")
+    ~expect:(Some "60")
+
+(* Internal WLP symbols (havoc copies, the frozen-variant var) are not surfaced:
+   the loop-variant obligation reports only the source variable. *)
+let%test_unit "counterexample: hides internal variables" =
+  [%test_result: string option]
+    (ce_value "verify_false_variant.cav" "variant")
+    ~expect:None
+
+(* An array witness is expanded into a concrete list of its (model) length, not
+   left as Why3 map syntax. The fixture pins [len(a) = 3] on entry and writes out
+   of bounds, so the array is a three-element list; its entries are unconstrained
+   and Z3 fills them with the map default 0. *)
+let%test_unit "counterexample: an array is a concrete list" =
+  [%test_result: string option]
+    (ce_value "verify_false_array_oob_len.cav" "a")
+    ~expect:(Some "[0, 0, 0]")
+
+(* An out-of-bounds access on an array reassigned inside the body leaves the
+   entry-state array empty (length 0): a clean [[]], not [[|_ => 0|]]. *)
+let%test_unit "counterexample: an empty array renders as []" =
+  [%test_result: string option]
+    (ce_value "verify_false_array_read_oob.cav" "a")
+    ~expect:(Some "[]")
+
+(* An [Invalid] verdict records its confidence. Z3 answers [unknown "sat"] on
+   these quantified WLP goals, so a genuine failure is reported as a candidate
+   rather than a confirmed disproof; a successful verification carries no
+   status. *)
+let status_of path =
+  (Main.verify_report ~debug ?timeout:(Some 5.) (Main.get_ast path)).status
+
+let%test_unit "status: a failed obligation is a candidate" =
+  [%test_result: Smt.Prover.status option]
+    (status_of "verify_false_div_by_zero.cav")
+    ~expect:(Some Smt.Prover.Candidate)
+
+(* A static writes-clause rejection never reaches the prover, so it is a
+   confirmed disproof rather than a candidate. *)
+let%test_unit "status: a static rejection is disproved" =
+  [%test_result: Smt.Prover.status option]
+    (status_of "verify_false_writes_undeclared.cav")
+    ~expect:(Some Smt.Prover.Disproved)
+
+let%test_unit "status: a valid program has none" =
+  [%test_result: Smt.Prover.status option]
+    (status_of "verify_true_nonlinear.cav")
+    ~expect:None
+
 (* A provided variant that does not decrease (here the measure [i] increases)
    is rejected even though the loop does terminate: the given measure fails to
    prove it. *)
@@ -357,11 +427,6 @@ let%test_unit "Main.verify false procedure ensures" =
 (* Caller does not establish the callee's `requires` (needs x >= 10). *)
 let%test_unit "Main.verify false procedure requires" =
   check_verify "verify_false_proc_requires.cav" Invalid
-
-(* Prover incompleteness: a *true* nonlinear fact (x,y >= 2 => x*y > x)
-   that Alt-Ergo cannot discharge, so verify reports Invalid, not Valid. *)
-let%test_unit "Main.verify false nonlinear incompleteness" =
-  check_verify "verify_false_nonlinear.cav" Invalid
 
 (* Well-definedness: [q <- x / y] with an unconstrained divisor cannot discharge
    the [y <> 0] obligation, so verification fails even though the postcondition
@@ -415,6 +480,21 @@ let%test_unit "Prover.result_of_answer mapping" =
   [%test_result: result]
     (f Why3.Call_provers.OutOfMemory)
     ~expect:(Failed "boom")
+
+(* Only a hard [Invalid] answer is a confirmed disproof; every other answer that
+   still yields an [Invalid] result (Z3's [Unknown "sat"] on a quantified goal)
+   is a candidate whose model may be spurious. *)
+let%test_unit "Prover.status_of_answer mapping" =
+  let open Smt.Prover in
+  [%test_result: status]
+    (status_of_answer Why3.Call_provers.Invalid)
+    ~expect:Disproved;
+  [%test_result: status]
+    (status_of_answer (Why3.Call_provers.Unknown "sat"))
+    ~expect:Candidate;
+  [%test_result: status]
+    (status_of_answer (Why3.Call_provers.Unknown ""))
+    ~expect:Candidate
 
 (* ===== Soundness regressions (previously unsound, now fixed) ===== *)
 

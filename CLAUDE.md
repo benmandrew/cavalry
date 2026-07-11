@@ -6,15 +6,15 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 Cavalry is a toy imperative programming language (OCaml) with Hoare-logic
 verification: programs carry pre/postcondition annotations and loop
-invariants, and can be proven correct via SMT (Alt-Ergo, through Why3)
+invariants, and can be proven correct via SMT (Z3, through Why3)
 without executing them. See `example.cav` for the surface syntax and the
 article linked from `README.md` for the theory.
 
 ## Commands
 
 ```bash
-opam install --deps-only --with-test --with-doc .   # install deps (incl. why3, alt-ergo 2.4.3, odoc)
-why3 config detect                       # required once, so why3 can find alt-ergo
+opam install --deps-only --with-test --with-doc .   # install deps (why3, odoc, ...); Z3 4.16.0 is a system binary (e.g. brew install z3)
+why3 config detect                       # required once, so why3 can find z3
 
 dune build                               # build everything
 dune build @fmt                          # check formatting (ocamlformat)
@@ -29,9 +29,28 @@ dune exec -- cav verify -d <file.cav>      # verify with debug output (prints WL
 
 There's no per-test filter wired up; `dune runtest` runs the whole
 `test/integration.ml` + `test/program.ml` suite together against the `.cav`
-fixtures in `test/`. CI (`.github/workflows/`) runs `why3 config detect`,
-`dune build @fmt`, `dune build`, `dune build @runtest`, and `dune build @doc`
-on ocaml 5.5.0.
+fixtures in `test/`. CI (`.github/workflows/`) provisions Z3 4.16.0, then runs
+`why3 config detect`, `dune build @fmt`, `dune build`, `dune build @runtest`,
+and `dune build @doc`, plus a step that `cav verify`s every README example, and
+a `snippets` job. Note Z3 diverges on nonlinear integer div/mod goals (e.g.
+deriving `q = x / y` from a `x = q*y + r` loop invariant); prefer the
+multiplicative postcondition. `cav verify --timeout` (default 10s) bounds each
+obligation so such a goal reports a failure instead of hanging.
+
+### README code snippets (regeneration flow)
+
+The README embeds syntax-highlighted **SVGs** of the example programs, rendered
+from `docs/readme-snippets/snippets/<slug>.cav` into
+`docs/snippet-<slug>-{light,dark}.svg`. After editing any snippet `.cav` (or the
+grammar / `.vscode/settings.json`), regenerate or CI's `snippets` job and the
+pre-commit hook fail:
+
+```bash
+cd docs/readme-snippets && npm install && npm run build   # re-render SVGs + README blocks
+npm run check                                             # what CI runs (exit 1 if stale)
+```
+
+See `docs/readme-snippets/README.md` for the full mechanism.
 
 ## Architecture
 
@@ -64,19 +83,18 @@ through `src/main.ml` (`get_ast`, `verify`, `exec`):
      Procedure calls are handled by substituting actuals for formals and
      havoc'ing written variables (fresh `y` vars + `t_forall_close`), not by
      inlining — see `Wlp.proc`/`sub_old_vars`/`sub_written_vars`.
-5. **SMT backend**: `src/smt/prover.ml` wraps Why3/Alt-Ergo — loads the
-   Alt-Ergo 2.4.3 driver once at module init (fails fast with `exit 1` if
-   Alt-Ergo isn't detected by `why3 config detect`), and `src/smt/dune`'s
-   sibling `Arith` module (`plus`/`sub`/`mul`/... plus `base_task`) builds
-   the arithmetic theory terms that `Hoare` and `Logic.translate_term`
-   compile expressions into.
+5. **SMT backend**: `src/smt/prover.ml` wraps Why3/Z3 — loads the Z3 4.16.0
+   driver once at module init (fails fast with `exit 1` if Z3 isn't detected
+   by `why3 config detect`), and the `Arith` module (`src/ast/arith.ml`,
+   `plus`/`sub`/`mul`/... plus `base_task`) builds the arithmetic theory terms
+   that `Hoare` and `Logic.translate_term` compile expressions into.
 
 Key modules, by directory:
 - `src/ast/` (`arith`, `logic`, `program`, `runtime`, `triple`, `vars`,
   `var_collection`) — AST types, the interpreter, and variable bookkeeping.
 - `src/ast/parse/` — lexer/grammar only; produces `ut_expr`/`ut_t`.
 - `src/hoare.ml` — the WLP calculus and top-level `verify`.
-- `src/smt/` — Why3/Alt-Ergo plumbing, independent of the AST.
+- `src/smt/` — Why3/Z3 plumbing, independent of the AST.
 - `bin/main.ml` — CLI wiring only (`run` / `verify` subcommands).
 
 `Vars.find_fallback` and the global/local split recur throughout `hoare.ml`

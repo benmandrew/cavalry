@@ -2,12 +2,13 @@ open Cavalry
 
 let exec source_file = Printf.printf "%d\n" (Main.exec source_file)
 
-let verify debug machine_int source_file =
+let verify debug machine_int timeout source_file =
+  let timeout = if timeout > 0. then Some timeout else None in
   let program = Main.get_ast source_file in
   let open Smt.Prover in
-  match Main.verify_report ~debug ~machine_int program with
+  match Main.verify_report ~debug ?timeout ~machine_int program with
   | { result = Valid; _ } -> Printf.printf "verification successful\n"
-  | { result = Invalid; failing_proc; reason; loc } ->
+  | { result = Invalid; failing_proc; reason; loc; counterexample; status } ->
       let where =
         match failing_proc with
         | Some p -> Printf.sprintf " in procedure '%s'" p
@@ -24,19 +25,30 @@ let verify debug machine_int source_file =
         | None -> "precondition does not imply postcondition"
       in
       Printf.printf "verification unsuccessful%s%s: %s\n" where at what;
+      print_string (Hoare.format_counterexample ?status counterexample);
       exit 1
   | { result = Failed s; _ } ->
-      Printf.printf "internal failure: %s\n" s;
+      (* A timeout or prover error. [s] is the raw prover output, whose tail is a
+         Z3 statistics dump on timeout; show only its first line (e.g. "timeout")
+         and leave the detail to [-d]. *)
+      let headline =
+        match String.index_opt s '\n' with
+        | Some i -> String.sub s 0 i
+        | None -> s
+      in
+      Printf.printf "internal failure: %s\n" headline;
       exit 2
 
-let compile debug no_verify native_int output source_file =
+let compile debug no_verify native_int timeout output source_file =
+  let timeout = if timeout > 0. then Some timeout else None in
   let output =
     match output with
     | Some o -> o
     | None -> Filename.remove_extension (Filename.basename source_file)
   in
   match
-    Main.compile ~debug ~verify:(not no_verify) ~native_int ~output source_file
+    Main.compile ~debug ~verify:(not no_verify) ?timeout ~native_int ~output
+      source_file
   with
   | () -> Printf.printf "compiled to %s\n" output
   | exception Main.Verification_failed msg ->
@@ -70,6 +82,15 @@ let machine_int =
           unbounded integers."
        [ "machine-int" ]
 
+let timeout =
+  Arg.value @@ Arg.opt Arg.float 10.
+  @@ Arg.info
+       ~doc:
+         "Per-obligation prover time limit in seconds. A non-terminating goal \
+          then reports an internal failure instead of hanging. 0 disables the \
+          limit."
+       ~docv:"SECONDS" [ "timeout" ]
+
 let run_cmd =
   let doc = "Run a Cavalry program in an interpreter" in
   let info = Cmd.info "run" ~doc in
@@ -79,7 +100,9 @@ let run_cmd =
 let verify_cmd =
   let doc = "Verify that a Cavalry program satisfy its specification" in
   let info = Cmd.info "verify" ~doc in
-  let cmd_t = Term.(const verify $ debug $ machine_int $ source_file) in
+  let cmd_t =
+    Term.(const verify $ debug $ machine_int $ timeout $ source_file)
+  in
   Cmd.v info cmd_t
 
 let output =
@@ -111,7 +134,9 @@ let compile_cmd =
   let doc = "Compile a Cavalry program to a native executable" in
   let info = Cmd.info "compile" ~doc in
   let cmd_t =
-    Term.(const compile $ debug $ no_verify $ native_int $ output $ source_file)
+    Term.(
+      const compile $ debug $ no_verify $ native_int $ timeout $ output
+      $ source_file)
   in
   Cmd.v info cmd_t
 
