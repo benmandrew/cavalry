@@ -33,6 +33,9 @@ _opam/
 # direnv cache
 .direnv/
 
+# Node deps for the README snippet renderer (docs/readme-snippets)
+node_modules/
+
 .vscode/*
 !.vscode/settings.json
 PLAN.md

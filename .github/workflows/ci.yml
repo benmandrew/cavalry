@@ -71,6 +71,29 @@ jobs:
           opam exec -- dune build @check
           opam exec -- zanuda -dir . -del-prefix "$(pwd)"
 
+  # Verifies the README's generated snippet SVGs are in sync with their .cav
+  # sources and the TextMate grammar. `gen.mjs --check` re-renders in memory and
+  # fails if anything committed is stale (see docs/readme-snippets/README.md).
+  # Independent of the OCaml toolchain, so it runs as its own lightweight job.
+  snippets:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+
+      - name: Install dependencies
+        working-directory: docs/readme-snippets
+        run: npm ci
+
+      - name: Check README snippets are up to date
+        working-directory: docs/readme-snippets
+        run: npm run check
+
   # Runs concurrently with the build matrix (no `needs`) so the odoc build
   # doesn't extend the critical path. Doc generation only compiles the modules,
   # so it skips the test run and prover detection the build job needs.

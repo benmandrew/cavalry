@@ -4,6 +4,10 @@
       {
         "scope": "keyword.other.specification.cavalry",
         "settings": { "fontStyle": "italic" }
+      },
+      {
+        "scope": "entity.name.function.cavalry",
+        "settings": { "foreground": "#569CD6" }
       }
     ]
   }

@@ -1,0 +1,14 @@
+{
+  "name": "cavalry-readme-snippets",
+  "version": "1.0.0",
+  "private": true,
+  "type": "module",
+  "description": "Render Cavalry code snippets to themed SVGs for the README from the VS Code TextMate grammar.",
+  "scripts": {
+    "build": "node gen.mjs",
+    "check": "node gen.mjs --check"
+  },
+  "dependencies": {
+    "shiki": "^4.3.1"
+  }
+}

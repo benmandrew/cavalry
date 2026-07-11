@@ -1,0 +1,23 @@
+procedure euclidean_div () =
+  requires { x >= 0 && y > 0 }
+  ensures { q = x / y && r = x % y }
+  writes { q, r }
+  q <- 0;
+  r <- x;
+  while r >= y do
+    invariant { x = q * y + r && 0 <= r }
+    variant { r }
+    r <- r - y;
+    q <- q + 1
+  end
+end
+
+{ true }
+x <- 42;
+y <- 17;
+q <- 0;
+r <- 0;
+euclidean_div();
+print(q);
+print(r)
+{ q = 2 && r = 8 }
