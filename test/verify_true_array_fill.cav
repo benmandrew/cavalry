@@ -1,9 +1,9 @@
 { n >= 0 }
-a <- array(n);
-i <- 0;
+a := array(n);
+i := 0;
 while i < n do
   invariant { 0 <= i && i <= n && forall j . 0 <= j && j < i -> a[j] = 5 }
-  a[i] <- 5;
-  i <- i + 1
+  a[i] := 5;
+  i := i + 1
 end
 { forall j . 0 <= j && j < n -> a[j] = 5 }

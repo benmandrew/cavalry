@@ -3,11 +3,11 @@ procedure loops (n) =
   ensures { true }
   variant { n }
   writes { r }
-  r <- n;
+  r := n;
   loops(n)
 end
 
 { true }
-r <- 0;
+r := 0;
 loops(3)
 { 0 <= r }

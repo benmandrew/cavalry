@@ -420,7 +420,7 @@ let%test_unit "Main.verify false recursion (unbounded below)" =
 let%test_unit "Main.verify false invariant on entry" =
   check_verify "verify_false_inv_entry.cav" Invalid
 
-(* Procedure body violates its own `ensures` (x <- x + 2 vs x = _x + 1). *)
+(* Procedure body violates its own `ensures` (x := x + 2 vs x = _x + 1). *)
 let%test_unit "Main.verify false procedure ensures" =
   check_verify "verify_false_proc_ensures.cav" Invalid
 
@@ -428,7 +428,7 @@ let%test_unit "Main.verify false procedure ensures" =
 let%test_unit "Main.verify false procedure requires" =
   check_verify "verify_false_proc_requires.cav" Invalid
 
-(* Well-definedness: [q <- x / y] with an unconstrained divisor cannot discharge
+(* Well-definedness: [q := x / y] with an unconstrained divisor cannot discharge
    the [y <> 0] obligation, so verification fails even though the postcondition
    is [true]. (Like the nonlinear case, the prover cannot close the goal within
    the timeout, which the pipeline reports as Invalid.) *)

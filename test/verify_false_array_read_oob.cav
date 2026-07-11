@@ -1,4 +1,4 @@
 { true }
-a <- array(10);
-x <- a[20]
+a := array(10);
+x := a[20]
 { true }

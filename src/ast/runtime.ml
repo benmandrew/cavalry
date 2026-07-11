@@ -13,8 +13,8 @@ module Runtime = struct
 
   type t = {
     global_vars : int BoundVars.t;
-    (* Arrays are always globals (created by [a <- array(n)], written by
-       [a\[i\] <- e]). Stored functionally, copy-on-write, so threading an
+    (* Arrays are always globals (created by [a := array(n)], written by
+       [a\[i\] := e]). Stored functionally, copy-on-write, so threading an
        environment mirrors scalar assignment and the map-based WLP semantics. *)
     global_arrays : int array BoundVars.t;
     local_vars : int BoundVars.t;

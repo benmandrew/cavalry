@@ -352,7 +352,7 @@ module Wlp = struct
         in
         T.t_and_simp (safe_e e) assign
     | ArrMake (a, n) ->
-        (* a <- array(n): length := n, elements := all zeros.
+        (* a := array(n): length := n, elements := all zeros.
            safe(n) /\ 0 <= n /\ q[ a <- const 0 ][ len(a) <- n ] *)
         let n_t = expr_to_term ~g_vars ~l_vars n in
         let a_v = Vars.find_fallback a l_vars g_vars in
@@ -365,7 +365,7 @@ module Wlp = struct
         in
         T.t_and_simp (safe_e n) (T.t_and_simp nonneg q_sub)
     | ArrAssgn (a, i, e) ->
-        (* a[i] <- e: safe(i) /\ safe(e) /\ 0 <= i < len(a)
+        (* a[i] := e: safe(i) /\ safe(e) /\ 0 <= i < len(a)
            /\ q[ a <- set a i e ] *)
         let i_t = expr_to_term ~g_vars ~l_vars i in
         let e_t = expr_to_term ~g_vars ~l_vars e in

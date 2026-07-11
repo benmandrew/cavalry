@@ -1,8 +1,8 @@
 // a leading comment
 { true }
-x <- 2; // trailing comment after a statement
+x := 2; // trailing comment after a statement
 // a comment on its own line
-y <- 60;
+y := 60;
 if x + 3 = 5 then
   x + y * 3 // 2 + 60 * 3 = 182
 else

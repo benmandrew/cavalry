@@ -34,8 +34,8 @@ type cmd =
   | While of Logic.expr * Logic.arith_expr option * bool expr * cmd
     (* invariant, optional variant (decreasing measure), guard, body *)
   | Print of int expr
-  | ArrMake of string * int expr (* a <- array(n) *)
-  | ArrAssgn of string * int expr * int expr (* a[i] <- e *)
+  | ArrMake of string * int expr (* a := array(n) *)
+  | ArrAssgn of string * int expr * int expr (* a[i] := e *)
   | Located of Loc.t * cmd
     (* a command annotated with its source location, used to point error
        messages at the construct whose obligation failed *)

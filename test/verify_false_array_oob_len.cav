@@ -2,10 +2,10 @@ procedure clobber () =
   requires { len(a) = 3 }
   ensures { true }
   writes { a }
-  a[5] <- 0
+  a[5] := 0
 end
 
 { true }
-a <- array(3);
+a := array(3);
 clobber()
 { true }

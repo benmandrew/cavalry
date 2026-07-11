@@ -1,8 +1,8 @@
 { x = 0 && i = 0 }
 while i < 10 do
   invariant { 2 * x = (i * (i - 1)) && i <= 10 }
-  x <- x + i;
-  i <- i + 1
+  x := x + i;
+  i := i + 1
 end;
 x
 { x = 45 }

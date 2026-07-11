@@ -13,7 +13,7 @@ let emit_main (c : cmd) : string =
 let contains ~substring s = String.is_substring s ~substring
 
 let%test_unit "Compile.emit - straight-line arithmetic" =
-  (* x <- 3; y <- x + 4; print(y); x *)
+  (* x := 3; y := x + 4; print(y); x *)
   let body =
     Seq
       ( Assgn ("x", Value (Int 3)),
@@ -64,7 +64,7 @@ let%test_unit "Compile.emit - if compiles both branches" =
       [%test_pred: string] (contains ~substring) out)
 
 let%test_unit "Compile.emit - while emits a Zarith-guarded loop" =
-  (* while i < 10 do invariant { true } i <- i + 1 end *)
+  (* while i < 10 do invariant { true } i := i + 1 end *)
   let body =
     While
       ( Logic.Bool true,
@@ -78,8 +78,8 @@ let%test_unit "Compile.emit - while emits a Zarith-guarded loop" =
 
 let%test_unit "Compile.emit - procedure: formals are locals, Assgn hits global"
     =
-  (* procedure f (a) = ... writes { x } x <- x + a end
-     { true } x <- 2; y <- 5; f(y); x { true } *)
+  (* procedure f (a) = ... writes { x } x := x + a end
+     { true } x := 2; y := 5; f(y); x { true } *)
   let proc =
     triple ~f:"f" ~ps:[ "a" ] ~ws:[ "x" ]
       (Assgn ("x", Plus (Value (VarInst "x"), Value (VarInst "a"))))
@@ -100,7 +100,7 @@ let%test_unit "Compile.emit - procedure: formals are locals, Assgn hits global"
       "let rec p_f l_a =";
       (* formal [a] read as a local *)
       "l_a";
-      (* the [<-] target is the shared global, not the formal *)
+      (* the [:=] target is the shared global, not the formal *)
       "g_x :=";
       (* call passes the actual through the caller's global [y] *)
       "(p_f (!g_y))";
@@ -117,7 +117,7 @@ let%test_unit "Compile.emit - zero-arg procedure takes unit" =
       [%test_pred: string] (contains ~substring) out)
 
 let%test_unit "Compile.emit - arrays: array ref, make, and indexed get/set" =
-  (* a <- array(3); a[1] <- 5; len(a) + a[1] *)
+  (* a := array(3); a[1] := 5; len(a) + a[1] *)
   let body =
     Seq
       ( ArrMake ("a", Value (Int 3)),

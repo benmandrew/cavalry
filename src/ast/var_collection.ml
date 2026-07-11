@@ -92,7 +92,7 @@ let collect_program c =
   collect_cmd c
 
 (* Names used as arrays: anything indexed ([a\[i\]]), measured ([len(a)]),
-   created ([a <- array(n)]), or element-assigned ([a\[i\] <- e]). A name is
+   created ([a := array(n)]), or element-assigned ([a\[i\] := e]). A name is
    array-typed iff it appears in one of these positions; every other name is a
    scalar integer. Array names get a [map int int] vsymbol plus a companion
    length variable (see [str_set_to_vars]). *)

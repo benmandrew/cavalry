@@ -9,7 +9,7 @@ let is_valid = function Valid -> true | Invalid | Failed _ -> false
 let is_invalid = function Invalid -> true | Valid | Failed _ -> false
 
 (* The same program is provable over unbounded integers but rejected under
-   63-bit machine integers, because [x <- x + 1] overflows when [x = max_int].
+   63-bit machine integers, because [x := x + 1] overflows when [x = max_int].
    This is the point of the feature, not a regression. *)
 let%test_unit "machine-int: unbounded increment is rejected" =
   [%test_result: bool] ~expect:true (is_valid (verify "verify_true_succ.cav"));

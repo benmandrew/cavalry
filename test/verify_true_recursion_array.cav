@@ -4,7 +4,7 @@ procedure fill (i) =
   variant { len(a) - i }
   writes { a }
   if i < len(a) then
-    a[i] <- 0;
+    a[i] := 0;
     fill(i + 1)
   else
     0
@@ -12,6 +12,6 @@ procedure fill (i) =
 end
 
 { true }
-a <- array(3);
+a := array(3);
 fill(0)
 { true }

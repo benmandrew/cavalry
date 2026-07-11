@@ -2,12 +2,12 @@ procedure f (a) =
   requires { true }
   ensures { x = _x + a }
   writes { x }
-  x <- x + a
+  x := x + a
 end
 
 { true }
-x <- 2;
-y <- 5;
+x := 2;
+y := 5;
 f(y);
 x
 { true }

@@ -3,13 +3,13 @@ procedure f (a) =
   ensures { x = _x + 1 }
   writes { x }
   if a > 0 then
-    x <- x + 1
+    x := x + 1
   else
-    x <- x + 1
+    x := x + 1
   end
 end
 
 { true }
-x <- 0;
+x := 0;
 f(5)
 { x = 1 }

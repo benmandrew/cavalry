@@ -1,4 +1,4 @@
 { true }
-a <- array(3);
-a[1] <- 5
+a := array(3);
+a[1] := 5
 { exists k . 0 <= k && k < len(a) && a[k] = 5 }

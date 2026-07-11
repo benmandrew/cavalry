@@ -2,11 +2,11 @@ procedure count_down (n) =
   requires { n >= 0 }
   ensures { r = 0 }
   writes { r }
-  r <- n;
+  r := n;
   while r > 0 do
     invariant { 0 <= r }
     variant { r }
-    r <- r - 1
+    r := r - 1
   end
 end
 

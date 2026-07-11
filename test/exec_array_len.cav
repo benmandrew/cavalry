@@ -1,5 +1,5 @@
 { true }
-a <- array(7);
-a[6] <- 3;
+a := array(7);
+a[6] := 3;
 len(a) + a[6]
 { true }

@@ -24,7 +24,7 @@ module Str_set = Set.Make (String)
    store (a formal [a] and a global [a] are genuinely different cells in the
    interpreter, and become [l_a] / [g_a] here):
    - [g_x]: a global, compiled to a top-level mutable [ref]. Read [!g_x],
-     written [g_x := _]. Every [<-] ([Assgn]) target is a global, in main and
+     written [g_x := _]. Every [:=] ([Assgn]) target is a global, in main and
      in procedures alike, because the interpreter's [Assgn] always writes the
      global store.
    - [l_x]: a local -- a procedure formal or a [let]-bound name. Read [l_x].
@@ -222,12 +222,12 @@ let rec emit_cmd ~ops ~locals c : string =
       Printf.sprintf "(print_string (%s (%s)); print_newline (); %s)"
         ops.to_string (emit_int ~ops ~locals e) ops.zero
   | ArrMake (a, n) ->
-      (* a <- array(n): fresh zero-filled array; command value is 0. *)
+      (* a := array(n): fresh zero-filled array; command value is 0. *)
       Printf.sprintf "(%s := Array.make (%s) %s; %s)" (gref a)
         (ops.idx (emit_int ~ops ~locals n))
         ops.zero ops.zero
   | ArrAssgn (a, i, e) ->
-      (* a[i] <- e; command value is the assigned element. *)
+      (* a[i] := e; command value is the assigned element. *)
       Printf.sprintf "(let v = %s in (!%s).(%s) <- v; v)"
         (emit_int ~ops ~locals e) (gref a)
         (ops.idx (emit_int ~ops ~locals i))
@@ -292,7 +292,7 @@ let emit ?(native_int = false) (program : (Triple.t * Vars.t) list) : string =
     |> List.map (fun x -> Printf.sprintf "let %s = ref %s" (gref x) ops.zero)
     |> String.concat "\n"
   in
-  (* Array globals start as an empty [array ref]; [a <- array(n)] replaces it
+  (* Array globals start as an empty [array ref]; [a := array(n)] replaces it
      with a zero-filled array of the requested length. *)
   let arr_refs =
     List.fold_left

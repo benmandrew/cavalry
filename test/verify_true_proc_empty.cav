@@ -2,10 +2,10 @@ procedure f () =
   requires { true }
   ensures { true }
   writes {  }
-  y <- y + 1
+  y := y + 1
 end
 
 { x = 2 }
-x <- 2;
-x <- x + 1
+x := 2;
+x := x + 1
 { x = 3 }

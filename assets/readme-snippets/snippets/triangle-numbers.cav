@@ -5,8 +5,8 @@ while i < n do
   // twice the running sum equals i*(i-1); i has climbed no further than n
   invariant { 2 * x = i * (i - 1) && 0 <= i && i <= n }
   variant { n - i }
-  x <- x + i;
-  i <- i + 1
+  x := x + i;
+  i := i + 1
 end;
 x
 { 2 * x = n * (n - 1) }

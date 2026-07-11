@@ -3,7 +3,7 @@ procedure dive (n) =
   ensures { true }
   variant { n }
   writes { r }
-  r <- n;
+  r := n;
   dive(n - 1)
 end
 

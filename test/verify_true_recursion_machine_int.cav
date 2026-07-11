@@ -4,14 +4,14 @@ procedure count (n) =
   variant { n }
   writes { r }
   if n = 0 then
-    r <- 0
+    r := 0
   else
-    r <- n;
+    r := n;
     count(n - 1)
   end
 end
 
 { true }
-r <- 0;
+r := 0;
 count(10)
 { true }

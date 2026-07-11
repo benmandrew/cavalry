@@ -83,7 +83,7 @@
       "patterns": [
         {
           "name": "keyword.operator.assignment.cavalry",
-          "match": "<-"
+          "match": ":="
         },
         {
           "name": "keyword.operator.logical.cavalry",

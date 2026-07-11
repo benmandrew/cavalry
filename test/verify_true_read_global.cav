@@ -2,11 +2,11 @@ procedure f (a) =
   requires { true }
   ensures { x = _x + a + n }
   writes { x }
-  x <- x + a + n
+  x := x + a + n
 end
 
 { true }
-x <- 0;
-n <- 100;
+x := 0;
+n := 100;
 f(1)
 { x = 101 }

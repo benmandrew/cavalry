@@ -4,10 +4,10 @@ procedure sum_to (n) =
   variant { n }
   writes { s }
   if n = 0 then
-    s <- 0
+    s := 0
   else
     sum_to(n - 1);
-    s <- s + n
+    s := s + n
   end
 end
 

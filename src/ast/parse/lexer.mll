@@ -51,7 +51,7 @@ rule main = parse
       { IMPL }
   | ';'
       { SEMICOLON }
-  | "<-"
+  | ":="
       { ASSGN }
   | '('
       { LPAREN }

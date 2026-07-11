@@ -1,11 +1,11 @@
 { true }
-i <- 0;
-s <- 0;
+i := 0;
+s := 0;
 while i < 5 do
   invariant { true }
   variant { 5 - i }
-  s <- s + i;
-  i <- i + 1
+  s := s + i;
+  i := i + 1
 end;
 s
 { true }

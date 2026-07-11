@@ -473,8 +473,8 @@ let rec logic_to_cav = function
 let rec cmd_to_cav c =
   match c with
   | Program.Located (_, c) -> cmd_to_cav c
-  | Program.Assgn (x, e) -> Printf.sprintf "%s <- %s" x (expr_to_cav e)
-  | Program.Let (x, e) -> Printf.sprintf "%s <- %s" x (expr_to_cav e)
+  | Program.Assgn (x, e) -> Printf.sprintf "%s := %s" x (expr_to_cav e)
+  | Program.Let (x, e) -> Printf.sprintf "%s := %s" x (expr_to_cav e)
   | Program.Seq (a, b) -> Printf.sprintf "%s;\n%s" (cmd_to_cav a) (cmd_to_cav b)
   | Program.If (b, c0, c1) ->
       Printf.sprintf "if %s then\n%s\nelse\n%s\nend" (expr_to_cav b)
@@ -493,9 +493,9 @@ let rec cmd_to_cav c =
       Printf.sprintf "%s(%s)" f (String.concat ", " (List.map expr_to_cav ps))
   | Program.IntExpr e -> expr_to_cav e
   | Program.Print e -> Printf.sprintf "print %s" (expr_to_cav e)
-  | Program.ArrMake (a, n) -> Printf.sprintf "%s <- array(%s)" a (expr_to_cav n)
+  | Program.ArrMake (a, n) -> Printf.sprintf "%s := array(%s)" a (expr_to_cav n)
   | Program.ArrAssgn (a, i, e) ->
-      Printf.sprintf "%s[%s] <- %s" a (expr_to_cav i) (expr_to_cav e)
+      Printf.sprintf "%s[%s] := %s" a (expr_to_cav i) (expr_to_cav e)
 
 let proc_to_cav (t : Triple.t) =
   Printf.sprintf

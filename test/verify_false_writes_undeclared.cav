@@ -2,11 +2,11 @@ procedure f () =
   requires { true }
   ensures { true }
   writes {  }
-  y <- 99
+  y := 99
 end
 
 { true }
-y <- 1;
+y := 1;
 f();
 y
 { y = 1 }

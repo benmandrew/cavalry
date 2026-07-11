@@ -39,7 +39,7 @@ type _ expr =
 (** Commands (statements). [Let] introduces a local binding, [Assgn] mutates an
     existing variable, [Proc] is a call by name. [While] carries its loop
     invariant and optional variant (decreasing measure) alongside guard and
-    body. [ArrMake] is [a <- array(n)] and [ArrAssgn] is [a[i] <- e]. *)
+    body. [ArrMake] is [a := array(n)] and [ArrAssgn] is [a[i] := e]. *)
 type cmd =
   | IntExpr of int expr
   | Seq of cmd * cmd

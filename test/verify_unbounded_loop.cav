@@ -1,8 +1,8 @@
 { true }
-i <- 0;
+i := 0;
 while i >= 0 do
   invariant { 0 <= i }
-  i <- i + 1
+  i := i + 1
 end;
 i
 { true }
