@@ -17,9 +17,11 @@
         # OCaml and why3 stay opam-managed (see README) so the exact versions
         # pinned in cavalry.opam are what actually get built; this shell provides
         # opam plus the native libs/tools it needs to build those from source.
-        # The Z3 prover, by contrast, is a plain binary, so nix supplies it
-        # (pinned via flake.lock to 4.16.0, matching the [conf-z3] dep and the
-        # version [Smt.Prover] checks for); [why3 config detect] then finds it.
+        # The Z3 prover, by contrast, is a plain binary and not an opam package,
+        # so nix supplies it (pinned via flake.lock to 4.16.0, the version
+        # [Smt.Prover] checks for); [why3 config detect] then finds it. It is
+        # deliberately absent from cavalry.opam's depends -- opam installs no
+        # prover.
         devShells.default = pkgs.mkShell {
           packages = with pkgs; [
             opam

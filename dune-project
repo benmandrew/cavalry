@@ -24,7 +24,6 @@
   astring
   menhir
   why3
-  conf-z3
   zarith
   ppx_deriving
   (qcheck-core :with-test)
