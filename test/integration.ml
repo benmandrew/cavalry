@@ -240,6 +240,53 @@ let%test_unit "Main.verify_report names main when main fails" =
 let%test_unit "Main.verify_report reports no procedure on success" =
   check_failing_proc "verify_true_if.cav" None
 
+(* A rejected program is classified by *why* the obligation failed. Each fixture
+   below is engineered to fail exactly one kind of obligation, so the reported
+   reason pins down the fault. *)
+let check_reason ?(machine_int = false) path expect =
+  [%test_result: Hoare.reason option]
+    (Main.verify_report ~debug ~machine_int ?timeout:(Some 5.)
+       (Main.get_ast path))
+      .reason
+    ~expect:(Some expect)
+
+let%test_unit "reason: postcondition" =
+  check_reason "verify_false.cav" Postcondition
+
+let%test_unit "reason: procedure violates its own ensures" =
+  check_reason "verify_false_proc_ensures.cav" Postcondition
+
+let%test_unit "reason: callee precondition" =
+  check_reason "verify_false_proc_requires.cav" Call_precondition
+
+let%test_unit "reason: divisor may be zero" =
+  check_reason "verify_false_div_by_zero.cav" Nonzero_divisor
+
+let%test_unit "reason: array index out of bounds (write)" =
+  check_reason "verify_false_array_write_oob.cav" Array_bounds
+
+let%test_unit "reason: array index out of bounds (read)" =
+  check_reason "verify_false_array_read_oob.cav" Array_bounds
+
+let%test_unit "reason: array length negative" =
+  check_reason "verify_false_array_negative_length.cav" Array_length_nonneg
+
+let%test_unit "reason: loop invariant on entry" =
+  check_reason "verify_false_inv_entry.cav" Loop_invariant_init
+
+let%test_unit "reason: loop variant does not decrease" =
+  check_reason "verify_false_variant.cav" Loop_variant
+
+let%test_unit "reason: recursive variant does not decrease" =
+  check_reason "verify_false_recursion.cav" Recursive_variant
+
+let%test_unit "reason: undeclared write" =
+  check_reason "verify_false_writes_undeclared.cav" Undeclared_write
+
+(* Overflow-freedom is only an obligation under machine-integer verification. *)
+let%test_unit "reason: arithmetic may overflow (machine int)" =
+  check_reason ~machine_int:true "verify_boundary_overflow.cav" No_overflow
+
 (* A provided variant that does not decrease (here the measure [i] increases)
    is rejected even though the loop does terminate: the given measure fails to
    prove it. *)

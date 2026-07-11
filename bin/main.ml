@@ -7,15 +7,18 @@ let verify debug machine_int source_file =
   let open Smt.Prover in
   match Main.verify_report ~debug ~machine_int program with
   | { result = Valid; _ } -> Printf.printf "verification successful\n"
-  | { result = Invalid; failing_proc } ->
+  | { result = Invalid; failing_proc; reason } ->
       let where =
         match failing_proc with
         | Some p -> Printf.sprintf " in procedure '%s'" p
         | None -> ""
       in
-      Printf.printf
-        "verification unsuccessful%s: precondition does not imply postcondition\n"
-        where
+      let what =
+        match reason with
+        | Some r -> Hoare.expl_of_reason r
+        | None -> "precondition does not imply postcondition"
+      in
+      Printf.printf "verification unsuccessful%s: %s\n" where what
   | { result = Failed s; _ } -> Printf.printf "internal failure: %s\n" s
 
 let compile debug no_verify native_int output source_file =

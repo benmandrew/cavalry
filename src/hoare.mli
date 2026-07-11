@@ -31,10 +31,35 @@ val verify :
     [safe]/[Arith.in_bounds]), including inside loops and across procedure
     calls. The default reasons over unbounded integers. *)
 
-type report = { result : Smt.Prover.result; failing_proc : string option }
+(** Why a verification obligation failed. Recovered from the failing subgoal's
+    explanation attribute; see {!expl_of_reason} for the human wording. *)
+type reason =
+  | Postcondition
+  | Loop_invariant_init
+  | Loop_invariant_preserved
+  | Loop_variant
+  | Recursive_variant
+  | Call_precondition
+  | Array_bounds
+  | Array_length_nonneg
+  | Nonzero_divisor
+  | No_overflow
+  | Undeclared_write
+[@@deriving sexp_of, compare]
+
+val expl_of_reason : reason -> string
+(** A one-line, user-facing explanation of a {!type-reason}. *)
+
+type report = {
+  result : Smt.Prover.result;
+  failing_proc : string option;
+  reason : reason option;
+}
 (** A whole-program verification outcome. [failing_proc] names the first
     procedure ([main] included, under the name ["main"]) whose body failed to
-    verify, and is [None] iff [result] is [Valid]. *)
+    verify, and is [None] iff [result] is [Valid]. [reason] classifies the
+    failure when the prover isolated it to one obligation ([None] if it could
+    not, e.g. an internal [Failed]). *)
 
 val verify_report :
   ?debug:bool ->

@@ -40,15 +40,18 @@ let compile ?(debug = false) ?(verify = true) ?(native_int = false) ~output path
   (if verify then
      match Hoare.verify_report ~machine_int:native_int ast with
      | { result = Smt.Prover.Valid; _ } -> ()
-     | { result = Smt.Prover.Invalid; failing_proc } ->
+     | { result = Smt.Prover.Invalid; failing_proc; reason } ->
          let where =
            match failing_proc with
            | Some p -> Printf.sprintf "procedure '%s': " p
            | None -> ""
          in
-         raise
-           (Verification_failed
-              (where ^ "precondition does not imply postcondition"))
+         let what =
+           match reason with
+           | Some r -> Hoare.expl_of_reason r
+           | None -> "precondition does not imply postcondition"
+         in
+         raise (Verification_failed (where ^ what))
      | { result = Smt.Prover.Failed s; _ } ->
          raise (Verification_failed ("internal failure: " ^ s)));
   let ocaml = Compile.emit ~native_int ast in
