@@ -73,6 +73,25 @@ dune runtest
 
 ## Example programs
 
+Each example below is a standalone program in
+[`docs/readme-snippets/snippets/`](docs/readme-snippets/snippets); verify any of
+them yourself with `dune exec -- cav verify <file>`.
+
+### A Hoare triple
+
+Verification rests on the Hoare triple `{P} c {Q}`: if precondition `P` holds
+before command `c` runs, postcondition `Q` holds afterwards. The simplest
+programs are straight-line assignments, with no loops or procedures.
+
+<!-- snippet: hoare-triple -->
+<a href="docs/readme-snippets/snippets/hoare-triple.cav">
+  <picture>
+    <source media="(prefers-color-scheme: dark)" srcset="docs/snippet-hoare-triple-dark.svg">
+    <img alt="Cavalry code snippet" src="docs/snippet-hoare-triple-light.svg">
+  </picture>
+</a>
+<!-- /snippet -->
+
 ### Computing triangle numbers
 
 A loop's `invariant` holds on entry and after every iteration, while its
@@ -88,10 +107,13 @@ iteration — proves termination, giving total correctness.
 </a>
 <!-- /snippet -->
 
-### Euclidean division procedure
+### Procedures and contracts
 
-Division `/` and modulo `%` are part of the logic, so the postcondition can
-specify the loop's result directly in terms of them.
+A procedure is verified once against its contract: `requires` and `ensures` are
+its pre- and postcondition, and `writes` frames the globals it may modify.
+Callers reason from the contract alone, not from the body. Division `/` and
+modulo `%` are part of the logic, so the postcondition can name the result
+directly.
 
 <!-- snippet: euclidean-division -->
 <a href="docs/readme-snippets/snippets/euclidean-division.cav">
@@ -105,8 +127,8 @@ specify the loop's result directly in terms of them.
 ### Filling an array
 
 Bounded arrays are created with `array(n)` (zero-initialised), indexed with
-`a[i]`, and sized with `len(a)`. Specifications quantify over their contents
-with `forall` and `exists`.
+`a[i]`, and sized with `len(a)`. A `forall` in the invariant states what holds
+of every element filled so far.
 
 <!-- snippet: array-fill -->
 <a href="docs/readme-snippets/snippets/array-fill.cav">
@@ -117,16 +139,45 @@ with `forall` and `exists`.
 </a>
 <!-- /snippet -->
 
-### Recursive procedure
+### Existential specifications
 
-Procedures may call themselves. A `variant` on the procedure — decreasing
-across each recursive call — proves the recursion terminates.
+Where `forall` constrains every element, `exists` asserts that some element has
+a property — here, that a value written into the array is still present.
+
+<!-- snippet: array-exists -->
+<a href="docs/readme-snippets/snippets/array-exists.cav">
+  <picture>
+    <source media="(prefers-color-scheme: dark)" srcset="docs/snippet-array-exists-dark.svg">
+    <img alt="Cavalry code snippet" src="docs/snippet-array-exists-light.svg">
+  </picture>
+</a>
+<!-- /snippet -->
+
+### Recursion
+
+Procedures may call themselves. A `variant` on the procedure — decreasing across
+each recursive call — proves the recursion terminates, just as it does for a loop.
 
 <!-- snippet: recursive-procedure -->
 <a href="docs/readme-snippets/snippets/recursive-procedure.cav">
   <picture>
     <source media="(prefers-color-scheme: dark)" srcset="docs/snippet-recursive-procedure-dark.svg">
     <img alt="Cavalry code snippet" src="docs/snippet-recursive-procedure-light.svg">
+  </picture>
+</a>
+<!-- /snippet -->
+
+### Catching a bad specification
+
+When a program does not meet its specification, verification fails and reports
+the obligation it could not prove instead of accepting the program. The same
+check catches arithmetic overflow under `--machine-int` (see [Running](#running)).
+
+<!-- snippet: failing-spec -->
+<a href="docs/readme-snippets/snippets/failing-spec.cav">
+  <picture>
+    <source media="(prefers-color-scheme: dark)" srcset="docs/snippet-failing-spec-dark.svg">
+    <img alt="Cavalry code snippet" src="docs/snippet-failing-spec-light.svg">
   </picture>
 </a>
 <!-- /snippet -->

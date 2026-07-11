@@ -1,19 +1,21 @@
-<svg xmlns="http://www.w3.org/2000/svg" width="221" height="368" viewBox="0 0 221 368" font-family='ui-monospace, "SF Mono", Menlo, Consolas, monospace' font-size="14">
+<svg xmlns="http://www.w3.org/2000/svg" width="696" height="410" viewBox="0 0 696 410" font-family='ui-monospace, "SF Mono", Menlo, Consolas, monospace' font-size="14">
   <rect width="100%" height="100%" fill="#FFFFFF" rx="10"/>
-  <text x="18" y="30" xml:space="preserve"><tspan fill="#AF00DB">procedure</tspan><tspan fill="#000000"> </tspan><tspan fill="#569CD6">sum_to</tspan><tspan fill="#000000"> (</tspan><tspan fill="#001080">n</tspan><tspan fill="#000000">) =</tspan></text>
-  <text x="18" y="51" xml:space="preserve"><tspan fill="#000000">  </tspan><tspan fill="#0000FF" font-style="italic">requires</tspan><tspan fill="#000000"> { </tspan><tspan fill="#001080">n</tspan><tspan fill="#000000"> &gt;= </tspan><tspan fill="#098658">0</tspan><tspan fill="#000000"> }</tspan></text>
-  <text x="18" y="72" xml:space="preserve"><tspan fill="#000000">  </tspan><tspan fill="#0000FF" font-style="italic">ensures</tspan><tspan fill="#000000"> { </tspan><tspan fill="#001080">s</tspan><tspan fill="#000000"> &gt;= </tspan><tspan fill="#098658">0</tspan><tspan fill="#000000"> }</tspan></text>
-  <text x="18" y="93" xml:space="preserve"><tspan fill="#000000">  </tspan><tspan fill="#0000FF" font-style="italic">variant</tspan><tspan fill="#000000"> { </tspan><tspan fill="#001080">n</tspan><tspan fill="#000000"> }</tspan></text>
-  <text x="18" y="114" xml:space="preserve"><tspan fill="#000000">  </tspan><tspan fill="#0000FF" font-style="italic">writes</tspan><tspan fill="#000000"> { </tspan><tspan fill="#001080">s</tspan><tspan fill="#000000"> }</tspan></text>
-  <text x="18" y="135" xml:space="preserve"><tspan fill="#000000">  </tspan><tspan fill="#AF00DB">if</tspan><tspan fill="#000000"> </tspan><tspan fill="#001080">n</tspan><tspan fill="#000000"> = </tspan><tspan fill="#098658">0</tspan><tspan fill="#000000"> </tspan><tspan fill="#AF00DB">then</tspan></text>
-  <text x="18" y="156" xml:space="preserve"><tspan fill="#000000">    </tspan><tspan fill="#001080">s</tspan><tspan fill="#000000"> &lt;- </tspan><tspan fill="#098658">0</tspan></text>
-  <text x="18" y="177" xml:space="preserve"><tspan fill="#000000">  </tspan><tspan fill="#AF00DB">else</tspan></text>
-  <text x="18" y="198" xml:space="preserve"><tspan fill="#000000">    </tspan><tspan fill="#569CD6">sum_to</tspan><tspan fill="#000000">(</tspan><tspan fill="#001080">n</tspan><tspan fill="#000000"> - </tspan><tspan fill="#098658">1</tspan><tspan fill="#000000">);</tspan></text>
-  <text x="18" y="219" xml:space="preserve"><tspan fill="#000000">    </tspan><tspan fill="#001080">s</tspan><tspan fill="#000000"> &lt;- </tspan><tspan fill="#001080">s</tspan><tspan fill="#000000"> + </tspan><tspan fill="#001080">n</tspan></text>
-  <text x="18" y="240" xml:space="preserve"><tspan fill="#000000">  </tspan><tspan fill="#AF00DB">end</tspan></text>
-  <text x="18" y="261" xml:space="preserve"><tspan fill="#AF00DB">end</tspan></text>
-  <text x="18" y="282" xml:space="preserve"></text>
-  <text x="18" y="303" xml:space="preserve"><tspan fill="#000000">{ </tspan><tspan fill="#0000FF">true</tspan><tspan fill="#000000"> }</tspan></text>
-  <text x="18" y="324" xml:space="preserve"><tspan fill="#569CD6">sum_to</tspan><tspan fill="#000000">(</tspan><tspan fill="#098658">5</tspan><tspan fill="#000000">)</tspan></text>
-  <text x="18" y="345" xml:space="preserve"><tspan fill="#000000">{ </tspan><tspan fill="#001080">s</tspan><tspan fill="#000000"> &gt;= </tspan><tspan fill="#098658">0</tspan><tspan fill="#000000"> }</tspan></text>
+  <text x="18" y="30" xml:space="preserve"><tspan fill="#008000">// A procedure may call itself. The `variant` strictly decreases across each</tspan></text>
+  <text x="18" y="51" xml:space="preserve"><tspan fill="#008000">// recursive call, which is what proves the recursion terminates.</tspan></text>
+  <text x="18" y="72" xml:space="preserve"><tspan fill="#AF00DB">procedure</tspan><tspan fill="#000000"> </tspan><tspan fill="#569CD6">sum_to</tspan><tspan fill="#000000"> (</tspan><tspan fill="#001080">n</tspan><tspan fill="#000000">) =</tspan></text>
+  <text x="18" y="93" xml:space="preserve"><tspan fill="#000000">  </tspan><tspan fill="#0000FF" font-style="italic">requires</tspan><tspan fill="#000000"> { </tspan><tspan fill="#001080">n</tspan><tspan fill="#000000"> &gt;= </tspan><tspan fill="#098658">0</tspan><tspan fill="#000000"> }</tspan></text>
+  <text x="18" y="114" xml:space="preserve"><tspan fill="#000000">  </tspan><tspan fill="#0000FF" font-style="italic">ensures</tspan><tspan fill="#000000"> { </tspan><tspan fill="#001080">s</tspan><tspan fill="#000000"> &gt;= </tspan><tspan fill="#098658">0</tspan><tspan fill="#000000"> }</tspan></text>
+  <text x="18" y="135" xml:space="preserve"><tspan fill="#000000">  </tspan><tspan fill="#0000FF" font-style="italic">variant</tspan><tspan fill="#000000"> { </tspan><tspan fill="#001080">n</tspan><tspan fill="#000000"> }</tspan></text>
+  <text x="18" y="156" xml:space="preserve"><tspan fill="#000000">  </tspan><tspan fill="#0000FF" font-style="italic">writes</tspan><tspan fill="#000000"> { </tspan><tspan fill="#001080">s</tspan><tspan fill="#000000"> }</tspan></text>
+  <text x="18" y="177" xml:space="preserve"><tspan fill="#000000">  </tspan><tspan fill="#AF00DB">if</tspan><tspan fill="#000000"> </tspan><tspan fill="#001080">n</tspan><tspan fill="#000000"> = </tspan><tspan fill="#098658">0</tspan><tspan fill="#000000"> </tspan><tspan fill="#AF00DB">then</tspan></text>
+  <text x="18" y="198" xml:space="preserve"><tspan fill="#000000">    </tspan><tspan fill="#001080">s</tspan><tspan fill="#000000"> &lt;- </tspan><tspan fill="#098658">0</tspan></text>
+  <text x="18" y="219" xml:space="preserve"><tspan fill="#000000">  </tspan><tspan fill="#AF00DB">else</tspan></text>
+  <text x="18" y="240" xml:space="preserve"><tspan fill="#000000">    </tspan><tspan fill="#569CD6">sum_to</tspan><tspan fill="#000000">(</tspan><tspan fill="#001080">n</tspan><tspan fill="#000000"> - </tspan><tspan fill="#098658">1</tspan><tspan fill="#000000">);</tspan></text>
+  <text x="18" y="261" xml:space="preserve"><tspan fill="#000000">    </tspan><tspan fill="#001080">s</tspan><tspan fill="#000000"> &lt;- </tspan><tspan fill="#001080">s</tspan><tspan fill="#000000"> + </tspan><tspan fill="#001080">n</tspan></text>
+  <text x="18" y="282" xml:space="preserve"><tspan fill="#000000">  </tspan><tspan fill="#AF00DB">end</tspan></text>
+  <text x="18" y="303" xml:space="preserve"><tspan fill="#AF00DB">end</tspan></text>
+  <text x="18" y="324" xml:space="preserve"></text>
+  <text x="18" y="345" xml:space="preserve"><tspan fill="#000000">{ </tspan><tspan fill="#0000FF">true</tspan><tspan fill="#000000"> }</tspan></text>
+  <text x="18" y="366" xml:space="preserve"><tspan fill="#569CD6">sum_to</tspan><tspan fill="#000000">(</tspan><tspan fill="#098658">5</tspan><tspan fill="#000000">)</tspan></text>
+  <text x="18" y="387" xml:space="preserve"><tspan fill="#000000">{ </tspan><tspan fill="#001080">s</tspan><tspan fill="#000000"> &gt;= </tspan><tspan fill="#098658">0</tspan><tspan fill="#000000"> }</tspan></text>
 </svg>

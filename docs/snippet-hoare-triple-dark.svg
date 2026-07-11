@@ -1,0 +1,9 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="575" height="158" viewBox="0 0 575 158" font-family='ui-monospace, "SF Mono", Menlo, Consolas, monospace' font-size="14">
+  <rect width="100%" height="100%" fill="#1E1E1E" rx="10"/>
+  <text x="18" y="30" xml:space="preserve"><tspan fill="#6A9955">// A Hoare triple {P} c {Q}: if P holds before c runs, Q holds</tspan></text>
+  <text x="18" y="51" xml:space="preserve"><tspan fill="#6A9955">// after — a fact proved without executing the code.</tspan></text>
+  <text x="18" y="72" xml:space="preserve"><tspan fill="#D4D4D4">{ </tspan><tspan fill="#9CDCFE">x</tspan><tspan fill="#D4D4D4"> &gt;= </tspan><tspan fill="#B5CEA8">0</tspan><tspan fill="#D4D4D4"> }</tspan></text>
+  <text x="18" y="93" xml:space="preserve"><tspan fill="#9CDCFE">y</tspan><tspan fill="#D4D4D4"> &lt;- </tspan><tspan fill="#9CDCFE">x</tspan><tspan fill="#D4D4D4"> + </tspan><tspan fill="#B5CEA8">1</tspan><tspan fill="#D4D4D4">;</tspan></text>
+  <text x="18" y="114" xml:space="preserve"><tspan fill="#9CDCFE">z</tspan><tspan fill="#D4D4D4"> &lt;- </tspan><tspan fill="#B5CEA8">2</tspan><tspan fill="#D4D4D4"> * </tspan><tspan fill="#9CDCFE">y</tspan></text>
+  <text x="18" y="135" xml:space="preserve"><tspan fill="#D4D4D4">{ </tspan><tspan fill="#9CDCFE">z</tspan><tspan fill="#D4D4D4"> = </tspan><tspan fill="#B5CEA8">2</tspan><tspan fill="#D4D4D4"> * </tspan><tspan fill="#9CDCFE">x</tspan><tspan fill="#D4D4D4"> + </tspan><tspan fill="#B5CEA8">2</tspan><tspan fill="#D4D4D4"> }</tspan></text>
+</svg>

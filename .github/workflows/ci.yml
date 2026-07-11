@@ -59,6 +59,25 @@ jobs:
       - name: Run tests
         run: opam exec -- dune build @runtest
 
+      # Prove the README's example programs against their specifications, so a
+      # snippet can't drift out of sync with the language. `cav verify` reports
+      # the outcome on stdout (not via exit code), so match on that; every
+      # snippet must verify except failing-spec.cav, which must be rejected.
+      - name: Verify README example programs
+        run: |
+          for f in docs/readme-snippets/snippets/*.cav; do
+            out=$(opam exec -- dune exec -- cav verify "$f" 2>&1)
+            echo "$out"
+            case "$f" in
+              *failing-spec.cav)
+                echo "$out" | grep -q "verification unsuccessful" \
+                  || { echo "::error::$f was expected to fail verification"; exit 1; } ;;
+              *)
+                echo "$out" | grep -q "verification successful" \
+                  || { echo "::error::$f failed to verify"; exit 1; } ;;
+            esac
+          done
+
       # zanuda is a typedtree-based linter tightly coupled to the OCaml
       # compiler; its releases don't support 5.5.0, so this runs only on the
       # 4.14 leg. It reports via OCaml alerts and doesn't fail on findings, so

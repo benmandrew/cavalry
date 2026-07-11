@@ -1,0 +1,6 @@
+// Verification rejects specifications that don't hold. Here y is exactly x + 1,
+// so the claim y > x + 1 is false and `cav verify` reports the obligation it
+// could not prove instead of accepting the program.
+{ x >= 0 }
+y <- x + 1
+{ y > x + 1 }
