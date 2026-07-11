@@ -43,7 +43,13 @@ let compile ?(debug = false) ?(verify = true) ?(native_int = false) ~output path
   (if verify then
      match Hoare.verify_report ~machine_int:native_int ast with
      | { result = Smt.Prover.Valid; _ } -> ()
-     | { result = Smt.Prover.Invalid; failing_proc; reason; loc } ->
+     | {
+      result = Smt.Prover.Invalid;
+      failing_proc;
+      reason;
+      loc;
+      counterexample;
+     } ->
          let where =
            match failing_proc with
            | Some p -> Printf.sprintf "procedure '%s': " p
@@ -59,7 +65,12 @@ let compile ?(debug = false) ?(verify = true) ?(native_int = false) ~output path
            | Some r -> Hoare.expl_of_reason r
            | None -> "precondition does not imply postcondition"
          in
-         raise (Verification_failed (where ^ at ^ what))
+         let ce =
+           match Hoare.format_counterexample counterexample with
+           | "" -> ""
+           | block -> "\n" ^ block
+         in
+         raise (Verification_failed (where ^ at ^ what ^ ce))
      | { result = Smt.Prover.Failed s; _ } ->
          raise (Verification_failed ("internal failure: " ^ s)));
   let ocaml = Compile.emit ~native_int ast in

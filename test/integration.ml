@@ -316,6 +316,31 @@ let%test_unit "location: recursive variant points at the call's line" =
 let%test_unit "location: a plain postcondition has no location" =
   check_loc_line "verify_false.cav" None
 
+(* The counterexample is a concrete failing state, projected back onto source
+   variables. Values are forced by the fixture, so they are stable: the divisor
+   must be 0 to fail, and the precondition pins x,y. *)
+let ce_value path name =
+  List.Assoc.find ~equal:String.equal
+    (Main.verify_report ~debug ?timeout:(Some 5.) (Main.get_ast path))
+      .counterexample name
+
+let%test_unit "counterexample: the divisor is zero" =
+  [%test_result: string option]
+    (ce_value "verify_false_div_by_zero.cav" "y")
+    ~expect:(Some "0")
+
+let%test_unit "counterexample: the precondition values that break the goal" =
+  [%test_result: string option]
+    (ce_value "verify_false.cav" "y")
+    ~expect:(Some "60")
+
+(* Internal WLP symbols (havoc copies, the frozen-variant var) are not surfaced:
+   the loop-variant obligation reports only the source variable. *)
+let%test_unit "counterexample: hides internal variables" =
+  [%test_result: string option]
+    (ce_value "verify_false_variant.cav" "variant")
+    ~expect:None
+
 (* A provided variant that does not decrease (here the measure [i] increases)
    is rejected even though the loop does terminate: the given measure fails to
    prove it. *)

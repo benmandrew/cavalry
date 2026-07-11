@@ -38,3 +38,16 @@ val split_obligations :
     located node in the subgoal, [None] if the obligation was untagged). No
     prover is run: the caller builds a suitable per-subgoal task (e.g.
     minimising theory inclusion) and discharges it with {!prove_term}. *)
+
+val counterexample :
+  float option ->
+  Task.task ->
+  Term.vsymbol list ->
+  Term.term ->
+  (string * string) list
+(** [counterexample timeout task expose f] asks Z3's counterexamples driver for
+    a model of a failed obligation [f] (a subgoal from {!split_obligations}, on
+    [task]'s theories), returning the [(variable, value)] pairs it assigns the
+    variables in [expose] (the procedure's entry-state variables). Best-effort
+    and advisory: [[]] if no CE prover is configured or no model was produced,
+    so it never affects the verdict. *)

@@ -544,19 +544,28 @@ let verify_procedure ?timeout ~machine_int ~is_main g_vars procs
      inclusion is harmless, so the whole-goal [uses_map] is reused. The first
      failing obligation determines the reported reason and location. *)
   let rec check = function
-    | [] -> (Smt.Prover.Valid, None, None)
+    | [] -> (Smt.Prover.Valid, None, None, [])
     | (f, expl, loc) :: rest -> (
         let task = Arith.task ~div:(Arith.uses_div f) ~map:uses_map in
         match Smt.Prover.prove_term timeout task f with
         | Smt.Prover.Valid -> check rest
         | Smt.Prover.Invalid ->
-            (Smt.Prover.Invalid, reason_of_expl expl, Option.map Loc.of_why3 loc)
-        | Smt.Prover.Failed s -> (Smt.Prover.Failed s, None, None))
+            let ce = Smt.Prover.counterexample timeout task merged_vars f in
+            ( Smt.Prover.Invalid,
+              reason_of_expl expl,
+              Option.map Loc.of_why3 loc,
+              ce )
+        | Smt.Prover.Failed s -> (Smt.Prover.Failed s, None, None, []))
   in
   check obligations
 
 exception
-  Proc_invalid of string * Smt.Prover.result * reason option * Loc.t option
+  Proc_invalid of
+    string
+    * Smt.Prover.result
+    * reason option
+    * Loc.t option
+    * (string * string) list
 
 (* A procedure's [writes] clause must name every global it actually assigns;
    otherwise a caller's WLP would never havoc that global and could "prove"
@@ -580,6 +589,9 @@ type report = {
   failing_proc : string option;
   reason : reason option;
   loc : Loc.t option;
+  counterexample : (string * string) list;
+      (* [(variable, value)] entry-state witness from Z3, empty when none was
+         produced (best-effort). *)
 }
 
 let verify_report ?debug:d ?timeout ?(machine_int = false) program =
@@ -592,14 +604,14 @@ let verify_report ?debug:d ?timeout ?(machine_int = false) program =
        hypothesis). This lifts the earlier bottom-up ordering restriction. main
        is never a callee, so it is not registered. *)
     let procs = if is_main then procs else Proc_map.add t.f proc procs in
-    let result, reason, loc =
+    let result, reason, loc, ce =
       if (not is_main) && not (writes_are_declared globals procs t) then
-        (Smt.Prover.Invalid, Some Undeclared_write, None)
+        (Smt.Prover.Invalid, Some Undeclared_write, None, [])
       else verify_procedure ?timeout ~machine_int ~is_main globals procs proc
     in
     match result with
     | Valid -> procs
-    | Invalid | Failed _ -> raise (Proc_invalid (t.f, result, reason, loc))
+    | Invalid | Failed _ -> raise (Proc_invalid (t.f, result, reason, loc, ce))
   in
   try
     let proc_map = List.fold_left (f ~is_main:false) Proc_map.empty procs in
@@ -611,9 +623,25 @@ let verify_report ?debug:d ?timeout ?(machine_int = false) program =
       failing_proc = None;
       reason = None;
       loc = None;
+      counterexample = [];
     }
-  with Proc_invalid (s, result, reason, loc) ->
-    { result; failing_proc = Some s; reason; loc }
+  with Proc_invalid (s, result, reason, loc, ce) ->
+    { result; failing_proc = Some s; reason; loc; counterexample = ce }
 
 let verify ?debug ?timeout ?machine_int program =
   (verify_report ?debug ?timeout ?machine_int program).result
+
+(* Render a report's counterexample as an indented block for display, or the
+   empty string if there is nothing user-facing to show. Internal symbols the
+   WLP introduces -- [@old] snapshots ([_x]) and array length keys -- are hidden;
+   only source-level variables remain. *)
+let format_counterexample ce =
+  let is_internal name =
+    String.length name = 0 || Char.equal name.[0] '_' || Vars.is_len_key name
+  in
+  let visible = List.filter (fun (n, _) -> not (is_internal n)) ce in
+  match visible with
+  | [] -> ""
+  | _ ->
+      let line (n, v) = Printf.sprintf "    %s = %s\n" n v in
+      "  counterexample:\n" ^ String.concat "" (List.map line visible)

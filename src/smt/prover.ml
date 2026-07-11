@@ -44,6 +44,23 @@ let z3_driver =
     eprintf "Failed to load driver for Z3: %a\n" Exn_printer.exn_printer e;
     exit 1
 
+(* Z3's [counterexamples] alternative, loaded best-effort: it drives the
+   *advisory* counterexample on a failed obligation, so if it is missing or its
+   driver fails to load we simply produce no counterexample -- never affecting
+   the verdict. *)
+let z3_ce =
+  try
+    let fp =
+      Whyconf.parse_filter_prover
+        (Printf.sprintf "Z3,%s,counterexamples" z3_version)
+    in
+    let provers = Whyconf.filter_provers config fp in
+    if Whyconf.Mprover.is_empty provers then None
+    else
+      let cp = snd (Whyconf.Mprover.max_binding provers) in
+      Some (cp, Driver.load_driver_for_prover main env cp)
+  with _ -> None
+
 type result = Valid | Invalid | Failed of string [@@deriving sexp_of, ord]
 
 (* Maps a prover's raw answer onto our tri-state result. Factored out of
@@ -107,3 +124,78 @@ let split_obligations base_task vars t =
       let _, expl, _ = Termcode.goal_expl_task ~root:false st in
       let f = Task.task_goal_fmla st in
       (f, expl, first_loc f))
+
+(* Turn the outer universally-quantified variables of a split subgoal
+   [forall xs. body] into fresh 0-ary constants, each tagged [model_trace:<name>]
+   and given a (dummy) location -- both required for Z3 to report the symbol in
+   its model. Only the outermost block is opened (the entry-state variables);
+   inner havoc quantifiers stay bound. Returns the constants to declare and the
+   opened body. Which of these are shown to the user is decided by name in
+   [counterexample], since the WLP alpha-renames variables so identity is not a
+   reliable filter. *)
+let skolemise f =
+  match f.Term.t_node with
+  | Term.Tquant (Term.Tforall, tq) ->
+      let vsl, _, body = Term.t_open_quant tq in
+      let consts, map =
+        List.fold_left
+          ~f:(fun (consts, map) v ->
+            let name = v.Term.vs_name.Ident.id_string in
+            let attrs =
+              Ident.Sattr.singleton
+                (Ident.create_attribute ("model_trace:" ^ name))
+            in
+            let loc = Loc.user_position "" 0 0 0 0 in
+            let ls =
+              Term.create_lsymbol
+                (Ident.id_fresh ~attrs ~loc name)
+                [] (Some v.Term.vs_ty)
+            in
+            ( ls :: consts,
+              Term.Mvs.add v (Term.t_app ls [] (Some v.Term.vs_ty)) map ))
+          ~init:([], Term.Mvs.empty) vsl
+      in
+      (consts, Term.t_subst map body)
+  | _ -> ([], f)
+
+(* Best-effort counterexample for a failed obligation [f] (a split subgoal):
+   skolemise its entry-state variables into model-reportable constants, ask Z3's
+   counterexamples driver for a model, and return the [(name, value)] pairs it
+   assigns the *source* variables named in [expose]. Z3 also surfaces the WLP's
+   internal havoc/frozen-variant vars (introduced existentially in the negation);
+   those, and any not named among [expose], are dropped. Empty if no CE prover is
+   configured or no model was produced. *)
+let counterexample timeout base_task expose f =
+  match z3_ce with
+  | None -> []
+  | Some (cp, driver) -> (
+      let expose_names =
+        List.map ~f:(fun v -> v.Term.vs_name.Ident.id_string) expose
+        |> String.Set.of_list
+      in
+      let consts, body = skolemise f in
+      let task = List.fold_left ~f:Task.add_param_decl ~init:base_task consts in
+      let goal_id = Decl.create_prsymbol (Ident.id_fresh "goal") in
+      let task = Task.add_prop_decl task Decl.Pgoal goal_id body in
+      let limits =
+        match timeout with
+        | None -> Call_provers.empty_limits
+        | Some limit_time ->
+            { Call_provers.limit_time; limit_mem = -1; limit_steps = -1 }
+      in
+      let r =
+        Driver.prove_task ~command:cp.Whyconf.command ~config:main ~limits
+          driver task
+        |> Call_provers.wait_on_call
+      in
+      match r.Call_provers.pr_models with
+      | [] -> []
+      | (_, model) :: _ ->
+          Model_parser.get_model_elements model
+          |> List.map ~f:(fun (e : Model_parser.model_element) ->
+              ( Model_parser.get_lsymbol_or_model_trace_name e,
+                Format.asprintf "%a" Model_parser.print_concrete_term
+                  e.Model_parser.me_concrete_value ))
+          |> List.filter ~f:(fun (n, _) -> Set.mem expose_names n)
+          |> List.dedup_and_sort ~compare:(fun (a, _) (b, _) ->
+              String.compare a b))

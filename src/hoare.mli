@@ -60,6 +60,7 @@ type report = {
   failing_proc : string option;
   reason : reason option;
   loc : Ast.Loc.t option;
+  counterexample : (string * string) list;
 }
 (** A whole-program verification outcome. [failing_proc] names the first
     procedure ([main] included, under the name ["main"]) whose body failed to
@@ -67,7 +68,12 @@ type report = {
     failure when the prover isolated it to one obligation ([None] if it could
     not, e.g. an internal [Failed]). [loc] points at the offending construct,
     and is [None] for whole-procedure obligations (a plain postcondition) and
-    static rejections. *)
+    static rejections. [counterexample] is a best-effort [(variable, value)]
+    entry-state witness from Z3 ([[]] when none was produced). *)
+
+val format_counterexample : (string * string) list -> string
+(** Render a {!report}'s [counterexample] as an indented display block (empty
+    string if nothing user-facing remains after hiding internal symbols). *)
 
 val verify_report :
   ?debug:bool ->
