@@ -23,8 +23,11 @@ let verify debug machine_int source_file =
         | Some r -> Hoare.expl_of_reason r
         | None -> "precondition does not imply postcondition"
       in
-      Printf.printf "verification unsuccessful%s%s: %s\n" where at what
-  | { result = Failed s; _ } -> Printf.printf "internal failure: %s\n" s
+      Printf.printf "verification unsuccessful%s%s: %s\n" where at what;
+      exit 1
+  | { result = Failed s; _ } ->
+      Printf.printf "internal failure: %s\n" s;
+      exit 2
 
 let compile debug no_verify native_int output source_file =
   let output =
