@@ -543,6 +543,17 @@ let%test_unit "Main.verify true boolean equality" =
 let%test_unit "Main.exec boolean equality" =
   [%test_result: int] (Main.exec "verify_true_bool_eq.cav") ~expect:1
 
+(* A boolean variable named in the postcondition and in a loop invariant. *)
+let%test_unit "Main.verify true boolean in spec" =
+  check_verify "verify_true_bool_spec.cav" Valid
+
+let%test_unit "Main.verify true boolean in invariant" =
+  check_verify "verify_true_bool_invariant.cav" Valid
+
+(* A false boolean postcondition is caught. *)
+let%test_unit "Main.verify false boolean in spec" =
+  check_verify "verify_false_bool_spec.cav" Invalid
+
 (* The same boolean-scalar program runs to a concrete result (x = 5 >= 0, so the
    [else] branch gives y = x = 5). *)
 let%test_unit "Main.exec boolean scalar" =

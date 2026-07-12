@@ -1,0 +1,5 @@
+// x < 0, so pos is false, but the postcondition asserts pos: verification fails.
+{ true }
+x := 0 - 5;
+pos := x > 0
+{ pos }

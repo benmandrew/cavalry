@@ -47,7 +47,7 @@ let rec arrays_arith (e : Logic.arith_expr) =
 
 let rec arrays_logic (e : Logic.logic_expr) =
   match e with
-  | Logic.Bool _ -> SS.empty
+  | Logic.Bool _ | Logic.BoolVar _ -> SS.empty
   | Logic.Not e | Logic.Forall (_, e) | Logic.Exists (_, e) -> arrays_logic e
   | Logic.And (a, b) | Logic.Or (a, b) | Logic.Impl (a, b) ->
       SS.union (arrays_logic a) (arrays_logic b)
@@ -158,9 +158,23 @@ let rec classify_bool (e : Program.ut_expr) =
   | UGet (_, i) -> classify_bool i
   | UInt _ | UBool _ | UVar _ | ULen _ -> SS.empty
 
+(* Boolean names mentioned as bare propositions in an assertion. *)
+let rec bools_logic (e : Logic.logic_expr) =
+  match e with
+  | Logic.BoolVar x -> SS.singleton x
+  | Logic.Bool _ | Logic.Eq _ | Logic.Neq _ | Logic.Lt _ | Logic.Leq _
+  | Logic.Gt _ | Logic.Geq _ ->
+      SS.empty
+  | Logic.Not e | Logic.Forall (_, e) | Logic.Exists (_, e) -> bools_logic e
+  | Logic.And (a, b) | Logic.Or (a, b) | Logic.Impl (a, b) ->
+      SS.union (bools_logic a) (bools_logic b)
+
 let program_bools (program : Triple.ut_t list) =
   List.fold_left
-    (fun s (t : Triple.ut_t) -> SS.union s (classify_bool t.u))
+    (fun s (t : Triple.ut_t) ->
+      SS.union s
+        (SS.union (classify_bool t.u)
+           (SS.union (bools_logic t.p) (bools_logic t.q))))
     SS.empty program
 
 (* ===== Expression typing ===== *)

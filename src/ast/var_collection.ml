@@ -29,6 +29,7 @@ let collect_logic e =
   let open Logic in
   let rec collect_logic_expr = function
     | Bool _ -> Str_set.empty
+    | BoolVar x -> Str_set.singleton x
     | Not e -> collect_logic_expr e
     | And (e, e') | Or (e, e') | Impl (e, e') ->
         Str_set.union (collect_logic_expr e) (collect_logic_expr e')
@@ -117,7 +118,7 @@ let arrays_logic e =
   let open Logic in
   let arith = arrays_arith in
   let rec logic = function
-    | Bool _ -> Str_set.empty
+    | Bool _ | BoolVar _ -> Str_set.empty
     | Not e | Forall (_, e) | Exists (_, e) -> logic e
     | And (a, b) | Or (a, b) | Impl (a, b) -> Str_set.union (logic a) (logic b)
     | Eq (a, b) | Neq (a, b) | Lt (a, b) | Leq (a, b) | Gt (a, b) | Geq (a, b)
@@ -230,9 +231,25 @@ let all_arrays (program : Triple.t list) =
               (Str_set.union (arrays_logic t.q) (arrays_program t.c)))))
     Str_set.empty program
 
+(* Boolean names an assertion mentions as bare propositions ([BoolVar]). A
+   boolean equality [b = c] instead parses as an arithmetic [Eq] over [Var]s, so
+   those names are classified boolean by their (body) assignment, not here. *)
+let bools_logic e =
+  let open Logic in
+  let rec go = function
+    | BoolVar x -> Str_set.singleton x
+    | Bool _ | Eq _ | Neq _ | Lt _ | Leq _ | Gt _ | Geq _ -> Str_set.empty
+    | Not e | Forall (_, e) | Exists (_, e) -> go e
+    | And (a, b) | Or (a, b) | Impl (a, b) -> Str_set.union (go a) (go b)
+  in
+  go e
+
 let all_bools (program : Triple.t list) =
   List.fold_left
-    (fun s (t : Triple.t) -> Str_set.union s (bools_program t.c))
+    (fun s (t : Triple.t) ->
+      Str_set.union s
+        (Str_set.union (bools_program t.c)
+           (Str_set.union (bools_logic t.p) (bools_logic t.q))))
     Str_set.empty program
 
 let collect_procedure globals (t : Triple.t) =

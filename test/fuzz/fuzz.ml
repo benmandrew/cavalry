@@ -463,6 +463,7 @@ let rec arith_to_cav = function
    comparisons this harness generates for P and Q. *)
 let rec logic_to_cav = function
   | Logic.Bool b -> string_of_bool b
+  | Logic.BoolVar x -> x
   | Logic.Not e -> Printf.sprintf "!%s" (logic_to_cav e)
   | Logic.And (a, b) ->
       Printf.sprintf "%s && %s" (logic_to_cav a) (logic_to_cav b)

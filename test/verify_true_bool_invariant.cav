@@ -1,0 +1,11 @@
+// A boolean variable in a loop invariant (and the postcondition): [ok] stays
+// true across the loop.
+{ n >= 0 }
+i := 0;
+ok := true;
+while i < n do
+  invariant { ok && 0 <= i && i <= n }
+  variant { n - i }
+  i := i + 1
+end
+{ ok }
