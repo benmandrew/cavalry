@@ -422,6 +422,13 @@ let rec expr_to_cav : type a. a Program.expr -> string =
   | Program.Leq (a, b) -> bin "<=" a b
   | Program.Gt (a, b) -> bin ">" a b
   | Program.Geq (a, b) -> bin ">=" a b
+  (* [bin] is monomorphised to [int expr] operands; the boolean connectives
+     recurse through the polymorphic [expr_to_cav] directly. *)
+  | Program.And (a, b) ->
+      Printf.sprintf "(%s && %s)" (expr_to_cav a) (expr_to_cav b)
+  | Program.Or (a, b) ->
+      Printf.sprintf "(%s || %s)" (expr_to_cav a) (expr_to_cav b)
+  | Program.Not a -> Printf.sprintf "(! %s)" (expr_to_cav a)
   | Program.Get (a, i) -> Printf.sprintf "%s[%s]" a (expr_to_cav i)
   | Program.Len a -> Printf.sprintf "len(%s)" a
 

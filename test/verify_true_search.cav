@@ -1,0 +1,10 @@
+// Linear search: the guard [a[i] != x] is only evaluated when [i < n]
+// (short-circuiting &&), so [a[i]] stays in bounds even when [i = n].
+{ n >= 0 && n <= len(a) }
+i := 0;
+while i < n && a[i] != x do
+  invariant { 0 <= i && i <= n && n <= len(a) }
+  variant { n - i }
+  i := i + 1
+end
+{ 0 <= i && i <= n }

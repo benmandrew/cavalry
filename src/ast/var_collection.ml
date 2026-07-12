@@ -64,6 +64,9 @@ let collect_program c =
     | Gt (e, e')
     | Geq (e, e') ->
         Str_set.union (collect_expr e) (collect_expr e')
+    | And (e, e') | Or (e, e') ->
+        Str_set.union (collect_expr e) (collect_expr e')
+    | Not e -> collect_expr e
     | Get (a, e) -> Str_set.add a (collect_expr e)
     | Len a -> Str_set.singleton a
   in
@@ -138,6 +141,8 @@ let arrays_program c =
     | Gt (a, b)
     | Geq (a, b) ->
         Str_set.union (expr a) (expr b)
+    | And (a, b) | Or (a, b) -> Str_set.union (expr a) (expr b)
+    | Not a -> expr a
   in
   let rec cmd = function
     | Located (_, c) -> cmd c

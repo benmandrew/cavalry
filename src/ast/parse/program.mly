@@ -98,6 +98,12 @@ expr:
       { UGt (e0, e1) }
   | e0 = expr GEQ e1 = expr
       { UGeq (e0, e1) }
+  | e0 = expr AND e1 = expr
+      { UAnd (e0, e1) }
+  | e0 = expr OR e1 = expr
+      { UOr (e0, e1) }
+  | NOT e = expr
+      { UNot (e) }
   | LPAREN e = expr RPAREN
       { ( e ) }
 ;

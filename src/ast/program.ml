@@ -15,6 +15,9 @@ type _ expr =
   | Leq : int expr * int expr -> bool expr
   | Gt : int expr * int expr -> bool expr
   | Geq : int expr * int expr -> bool expr
+  | And : bool expr * bool expr -> bool expr
+  | Or : bool expr * bool expr -> bool expr
+  | Not : bool expr -> bool expr
   | Plus : int expr * int expr -> int expr
   | Sub : int expr * int expr -> int expr
   | Mul : int expr * int expr -> int expr
@@ -58,6 +61,9 @@ type ut_expr =
   | ULeq of ut_expr * ut_expr
   | UGt of ut_expr * ut_expr
   | UGeq of ut_expr * ut_expr
+  | UAnd of ut_expr * ut_expr
+  | UOr of ut_expr * ut_expr
+  | UNot of ut_expr
   | UPlus of ut_expr * ut_expr
   | USub of ut_expr * ut_expr
   | UMul of ut_expr * ut_expr
@@ -92,6 +98,9 @@ and t_bool_expr = function
   | ULeq (a, b) -> Leq (t_int_expr a, t_int_expr b)
   | UGt (a, b) -> Gt (t_int_expr a, t_int_expr b)
   | UGeq (a, b) -> Geq (t_int_expr a, t_int_expr b)
+  | UAnd (a, b) -> And (t_bool_expr a, t_bool_expr b)
+  | UOr (a, b) -> Or (t_bool_expr a, t_bool_expr b)
+  | UNot a -> Not (t_bool_expr a)
   | e -> raise (TypeError (show_ut_expr e))
 
 and expr_to_cmd = function

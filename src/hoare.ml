@@ -123,6 +123,13 @@ let rec expr_to_term : type a.
   | Leq (e, e') -> leq (f e) (f e')
   | Gt (e, e') -> gt (f e) (f e')
   | Geq (e, e') -> geq (f e) (f e')
+  (* [f] is monomorphised to [int expr] by the arithmetic arms; the boolean
+     connectives recurse through the polymorphic [expr_to_term] directly. *)
+  | And (e, e') ->
+      T.t_and (expr_to_term ~g_vars ?l_vars e) (expr_to_term ~g_vars ?l_vars e')
+  | Or (e, e') ->
+      T.t_or (expr_to_term ~g_vars ?l_vars e) (expr_to_term ~g_vars ?l_vars e')
+  | Not e -> T.t_not (expr_to_term ~g_vars ?l_vars e)
   | Plus (e, e') -> plus (f e) (f e')
   | Sub (e, e') -> sub (f e) (f e')
   | Mul (e, e') -> mul (f e) (f e')
@@ -179,6 +186,20 @@ let rec safe : type a.
   | Len _ -> T.t_true
   | Eq (a, b) | Neq (a, b) | Lt (a, b) | Leq (a, b) | Gt (a, b) | Geq (a, b) ->
       T.t_and_simp (self a) (self b)
+  (* [&&]/[||] short-circuit (see [Runtime.exec_expr] and the compiled backend),
+     so the second operand is only evaluated -- and hence only need be safe --
+     when the first has the value that reaches it. [self] is monomorphic
+     ([int expr]); recurse into boolean operands through the polymorphic [safe]
+     directly. *)
+  | And (a, b) ->
+      let self = safe ~g_vars ?l_vars ?loc in
+      T.t_and_simp (self a)
+        (T.t_implies_simp (expr_to_term ~g_vars ?l_vars a) (self b))
+  | Or (a, b) ->
+      let self = safe ~g_vars ?l_vars ?loc in
+      T.t_and_simp (self a)
+        (T.t_implies_simp (T.t_not (expr_to_term ~g_vars ?l_vars a)) (self b))
+  | Not a -> safe ~g_vars ?l_vars ?loc a
 
 (* Well-definedness obligation for an expression: the conjunction of
    [divisor <> 0] over every [Div]/[Mod] node it contains, and
@@ -213,6 +234,20 @@ let rec defined : type a.
   | Len _ -> T.t_true
   | Eq (a, b) | Neq (a, b) | Lt (a, b) | Leq (a, b) | Gt (a, b) | Geq (a, b) ->
       T.t_and_simp (self a) (self b)
+  (* [&&]/[||] short-circuit, so the second operand's well-definedness
+     ([a\[i\]] in bounds, non-zero divisor) is only required when the first
+     operand's value reaches it. This is what lets [i < n && a[i] != x] verify:
+     [a[i]] need not be in bounds when [i < n] is false. [self] is monomorphic
+     ([int expr]); recurse into boolean operands through [defined] directly. *)
+  | And (a, b) ->
+      let self = defined ~g_vars ?l_vars ?loc in
+      T.t_and_simp (self a)
+        (T.t_implies_simp (expr_to_term ~g_vars ?l_vars a) (self b))
+  | Or (a, b) ->
+      let self = defined ~g_vars ?l_vars ?loc in
+      T.t_and_simp (self a)
+        (T.t_implies_simp (T.t_not (expr_to_term ~g_vars ?l_vars a)) (self b))
+  | Not a -> defined ~g_vars ?l_vars ?loc a
 
 module Proc_map = Map.Make (String)
 
