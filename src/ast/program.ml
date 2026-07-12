@@ -103,12 +103,10 @@ and t_bool_expr = function
   | UNot a -> Not (t_bool_expr a)
   | e -> raise (TypeError (show_ut_expr e))
 
-and expr_to_cmd = function
-  | UInt v -> IntExpr (t_int_expr (UInt v))
-  | UVar v -> IntExpr (t_int_expr (UVar v))
-  | UPlus (a, b) -> IntExpr (t_int_expr (UPlus (a, b)))
-  | UMul (a, b) -> IntExpr (t_int_expr (UMul (a, b)))
-  | e -> raise (TypeError (show_ut_expr e))
+(* A bare expression used as a statement: its value is discarded. Any integer
+   expression is valid here ([t_int_expr] raises [TypeError] on a boolean or a
+   nested command); [Typecheck] has already ruled those out by this point. *)
+and expr_to_cmd e = IntExpr (t_int_expr e)
 
 and t_cmd = function
   | ULoc (loc, e) -> Located (loc, t_cmd e)

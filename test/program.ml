@@ -185,7 +185,7 @@ let%test_unit "Ast.Runtime.exec - function" =
   let fn : Triple.ut_t =
     {
       f = "f";
-      ps = [ "z" ];
+      ps = [ ("z", None) ];
       u =
         USeq
           ( ULet ("y", UPlus (UVar "z", UInt 1)),

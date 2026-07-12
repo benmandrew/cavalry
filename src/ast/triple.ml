@@ -6,7 +6,8 @@ type ut_t = {
   variant : Logic.arith_expr option; (* Optional termination measure *)
   ws : string list; (* Written global variables *)
   f : string; (* Procedure name *)
-  ps : string list; (* Formal parameters *)
+  ps : (string * Ty.t option) list;
+      (* Formal parameters, optionally annotated *)
   u : Program.ut_expr; (* Procedure body *)
 }
 [@@deriving sexp_of]
@@ -22,5 +23,8 @@ type t = {
 }
 [@@deriving sexp_of]
 
+(* Parameter type annotations are validated by {!Typecheck} and dropped here:
+   the typed AST and everything downstream ([Hoare], [Runtime], [Compile]) work
+   with plain parameter names. *)
 let translate { p; f; variant; ws; ps; u; q } =
-  { p; f; variant; ws; ps; c = Program.translate_cmd u; q }
+  { p; f; variant; ws; ps = List.map fst ps; c = Program.translate_cmd u; q }

@@ -1,0 +1,6 @@
+// `a` is an array (created with array(n)); using it as an integer value is a
+// type error, not a silent Why3 sort clash.
+{ true }
+a := array(3);
+x := a + 1
+{ true }

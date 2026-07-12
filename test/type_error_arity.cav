@@ -1,0 +1,8 @@
+// Calling a procedure with the wrong number of arguments is a type error.
+procedure f (a, b) =
+  requires { true } ensures { true } writes { }
+  x := a + b
+end
+{ true }
+f(1)
+{ true }

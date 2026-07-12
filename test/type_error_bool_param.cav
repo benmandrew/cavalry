@@ -1,0 +1,10 @@
+// Parameter annotations are validated: only integer parameters are supported,
+// so a `bool`-annotated parameter is rejected (boolean variables are a later
+// milestone).
+procedure f (a: bool) =
+  requires { true } ensures { true } writes { }
+  x := 1
+end
+{ true }
+x := 0
+{ true }
