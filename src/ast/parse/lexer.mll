@@ -53,6 +53,8 @@ rule main = parse
       { SEMICOLON }
   | ":="
       { ASSGN }
+  | ':'
+      { COLON }
   | '('
       { LPAREN }
   | ')'
@@ -103,6 +105,10 @@ rule main = parse
       { LEN }
   | "array"
       { ARRAY }
+  | "int"
+      { TINT }
+  | "bool"
+      { TBOOL }
   | (['a'-'z']|['A'-'Z']|'_')+
       { VAR (Lexing.lexeme lexbuf) }
   | eof

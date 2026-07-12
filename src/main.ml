@@ -12,6 +12,9 @@ let get_ast path =
   lexbuf.Lexing.lex_curr_p <- { lexbuf.Lexing.lex_curr_p with pos_fname = path };
   let ut_ast = Parser.top Lexer.main lexbuf in
   In_channel.close file;
+  (* Reject ill-typed programs up front with a located diagnostic, before the
+     (context-free) elaboration and the variable environment run. *)
+  Typecheck.check ut_ast;
   List.map Triple.translate ut_ast |> Var_collection.collect
 
 let verify = Hoare.verify

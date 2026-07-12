@@ -1,8 +1,24 @@
 open Cavalry
 
-let exec source_file = Printf.printf "%d\n" (Main.exec source_file)
+(* [get_ast] (via [run]/[verify]/[compile]) rejects an ill-typed program with a
+   [Type_error]; render it as a clean [file:line:col] diagnostic and exit rather
+   than let cmdliner report an "uncaught exception". *)
+let with_type_errors f =
+  try f ()
+  with Ast.Typecheck.Type_error (loc, msg) ->
+    let at =
+      match loc with
+      | Some l -> Printf.sprintf "%s: " (Ast.Loc.to_string l)
+      | None -> ""
+    in
+    Printf.eprintf "type error: %s%s\n" at msg;
+    exit 1
+
+let exec source_file =
+  with_type_errors (fun () -> Printf.printf "%d\n" (Main.exec source_file))
 
 let verify debug machine_int timeout source_file =
+  with_type_errors @@ fun () ->
   let timeout = if timeout > 0. then Some timeout else None in
   let program = Main.get_ast source_file in
   let open Smt.Prover in
@@ -40,6 +56,7 @@ let verify debug machine_int timeout source_file =
       exit 2
 
 let compile debug no_verify native_int timeout output source_file =
+  with_type_errors @@ fun () ->
   let timeout = if timeout > 0. then Some timeout else None in
   let output =
     match output with

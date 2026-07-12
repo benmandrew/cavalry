@@ -487,6 +487,36 @@ let%test_unit "Main.get_ast type error assign bool" =
   in
   [%test_result: bool] raised ~expect:true
 
+(* The type checker raises a [Type_error] whose message names the fault; assert
+   both the exception and a stable fragment of its message. *)
+let check_type_error ~substring path =
+  match Main.get_ast path with
+  | exception Ast.Typecheck.Type_error (_, msg) ->
+      [%test_pred: string] (String.is_substring ~substring) msg
+  | _ -> failwithf "%s: expected a Type_error" path ()
+
+(* A name created with array(n) cannot be used as an integer value. *)
+let%test_unit "Main.get_ast type error array as scalar" =
+  check_type_error ~substring:"array 'a'" "type_error_array_as_scalar.cav"
+
+(* Calling a procedure that was never declared. *)
+let%test_unit "Main.get_ast type error undeclared procedure" =
+  check_type_error ~substring:"undeclared procedure"
+    "type_error_undeclared_proc.cav"
+
+(* Calling a declared procedure with the wrong argument count. *)
+let%test_unit "Main.get_ast type error call arity" =
+  check_type_error ~substring:"argument" "type_error_arity.cav"
+
+(* Only integer parameters are supported, so a bool-annotated one is rejected. *)
+let%test_unit "Main.get_ast type error bool parameter" =
+  check_type_error ~substring:"only integer parameters"
+    "type_error_bool_param.cav"
+
+(* Optional int parameter annotations are accepted and the program verifies. *)
+let%test_unit "Main.verify true annotated procedure" =
+  check_verify "verify_true_annotated_proc.cav" Valid
+
 (* ===== Prover answer -> result mapping (stubbed, no real solver call) ===== *)
 
 let%test_unit "Prover.result_of_answer mapping" =

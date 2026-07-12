@@ -73,6 +73,11 @@
    verify_true_if_local_guard.cav
    type_error_if_guard.cav
    type_error_assign_bool.cav
+   type_error_array_as_scalar.cav
+   type_error_undeclared_proc.cav
+   type_error_arity.cav
+   type_error_bool_param.cav
+   verify_true_annotated_proc.cav
    verify_false_writes_undeclared.cav
    verify_false_loop_unquantified.cav
    compile_overflow.cav

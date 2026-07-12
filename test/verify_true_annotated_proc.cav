@@ -1,0 +1,10 @@
+// Optional `int` parameter annotations are accepted (and checked); an annotated
+// procedure verifies exactly as its unannotated form would.
+procedure add (a: int, b: int) =
+  requires { true } ensures { x = a + b } writes { x }
+  x := a + b
+end
+{ true }
+x := 0;
+add(2, 3)
+{ x = 5 }

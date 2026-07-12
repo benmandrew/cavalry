@@ -1,0 +1,4 @@
+// Calling a procedure that was never declared is a type error.
+{ true }
+foo()
+{ true }

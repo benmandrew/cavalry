@@ -4,6 +4,9 @@
 %type <Ast.Triple.ut_t> procedure
 %type <Ast.Logic.arith_expr option> variant_opt
 %type <string list> variable_list
+%type <(string * Ast.Ty.t option) list> param_list
+%type <string * Ast.Ty.t option> param
+%type <Ast.Ty.t> ty
 %type <Ast.Program.ut_expr> command
 %type <Ast.Program.ut_expr> command_desc
 %type <Ast.Program.ut_expr> expr
@@ -18,8 +21,28 @@ top:
       { [ m ] }
 ;
 procedure:
-  | PROCEDURE f = VAR LPAREN ps = variable_list RPAREN EQ REQUIRES LBRACE p = logic_expr RBRACE ENSURES LBRACE q = logic_expr RBRACE variant = variant_opt WRITES LBRACE ws = variable_list RBRACE u = command END
+  | PROCEDURE f = VAR LPAREN ps = param_list RPAREN EQ REQUIRES LBRACE p = logic_expr RBRACE ENSURES LBRACE q = logic_expr RBRACE variant = variant_opt WRITES LBRACE ws = variable_list RBRACE u = command END
       { { Ast.Triple.p; q; variant; ws; f; ps; u } }
+;
+ty:
+  | TINT
+      { Ast.Ty.Int }
+  | TBOOL
+      { Ast.Ty.Bool }
+;
+param:
+  | v = VAR
+      { (v, None) }
+  | v = VAR COLON t = ty
+      { (v, Some t) }
+;
+param_list:
+  | p = param COMMA ps = param_list
+      { p :: ps }
+  | p = param
+      { [ p ] }
+  |
+      { [] }
 ;
 variant_opt:
   |
