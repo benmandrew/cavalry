@@ -13,5 +13,8 @@ exception Type_error of Loc.t option * string
 (** The source location of the offending construct (when known) and a
     human-readable message. *)
 
-val check : Triple.ut_t list -> unit
-(** @raise Type_error if the program is not well-typed. *)
+val check : Triple.ut_t list -> string list
+(** Returns the names of the program's boolean variables (inferred from boolean
+    contexts), which drives how {!Triple.translate} elaborates them.
+
+    @raise Type_error if the program is not well-typed. *)

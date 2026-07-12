@@ -100,7 +100,9 @@ let val_to_term : type a. g_vars:Vars.t -> ?l_vars:Vars.t -> a value -> T.term =
   | Unit _ -> unit_term
   | Int v -> T.t_nat_const v
   | Bool b -> if b then T.t_bool_true else T.t_bool_false
-  | VarInst x -> (
+  (* Integer and boolean variables resolve identically -- to their [vsymbol],
+     whose Why3 sort ([int] or [bool]) was fixed by {!Var_collection}. *)
+  | VarInst x | BoolVar x -> (
       match l_vars with
       | Some l_vars -> T.t_var @@ Vars.find_fallback x l_vars g_vars
       | None -> T.t_var @@ Vars.find x g_vars)
@@ -116,6 +118,13 @@ let rec expr_to_term : type a.
   in
   let open Arith in
   match e with
+  (* A boolean expression must translate to a Why3 *formula* (Prop), since it is
+     used as a guard or under the connectives. A boolean literal or variable is a
+     [bool]-sorted term, so coerce it with [= True]; comparisons and connectives
+     already yield formulas. *)
+  | Value (Bool b) -> if b then T.t_true else T.t_false
+  | Value (BoolVar _ as v) ->
+      T.t_equ (val_to_term ~g_vars ?l_vars v) T.t_bool_true
   | Value v -> val_to_term ~g_vars ?l_vars v
   | Eq (e, e') -> eq (f e) (f e')
   | Neq (e, e') -> neq (f e) (f e')
@@ -375,17 +384,30 @@ module Wlp = struct
     | IntExpr e -> T.t_and_simp (safe_e e) q
     | Print e -> T.t_and_simp (safe_e e) q
     | Seq (c, c') -> cmd c (cmd c' q)
-    | Assgn (x, e) | Let (x, e) ->
-        (* safe(e) /\ forall y. y = e -> q[ x <- y ] *)
-        let e_t = expr_to_term ~g_vars ~l_vars e in
+    | Assgn (x, ae) | Let (x, ae) ->
+        (* safe(e) /\ forall y. y = e -> q[ x <- y ]. The right-hand side may be
+           integer or boolean; [e_t] and the fresh [y] take the target's sort
+           ([fresh_like] rather than the integer [create_fresh]), so a boolean
+           assignment substitutes a boolean-sorted term. *)
+        let e_t, safe =
+          match ae with
+          | IntE e -> (expr_to_term ~g_vars ~l_vars e, safe_e e)
+          | BoolE e ->
+              (* The right-hand side is a formula; store it into the
+                 [bool]-sorted variable by coercing it back to a [bool] term. *)
+              ( T.t_if
+                  (expr_to_term ~g_vars ~l_vars e)
+                  T.t_bool_true T.t_bool_false,
+                safe_e e )
+        in
         let x = Vars.find_fallback x l_vars g_vars in
-        let y = Vars.create_fresh "y" in
+        let y = Vars.fresh_like x in
         let y_t = T.t_var y in
         let q_sub = T.t_subst_single x y_t q in
         let assign =
           T.(t_forall_close [ y ] [] (t_implies (t_equ y_t e_t) q_sub))
         in
-        T.t_and_simp (safe_e e) assign
+        T.t_and_simp safe assign
     | ArrMake (a, n) ->
         (* a := array(n): length := n, elements := all zeros.
            safe(n) /\ 0 <= n /\ q[ a <- const 0 ][ len(a) <- n ] *)

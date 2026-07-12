@@ -480,7 +480,7 @@ let%test_unit "Main.get_ast type error if guard" =
   in
   [%test_result: bool] raised ~expect:true
 
-(* Assignment RHS must be an int expr; `1 < 2` is boolean. *)
+(* A variable fixed as an integer cannot later be assigned a boolean. *)
 let%test_unit "Main.get_ast type error assign bool" =
   let raised =
     Exn.does_raise (fun () -> Main.get_ast "type_error_assign_bool.cav")
@@ -513,9 +513,33 @@ let%test_unit "Main.get_ast type error bool parameter" =
   check_type_error ~substring:"only integer parameters"
     "type_error_bool_param.cav"
 
+(* A boolean variable used in arithmetic. *)
+let%test_unit "Main.get_ast type error boolean in arithmetic" =
+  check_type_error ~substring:"expected int but got bool"
+    "type_error_bool_arith.cav"
+
+(* An integer variable used as a loop guard. *)
+let%test_unit "Main.get_ast type error integer guard variable" =
+  check_type_error ~substring:"expected bool but got int"
+    "type_error_var_guard.cav"
+
 (* Optional int parameter annotations are accepted and the program verifies. *)
 let%test_unit "Main.verify true annotated procedure" =
   check_verify "verify_true_annotated_proc.cav" Valid
+
+(* A boolean scalar variable inferred from its comparison RHS and used as an
+   [if] guard. *)
+let%test_unit "Main.verify true boolean scalar" =
+  check_verify "verify_true_bool_scalar.cav" Valid
+
+(* A boolean flag driving a loop guard, with a variant for total correctness. *)
+let%test_unit "Main.verify true boolean flag loop" =
+  check_verify "verify_true_bool_flag.cav" Valid
+
+(* The same boolean-scalar program runs to a concrete result (x = 5 >= 0, so the
+   [else] branch gives y = x = 5). *)
+let%test_unit "Main.exec boolean scalar" =
+  [%test_result: int] (Main.exec "verify_true_bool_scalar.cav") ~expect:5
 
 (* ===== Prover answer -> result mapping (stubbed, no real solver call) ===== *)
 

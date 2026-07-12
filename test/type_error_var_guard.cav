@@ -1,0 +1,9 @@
+// A loop guard must be boolean; `x` is an integer variable, so `while x` is a
+// type error.
+{ true }
+x := 5;
+while x do
+  invariant { true }
+  x := x - 1
+end
+{ true }

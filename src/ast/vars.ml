@@ -14,6 +14,11 @@ let union (a : t) (b : t) = M.union (fun _ v _ -> Some v) a b
 let fold = M.fold
 let create_fresh x = Why3.(Term.create_vsymbol (Ident.id_fresh x) Ty.ty_int)
 
+(* A boolean-valued variable. Its Why3 sort is [bool], distinct from the [int]
+   of [create_fresh], so terms over it are boolean-sorted. *)
+let create_fresh_bool x =
+  Why3.(Term.create_vsymbol (Ident.id_fresh x) Ty.ty_bool)
+
 (* An array-valued variable ([map int int]); its element store. *)
 let create_fresh_array x =
   Why3.Term.create_vsymbol (Why3.Ident.id_fresh x) (Lazy.force Arith.ty_int_map)

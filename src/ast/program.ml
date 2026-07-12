@@ -5,6 +5,7 @@ type _ value =
   | Int : int -> int value
   | Bool : bool -> bool value
   | VarInst : string -> int value
+  | BoolVar : string -> bool value
 [@@deriving sexp_of]
 
 type _ expr =
@@ -27,11 +28,17 @@ type _ expr =
   | Len : string -> int expr (* array length len(a) *)
 [@@deriving sexp_of]
 
+(* An expression of statically-unknown type: the right-hand side of an
+   assignment, which may be an integer or a boolean now that variables can be
+   either. The tag recovers the type the GADT erased so consumers (interpreter,
+   compiler, WLP) can dispatch on it. *)
+type anyexpr = IntE of int expr | BoolE of bool expr [@@deriving sexp_of]
+
 type cmd =
   | IntExpr of int expr
   | Seq of cmd * cmd
-  | Assgn of string * int expr
-  | Let of string * int expr
+  | Assgn of string * anyexpr
+  | Let of string * anyexpr
   | Proc of string * int expr list
   | If of bool expr * cmd * cmd
   | While of Logic.expr * Logic.arith_expr option * bool expr * cmd
@@ -92,6 +99,9 @@ let rec t_int_expr = function
 
 and t_bool_expr = function
   | UBool v -> Value (Bool v)
+  (* A bare variable in boolean position is a boolean variable; [Typecheck] has
+     already established that [v] is boolean-typed. *)
+  | UVar v -> Value (BoolVar v)
   | UEq (a, b) -> Eq (t_int_expr a, t_int_expr b)
   | UNeq (a, b) -> Neq (t_int_expr a, t_int_expr b)
   | ULt (a, b) -> Lt (t_int_expr a, t_int_expr b)
@@ -106,19 +116,27 @@ and t_bool_expr = function
 (* A bare expression used as a statement: its value is discarded. Any integer
    expression is valid here ([t_int_expr] raises [TypeError] on a boolean or a
    nested command); [Typecheck] has already ruled those out by this point. *)
-and expr_to_cmd e = IntExpr (t_int_expr e)
+let expr_to_cmd e = IntExpr (t_int_expr e)
 
-and t_cmd = function
-  | ULoc (loc, e) -> Located (loc, t_cmd e)
-  | USeq (c, c') -> Seq (t_cmd c, t_cmd c')
-  | UAssgn (s, e) -> Assgn (s, t_int_expr e)
-  | ULet (s, e) -> Let (s, t_int_expr e)
+(* Elaborate an assignment right-hand side at its target's type: a boolean-typed
+   variable ([is_bool x]) takes a boolean expression, any other an integer one.
+   [Typecheck] guarantees the source expression matches. *)
+let t_rhs ~is_bool x e =
+  if is_bool x then BoolE (t_bool_expr e) else IntE (t_int_expr e)
+
+let rec t_cmd ~is_bool c =
+  let recur = t_cmd ~is_bool in
+  match c with
+  | ULoc (loc, e) -> Located (loc, recur e)
+  | USeq (c, c') -> Seq (recur c, recur c')
+  | UAssgn (s, e) -> Assgn (s, t_rhs ~is_bool s e)
+  | ULet (s, e) -> Let (s, t_rhs ~is_bool s e)
   | UProc (f, ps) -> Proc (f, List.map ps ~f:t_int_expr)
-  | UIf (e, c, c') -> If (t_bool_expr e, t_cmd c, t_cmd c')
-  | UWhile (inv, variant, e, c) -> While (inv, variant, t_bool_expr e, t_cmd c)
+  | UIf (e, c, c') -> If (t_bool_expr e, recur c, recur c')
+  | UWhile (inv, variant, e, c) -> While (inv, variant, t_bool_expr e, recur c)
   | UPrint e -> Print (t_int_expr e)
   | UArrMake (a, n) -> ArrMake (a, t_int_expr n)
   | UArrAssgn (a, i, e) -> ArrAssgn (a, t_int_expr i, t_int_expr e)
   | v -> expr_to_cmd v
 
-let translate_cmd = t_cmd
+let translate_cmd ~is_bool = t_cmd ~is_bool

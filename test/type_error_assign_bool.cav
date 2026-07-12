@@ -1,3 +1,7 @@
+// `x` is fixed as an integer by `x := 5`, so later assigning it a boolean
+// (`1 < 2`) is a type error. (A variable whose first/only assignment is boolean
+// is instead inferred boolean -- see verify_true_bool_flag.cav.)
 { true }
+x := 5;
 x := 1 < 2
 { true }

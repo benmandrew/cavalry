@@ -1,0 +1,12 @@
+// A boolean scalar variable: [neg] is inferred boolean from its comparison
+// right-hand side, then used as an [if] guard. Runnable and verifiable.
+{ true }
+x := 5;
+neg := x < 0;
+if neg then
+  y := 0 - x
+else
+  y := x
+end;
+y
+{ y = 5 }

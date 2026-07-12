@@ -138,7 +138,7 @@ let gen_invariant =
     ]
 
 let gen_assgn =
-  G.map2 (fun x e -> Program.Assgn (x, e)) gen_var (gen_int_expr 3)
+  G.map2 (fun x e -> Program.Assgn (x, Program.IntE e)) gen_var (gen_int_expr 3)
 
 (* Loop-free command generator: assignments, sequencing, conditionals. Used for
    the dual (true-postcondition) property, where WLP is exact and the solver
@@ -180,9 +180,11 @@ let gen_while =
       G.bind gen_invariant (fun inv ->
           G.map2
             (fun t e ->
-              let decr = Assgn (c, Sub (Value (VarInst c), Value (Int 1))) in
+              let decr =
+                Assgn (c, IntE (Sub (Value (VarInst c), Value (Int 1))))
+              in
               let guard = Gt (Value (VarInst c), Value (Int 0)) in
-              While (inv, None, guard, Seq (Assgn (t, e), decr)))
+              While (inv, None, guard, Seq (Assgn (t, IntE e), decr)))
             (G.oneof_list others) (gen_int_expr 3)))
 
 (* Full command generator: adds shallow, rare [While] loops. Used for the
@@ -226,7 +228,8 @@ let gen_case gen_cmd = G.pair gen_s0 (G.sized_size (G.int_range 2 6) gen_cmd)
 let seed_cmd s0 c =
   List.fold_right
     (fun (x, v) acc ->
-      Program.Seq (Program.Assgn (x, Program.Value (Program.Int v)), acc))
+      Program.Seq
+        (Program.Assgn (x, Program.IntE (Program.Value (Program.Int v))), acc))
     s0 c
 
 let run s0 c =
@@ -288,7 +291,7 @@ let gen_framing =
 
 let framing_body hidden kh roles =
   let open Program in
-  let assign v k = Assgn (v, Plus (Value (VarInst v), Value (Int k))) in
+  let assign v k = Assgn (v, IntE (Plus (Value (VarInst v), Value (Int k)))) in
   let stmts =
     assign hidden kh
     :: List.filter_map
@@ -402,6 +405,7 @@ let value_to_cav : type a. a Program.value -> string = function
   | Program.Int i -> string_of_int i
   | Program.Bool b -> string_of_bool b
   | Program.VarInst x -> x
+  | Program.BoolVar x -> x
   | Program.Unit () -> "()"
 
 let rec expr_to_cav : type a. a Program.expr -> string =
@@ -477,11 +481,15 @@ let rec logic_to_cav = function
   | Logic.Forall (x, e) -> Printf.sprintf "forall %s . %s" x (logic_to_cav e)
   | Logic.Exists (x, e) -> Printf.sprintf "exists %s . %s" x (logic_to_cav e)
 
+let any_to_cav = function
+  | Program.IntE e -> expr_to_cav e
+  | Program.BoolE e -> expr_to_cav e
+
 let rec cmd_to_cav c =
   match c with
   | Program.Located (_, c) -> cmd_to_cav c
-  | Program.Assgn (x, e) -> Printf.sprintf "%s := %s" x (expr_to_cav e)
-  | Program.Let (x, e) -> Printf.sprintf "%s := %s" x (expr_to_cav e)
+  | Program.Assgn (x, e) -> Printf.sprintf "%s := %s" x (any_to_cav e)
+  | Program.Let (x, e) -> Printf.sprintf "%s := %s" x (any_to_cav e)
   | Program.Seq (a, b) -> Printf.sprintf "%s;\n%s" (cmd_to_cav a) (cmd_to_cav b)
   | Program.If (b, c0, c1) ->
       Printf.sprintf "if %s then\n%s\nelse\n%s\nend" (expr_to_cav b)

@@ -15,12 +15,18 @@ let rec equal_expr : type a. a expr -> a expr -> bool =
   | Mul (e0, e0'), Mul (e1, e1') -> equal_expr e0 e1 && equal_expr e0' e1'
   | _, _ -> false
 
+let equal_any (a0 : anyexpr) (a1 : anyexpr) =
+  match (a0, a1) with
+  | IntE e0, IntE e1 -> equal_expr e0 e1
+  | BoolE e0, BoolE e1 -> equal_expr e0 e1
+  | _ -> false
+
 let rec equal_cmd : cmd -> cmd -> bool =
  fun e0 e1 ->
   match (e0, e1) with
   | IntExpr e0, IntExpr e1 -> equal_expr e0 e1
   | Seq (e0, e0'), Seq (e1, e1') -> equal_cmd e0 e1 && equal_cmd e0' e1'
-  | Assgn (s0, e0), Assgn (s1, e1) -> String.equal s0 s1 && equal_expr e0 e1
+  | Assgn (s0, e0), Assgn (s1, e1) -> String.equal s0 s1 && equal_any e0 e1
   | If (e0, e0', e0''), If (e1, e1', e1'') ->
       equal_expr e0 e1 && equal_cmd e0' e1' && equal_cmd e0'' e1''
   | _, _ -> false
@@ -43,7 +49,7 @@ let%test_unit "Ast.Program.type_expr" =
   (* x := 1 + 2; if 1 = 2 then 5 else x * 5 end *)
   let expected =
     Seq
-      ( Assgn ("x", Plus (Value (Int 1), Value (Int 2))),
+      ( Assgn ("x", IntE (Plus (Value (Int 1), Value (Int 2)))),
         If
           ( Eq (Value (Int 1), Value (Int 2)),
             IntExpr (Value (Int 5)),
@@ -54,14 +60,14 @@ let%test_unit "Ast.Program.type_expr" =
       ( UAssgn ("x", UPlus (UInt 1, UInt 2)),
         UIf (UEq (UInt 1, UInt 2), UInt 5, UMul (UVar "x", UInt 5)) )
   in
-  let result = translate_cmd ut in
+  let result = translate_cmd ~is_bool:(fun _ -> false) ut in
   test_ast_eq ~expected result
 
 let%test_unit "Ast.Runtime.exec - assgn" =
   (* x := 1 + 2; x * 5 *)
   let c =
     Seq
-      ( Assgn ("x", Plus (Value (Int 1), Value (Int 2))),
+      ( Assgn ("x", IntE (Plus (Value (Int 1), Value (Int 2)))),
         IntExpr (Mul (Value (VarInst "x"), Value (Int 5))) )
   in
   let main = { f = ""; ps = []; c } in
@@ -84,9 +90,9 @@ let%test_unit "Ast.Runtime.exec - var-var-assgn" =
   (* x := 1; y := x + 2; y *)
   let c =
     Seq
-      ( Assgn ("x", Value (Int 1)),
+      ( Assgn ("x", IntE (Value (Int 1))),
         Seq
-          ( Assgn ("y", Plus (Value (VarInst "x"), Value (Int 2))),
+          ( Assgn ("y", IntE (Plus (Value (VarInst "x"), Value (Int 2)))),
             IntExpr (Value (VarInst "y")) ) )
   in
   let main = { f = ""; ps = []; c } in
@@ -105,9 +111,9 @@ let%test_unit "Ast.Runtime.exec - while" =
   (* x := 0; i := 0; while i < 10 do x := x + i; i := i + 1 end; x *)
   let c =
     Seq
-      ( Assgn ("x", Value (Int 0)),
+      ( Assgn ("x", IntE (Value (Int 0))),
         Seq
-          ( Assgn ("i", Value (Int 0)),
+          ( Assgn ("i", IntE (Value (Int 0))),
             Seq
               ( While
                   ( dummy_invariant,
@@ -115,8 +121,12 @@ let%test_unit "Ast.Runtime.exec - while" =
                     Lt (Value (VarInst "i"), Value (Int 10)),
                     Seq
                       ( Assgn
-                          ("x", Plus (Value (VarInst "x"), Value (VarInst "i"))),
-                        Assgn ("i", Plus (Value (VarInst "i"), Value (Int 1)))
+                          ( "x",
+                            IntE
+                              (Plus (Value (VarInst "x"), Value (VarInst "i")))
+                          ),
+                        Assgn
+                          ("i", IntE (Plus (Value (VarInst "i"), Value (Int 1))))
                       ) ),
                 IntExpr (Value (VarInst "x")) ) ) )
   in
@@ -132,17 +142,20 @@ let dummy_invariant = Logic.(Eq (Int 1, Int 2))
 let%test_unit "Ast.Runtime.exec_env - terminating loop returns final env" =
   let c =
     Seq
-      ( Assgn ("x", Value (Int 0)),
+      ( Assgn ("x", IntE (Value (Int 0))),
         Seq
-          ( Assgn ("i", Value (Int 0)),
+          ( Assgn ("i", IntE (Value (Int 0))),
             While
               ( dummy_invariant,
                 None,
                 Lt (Value (VarInst "i"), Value (Int 3)),
                 Seq
-                  ( Assgn ("x", Plus (Value (VarInst "x"), Value (VarInst "i"))),
-                    Assgn ("i", Plus (Value (VarInst "i"), Value (Int 1))) ) )
-          ) )
+                  ( Assgn
+                      ( "x",
+                        IntE (Plus (Value (VarInst "x"), Value (VarInst "i")))
+                      ),
+                    Assgn ("i", IntE (Plus (Value (VarInst "i"), Value (Int 1))))
+                  ) ) ) )
   in
   match exec_env ~fuel:100 [ { f = ""; ps = []; c } ] with
   | Terminated env ->
@@ -155,12 +168,12 @@ let%test_unit "Ast.Runtime.exec_env - terminating loop returns final env" =
 let%test_unit "Ast.Runtime.exec_env - non-terminating loop runs out of fuel" =
   let c =
     Seq
-      ( Assgn ("i", Value (Int 0)),
+      ( Assgn ("i", IntE (Value (Int 0))),
         While
           ( dummy_invariant,
             None,
             Lt (Value (Int 0), Value (Int 1)),
-            Assgn ("i", Plus (Value (VarInst "i"), Value (Int 1))) ) )
+            Assgn ("i", IntE (Plus (Value (VarInst "i"), Value (Int 1)))) ) )
   in
   let out_of_fuel =
     match exec_env ~fuel:50 [ { f = ""; ps = []; c } ] with
@@ -213,7 +226,9 @@ let%test_unit "Ast.Runtime.exec - function" =
     }
   in
   let program ret =
-    List.map [ fn; main ret ] ~f:(fun ut -> Triple.translate ut |> to_proc_t)
+    List.map
+      [ fn; main ret ]
+      ~f:(fun ut -> Triple.translate ~is_bool:(fun _ -> false) ut |> to_proc_t)
   in
   let result = exec (program "x") in
   [%test_result: int] result ~expect:8;

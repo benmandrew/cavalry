@@ -103,13 +103,77 @@ let program_arrays (program : Triple.ut_t list) =
               (SS.union (arrays_logic t.q) (arrays_measure t.variant)))))
     SS.empty program
 
+(* ===== Boolean-variable inference =====
+   A variable is boolean when a boolean context forces it, with no annotation
+   required: it is assigned a syntactically-boolean expression (a comparison, a
+   connective, or a literal), or it appears as a bare variable in a boolean
+   position -- a loop/if guard, or an operand of &&/||/!. A bare variable merely
+   copied from another (`y := b`) is *not* inferred boolean; that ambiguous case
+   is left to a future annotation. Consistency -- that such a name is not also
+   used as an integer or array -- is checked afterwards by the main pass. *)
+
+let is_syntactically_bool (e : Program.ut_expr) =
+  match e with
+  | UBool _ | UEq _ | UNeq _ | ULt _ | ULeq _ | UGt _ | UGeq _ | UAnd _ | UOr _
+  | UNot _ ->
+      true
+  | _ -> false
+
+let rec classify_bool (e : Program.ut_expr) =
+  let open Program in
+  let ( ++ ) = SS.union in
+  (* A bare variable occupying a position that demands a boolean. *)
+  let bvar = function UVar x -> SS.singleton x | _ -> SS.empty in
+  match e with
+  | UAssgn (x, rhs) | ULet (x, rhs) ->
+      let here =
+        if is_syntactically_bool rhs then SS.singleton x else SS.empty
+      in
+      here ++ classify_bool rhs
+  | UAnd (a, b) | UOr (a, b) ->
+      bvar a ++ bvar b ++ classify_bool a ++ classify_bool b
+  | UNot a -> bvar a ++ classify_bool a
+  | UIf (c, a, b) ->
+      bvar c ++ classify_bool c ++ classify_bool a ++ classify_bool b
+  | UWhile (_inv, _variant, c, body) ->
+      bvar c ++ classify_bool c ++ classify_bool body
+  | USeq (a, b) -> classify_bool a ++ classify_bool b
+  | ULoc (_, e) | UPrint e -> classify_bool e
+  | UArrMake (_, n) -> classify_bool n
+  | UArrAssgn (_, i, e) -> classify_bool i ++ classify_bool e
+  | UProc (_, args) ->
+      List.fold_left (fun s a -> s ++ classify_bool a) SS.empty args
+  | UEq (a, b)
+  | UNeq (a, b)
+  | ULt (a, b)
+  | ULeq (a, b)
+  | UGt (a, b)
+  | UGeq (a, b)
+  | UPlus (a, b)
+  | USub (a, b)
+  | UMul (a, b)
+  | UDiv (a, b)
+  | UMod (a, b) ->
+      classify_bool a ++ classify_bool b
+  | UGet (_, i) -> classify_bool i
+  | UInt _ | UBool _ | UVar _ | ULen _ -> SS.empty
+
+let program_bools (program : Triple.ut_t list) =
+  List.fold_left
+    (fun s (t : Triple.ut_t) -> SS.union s (classify_bool t.u))
+    SS.empty program
+
 (* ===== Expression typing ===== *)
 
-type env = { arrays : SS.t; procs : (string * int) list }
+type env = { arrays : SS.t; bools : SS.t; procs : (string * int) list }
 
 let require_array env loc a =
   if not (SS.mem a env.arrays) then
     fail loc "'%s' is used as an array but is not one" a
+
+(* The type a bare scalar variable has: boolean if inferred so, otherwise
+   integer. (Array names never reach here -- they are rejected as scalars.) *)
+let scalar_type env x = if SS.mem x env.bools then Ty.Bool else Ty.Int
 
 let rec synth env loc (e : Program.ut_expr) : Ty.t =
   let open Program in
@@ -118,8 +182,8 @@ let rec synth env loc (e : Program.ut_expr) : Ty.t =
   | UBool _ -> Ty.Bool
   | UVar x ->
       if SS.mem x env.arrays then
-        fail loc "array '%s' cannot be used as an integer value" x
-      else Ty.Int
+        fail loc "array '%s' cannot be used as a scalar value" x
+      else scalar_type env x
   | UGet (a, i) ->
       require_array env loc a;
       expect env loc Ty.Int i;
@@ -183,7 +247,9 @@ let rec check_cmd env loc (e : Program.ut_expr) : unit =
           "array '%s' cannot be assigned as a scalar (use '%s[i] := ...' or \
            '%s := array(n)')"
           x x x;
-      expect env loc Ty.Int e
+      (* A boolean variable takes a boolean right-hand side, an integer one an
+         integer -- assigning across types is a type error. *)
+      expect env loc (scalar_type env x) e
   | UProc (f, args) -> check_call env loc f args
   | UIf (c, a, b) ->
       expect env loc Ty.Bool c;
@@ -225,8 +291,26 @@ let check_params (ps : (string * Ty.t option) list) =
             name (Ty.to_string t))
     ps
 
-let check (program : Triple.ut_t list) : unit =
+let check (program : Triple.ut_t list) : string list =
   let arrays = program_arrays program in
+  let bools = program_bools program in
+  (* A name cannot be both an array and a boolean. *)
+  (match SS.choose_opt (SS.inter arrays bools) with
+  | Some x -> fail None "variable '%s' is used as both an array and a boolean" x
+  | None -> ());
+  (* Boolean procedure parameters are not yet supported; reject an inferred one
+     (an annotated one is caught by [check_params]). *)
+  let params =
+    List.fold_left
+      (fun s (t : Triple.ut_t) ->
+        List.fold_left (fun s (p, _) -> SS.add p s) s t.ps)
+      SS.empty program
+  in
+  (match SS.choose_opt (SS.inter params bools) with
+  | Some x ->
+      fail None
+        "parameter '%s' is boolean, but only integer parameters are supported" x
+  | None -> ());
   (* Every triple but the last is a named procedure; the last is [main] and is
      not callable. Signatures are (name, arity). *)
   let procs =
@@ -237,9 +321,10 @@ let check (program : Triple.ut_t list) : unit =
           rev_procs
     | [] -> []
   in
-  let env = { arrays; procs } in
+  let env = { arrays; bools; procs } in
   List.iter
     (fun (t : Triple.ut_t) ->
       check_params t.ps;
       check_cmd env None t.u)
-    program
+    program;
+  SS.elements bools
