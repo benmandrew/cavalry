@@ -4,7 +4,7 @@
 
 Cavalry is a mini programming language of my own design where written programs can be "verified", i.e. the implementation of the program can be rigorously checked against its logical specification for correctness, without ever running the code.
 
-Programs are built from procedures, loops, and bounded arrays, and their specifications quantify over program state with `forall` and `exists`. Verification covers not just partial correctness but termination too: loops and recursive procedures carry `variant` measures that prove they finish, giving total correctness. A verified program can then be compiled to a native executable.
+Programs are built from integers, booleans, bounded arrays, loops, and procedures that can return values, and their specifications quantify over program state with `forall` and `exists`. Verification covers not just partial correctness but termination too: loops and recursive procedures carry `variant` measures that prove they finish, giving total correctness. A verified program can then be compiled to a native executable.
 
 Details about Cavalry and Hoare logic are in an article on my website [here](https://www.benmandrew.com/articles/cavalry).
 
@@ -126,6 +126,21 @@ directly.
 </a>
 <!-- /snippet -->
 
+### Returning a value
+
+A procedure can also return a value. A `returns { r : ty }` clause names the
+result binder its `ensures` constrains; the body assigns it, and a call binds the
+result at an assignment. The caller still reasons from the contract alone.
+
+<!-- snippet: returning-value -->
+<a href="assets/readme-snippets/snippets/returning-value.cav">
+  <picture>
+    <source media="(prefers-color-scheme: dark)" srcset="assets/snippet-returning-value-dark.svg">
+    <img alt="Cavalry code snippet" src="assets/snippet-returning-value-light.svg">
+  </picture>
+</a>
+<!-- /snippet -->
+
 ### Filling an array
 
 Bounded arrays are created with `array(n)` (zero-initialised), indexed with
@@ -151,6 +166,22 @@ a property — here, that a value written into the array is still present.
   <picture>
     <source media="(prefers-color-scheme: dark)" srcset="assets/snippet-array-exists-dark.svg">
     <img alt="Cavalry code snippet" src="assets/snippet-array-exists-light.svg">
+  </picture>
+</a>
+<!-- /snippet -->
+
+### Booleans and compound guards
+
+Booleans are first-class values. A guard may combine comparisons with `&&`, `||`,
+and `!`, and short-circuits like most languages — so an array read stays inside
+its bounds. A boolean variable holds a flag, appears as a bare proposition in a
+specification, and an `if` may drop its `else` when the missing branch is a no-op.
+
+<!-- snippet: booleans -->
+<a href="assets/readme-snippets/snippets/booleans.cav">
+  <picture>
+    <source media="(prefers-color-scheme: dark)" srcset="assets/snippet-booleans-dark.svg">
+    <img alt="Cavalry code snippet" src="assets/snippet-booleans-light.svg">
   </picture>
 </a>
 <!-- /snippet -->
