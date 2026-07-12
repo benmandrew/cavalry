@@ -23,6 +23,14 @@
       { Forall (x, e) }
   | EXISTS x = VAR DOT e = logic_expr
       { Exists (x, e) }
+  (* Parenthesised proposition, e.g. [A && (forall j. P)]. A lone parenthesised
+     atom -- [(x)] or [(a[i])] -- is ambiguous between this and a parenthesised
+     arithmetic operand (as in [(x) = y]); Menhir reports two benign
+     reduce/reduce conflicts there and resolves them, by rule order, to the
+     proposition reading (which is what [(found)] wants). The only forms this
+     rejects are pointless ones like [(x) = y], written [x = y] instead. *)
+  | LPAREN e = logic_expr RPAREN
+      { e }
   | e0 = arith_expr EQ e1 = arith_expr
       { Eq (e0, e1) }
   | e0 = arith_expr NEQ e1 = arith_expr

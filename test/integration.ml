@@ -584,6 +584,10 @@ let%test_unit "Main.verify true boolean array read" =
 let%test_unit "Main.exec boolean array" =
   [%test_result: int] (Main.exec "verify_true_bool_array_read.cav") ~expect:1
 
+(* A parenthesised quantifier grouped inside an assertion. *)
+let%test_unit "Main.verify true parenthesised quantifier" =
+  check_verify "verify_true_paren_quantifier.cav" Valid
+
 (* The same boolean-scalar program runs to a concrete result (x = 5 >= 0, so the
    [else] branch gives y = x = 5). *)
 let%test_unit "Main.exec boolean scalar" =
