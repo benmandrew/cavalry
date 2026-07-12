@@ -141,6 +141,8 @@ let rec arrays_expr : type a. a expr -> Str_set.t = function
   | Gt (a, b)
   | Geq (a, b) ->
       Str_set.union (arrays_expr a) (arrays_expr b)
+  | And (a, b) | Or (a, b) -> Str_set.union (arrays_expr a) (arrays_expr b)
+  | Not a -> arrays_expr a
 
 let rec arrays = function
   | Located (_, c) -> arrays c
@@ -188,14 +190,22 @@ let emit_bool ~ops ~locals (e : bool expr) : string =
     Printf.sprintf "(%s %s %s)" op (emit_int ~ops ~locals a)
       (emit_int ~ops ~locals b)
   in
-  match e with
-  | Value (Bool b) -> string_of_bool b
-  | Eq (a, b) -> cmp ops.eq a b
-  | Neq (a, b) -> Printf.sprintf "(not %s)" (cmp ops.eq a b)
-  | Lt (a, b) -> cmp ops.lt a b
-  | Leq (a, b) -> cmp ops.leq a b
-  | Gt (a, b) -> cmp ops.gt a b
-  | Geq (a, b) -> cmp ops.geq a b
+  (* [go] is explicitly recursive because [&&]/[||]/[!] nest over boolean
+     operands, unlike the flat comparisons. *)
+  let rec go (e : bool expr) : string =
+    match e with
+    | Value (Bool b) -> string_of_bool b
+    | Eq (a, b) -> cmp ops.eq a b
+    | Neq (a, b) -> Printf.sprintf "(not %s)" (cmp ops.eq a b)
+    | Lt (a, b) -> cmp ops.lt a b
+    | Leq (a, b) -> cmp ops.leq a b
+    | Gt (a, b) -> cmp ops.gt a b
+    | Geq (a, b) -> cmp ops.geq a b
+    | And (a, b) -> Printf.sprintf "(%s && %s)" (go a) (go b)
+    | Or (a, b) -> Printf.sprintf "(%s || %s)" (go a) (go b)
+    | Not a -> Printf.sprintf "(not %s)" (go a)
+  in
+  go e
 
 (* Flatten the (possibly unbalanced) [Seq] tree into left-to-right statement
    order, so a [Let] can scope over everything sequenced after it. *)

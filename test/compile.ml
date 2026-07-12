@@ -63,6 +63,23 @@ let%test_unit "Compile.emit - if compiles both branches" =
   List.iter [ "(if "; "Z.lt"; "then"; "else" ] ~f:(fun substring ->
       [%test_pred: string] (contains ~substring) out)
 
+let%test_unit "Compile.emit - boolean connectives use short-circuit operators" =
+  (* if (x < 1 || x > 9) && !(x = 5) then 1 else 0 end -- the connectives must
+     emit OCaml's short-circuiting [&&]/[||]/[not], not a strict conjunction. *)
+  let body =
+    If
+      ( And
+          ( Or
+              ( Lt (Value (VarInst "x"), Value (Int 1)),
+                Gt (Value (VarInst "x"), Value (Int 9)) ),
+            Not (Eq (Value (VarInst "x"), Value (Int 5))) ),
+        IntExpr (Value (Int 1)),
+        IntExpr (Value (Int 0)) )
+  in
+  let out = emit_main body in
+  List.iter [ "&&"; "||"; "not" ] ~f:(fun substring ->
+      [%test_pred: string] (contains ~substring) out)
+
 let%test_unit "Compile.emit - while emits a Zarith-guarded loop" =
   (* while i < 10 do invariant { true } i := i + 1 end *)
   let body =

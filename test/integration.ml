@@ -14,6 +14,16 @@ let check_verify path expect =
 let%test_unit "Main.exec if" =
   [%test_result: int] (Main.exec "exec_if.cav") ~expect:182
 
+(* One-armed [if]: the first guard is taken, the second is skipped (its absent
+   [else] is a no-op), so x = 5. *)
+let%test_unit "Main.exec one-armed if" =
+  [%test_result: int] (Main.exec "exec_if_noelse.cav") ~expect:5
+
+(* [&&]/[||] short-circuit at runtime, so the out-of-bounds read guarded by a
+   decided condition is never evaluated and the run does not raise: 2 + 30. *)
+let%test_unit "Main.exec short-circuit guards" =
+  [%test_result: int] (Main.exec "exec_short_circuit.cav") ~expect:32
+
 (* [//] line comments are stripped by the lexer, so a program peppered with
    them evaluates identically to exec_if.cav: 2 + 60 * 3 = 182. *)
 let%test_unit "Main.exec line comments" =
@@ -69,6 +79,17 @@ let%test_unit "Main.exec unbound raises" =
 (* ===== verify: expected Valid ===== *)
 
 let%test_unit "Main.verify true if" = check_verify "verify_true_if.cav" Valid
+
+(* One-armed [if]: the implicit (empty) else preserves the state, so the
+   postcondition holds on the guard-false path. *)
+let%test_unit "Main.verify true one-armed if" =
+  check_verify "verify_true_if_noelse.cav" Valid
+
+(* Compound guard with a short-circuiting [&&]: [a[i]] need only be in bounds
+   when [i < n] holds, which is exactly what the short-circuit definedness
+   obligation grants. The headline case for compound boolean guards. *)
+let%test_unit "Main.verify true linear search" =
+  check_verify "verify_true_search.cav" Valid
 
 let%test_unit "Main.verify true while" =
   check_verify "verify_true_while.cav" Valid

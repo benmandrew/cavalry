@@ -149,6 +149,10 @@ let rec exec_expr : type a. Runtime.t -> a expr -> a =
   | Geq (a, b) ->
       let v1 = exec_expr r a in
       v1 >= exec_expr r b
+  (* Short-circuiting, matching OCaml's [&&]/[||] and the compiled backend. *)
+  | And (a, b) -> exec_expr r a && exec_expr r b
+  | Or (a, b) -> exec_expr r a || exec_expr r b
+  | Not a -> not (exec_expr r a)
 
 and exec_cmd ?(fuel = ref max_int) r c : int * Runtime.t =
   let exec_cmd r c = exec_cmd ~fuel r c in

@@ -1,0 +1,12 @@
+// One-armed if at runtime: the first guard is taken (x becomes 5), the second
+// is skipped (its absent else is a no-op), so the result is 5.
+{ true }
+x := 0;
+if 1 = 1 then
+  x := x + 5
+end;
+if 1 = 2 then
+  x := x + 100
+end;
+x
+{ true }

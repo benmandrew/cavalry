@@ -1,0 +1,7 @@
+// One-armed if: an absent else is a no-op, so when the guard is false the
+// state is unchanged and the postcondition still holds.
+{ x = 7 }
+if x < 0 then
+  x := 0
+end
+{ x = 7 }
