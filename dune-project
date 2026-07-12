@@ -37,4 +37,23 @@
     (= "0.29.0")
     :with-test))))
 
+;; The browser build (web/) is a separate package so its js_of_ocaml/Z3-wasm
+;; toolchain stays out of the core [cavalry] dependencies -- `opam install
+;; cavalry` (the CLI/library) does not drag in js_of_ocaml. The dev shell
+;; installs both via `opam install --deps-only .`. See web/README.md.
+(package
+ (name cavalry-web)
+ (synopsis "Client-side (browser) build of the Cavalry verifier")
+ (description
+  "Compiles the Cavalry verification pipeline to JavaScript with js_of_ocaml and pairs it with a WebAssembly build of Z3, so programs can be verified entirely in the browser.")
+ (depends
+  (ocaml (>= "4.14"))
+  dune
+  cavalry
+  js_of_ocaml
+  js_of_ocaml-compiler
+  zarith_stubs_js
+  yojson
+  crunch))
+
 (using menhir 2.1)
