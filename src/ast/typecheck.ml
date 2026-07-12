@@ -273,7 +273,8 @@ type env = {
   arrays : SS.t;
   bools : SS.t;
   bool_arrays : SS.t;
-  procs : (string * Ty.t list) list;
+  procs : (string * (Ty.t list * Ty.t option)) list;
+      (* per procedure: its parameter types and its optional result type *)
 }
 
 (* The element type of an array: boolean if inferred so, otherwise integer. *)
@@ -406,16 +407,20 @@ let check_measure env = function
 
 (* ===== Command typing ===== *)
 
+(* Check a call's arguments against [f]'s signature and return its result type
+   (if any). Shared by a bare call statement (result discarded) and [x := f(..)]
+   (result bound). *)
 let check_call env loc f args =
   match List.assoc_opt f env.procs with
   | None -> fail loc "call to undeclared procedure '%s'" f
-  | Some tys ->
+  | Some (tys, result) ->
       let arity = List.length tys in
       let n = List.length args in
       if n <> arity then
         fail loc "procedure '%s' expects %d argument(s) but got %d" f arity n;
       (* Each actual must match its formal's type. *)
-      List.iter2 (fun ty arg -> expect env loc ty arg) tys args
+      List.iter2 (fun ty arg -> expect env loc ty arg) tys args;
+      result
 
 let rec check_cmd env loc (e : Program.ut_expr) : unit =
   let open Program in
@@ -424,6 +429,18 @@ let rec check_cmd env loc (e : Program.ut_expr) : unit =
   | USeq (a, b) ->
       check_cmd env loc a;
       check_cmd env loc b
+  (* [x := f(args)]: the call must return a value, and its result type must
+     match the target variable's type. *)
+  | UAssgn (x, UProc (f, args)) -> (
+      if SS.mem x env.arrays then
+        fail loc "array '%s' cannot be assigned a scalar result" x;
+      let xt = scalar_type env x in
+      match check_call env loc f args with
+      | None -> fail loc "procedure '%s' does not return a value" f
+      | Some ty ->
+          if not (Ty.equal ty xt) then
+            fail loc "cannot assign %s result of '%s' to %s variable '%s'"
+              (Ty.to_string ty) f (Ty.to_string xt) x)
   | UAssgn (x, e) | ULet (x, e) ->
       if SS.mem x env.arrays then
         fail loc
@@ -433,7 +450,8 @@ let rec check_cmd env loc (e : Program.ut_expr) : unit =
       (* A boolean variable takes a boolean right-hand side, an integer one an
          integer -- assigning across types is a type error. *)
       expect env loc (scalar_type env x) e
-  | UProc (f, args) -> check_call env loc f args
+  (* A bare call as a statement: any result is discarded. *)
+  | UProc (f, args) -> ignore (check_call env loc f args : Ty.t option)
   | UIf (c, a, b) ->
       expect env loc Ty.Bool c;
       check_cmd env loc a;
@@ -478,6 +496,19 @@ let check_params ~arrays ~bools (ps : (string * Ty.t option) list) =
           fail None "array parameter '%s' is not supported" name)
     ps
 
+(* Targets of a call-assignment [x := f(args)]: the pairs [(x, f)]. Used to
+   classify [x] boolean when [f]'s result is boolean, mirroring how a
+   syntactically-boolean right-hand side classifies its target. *)
+let rec call_targets (e : Program.ut_expr) : (string * string) list =
+  let open Program in
+  match e with
+  | UAssgn (x, UProc (f, _)) -> [ (x, f) ]
+  | USeq (a, b) -> call_targets a @ call_targets b
+  | ULoc (_, e) -> call_targets e
+  | UIf (_, a, b) -> call_targets a @ call_targets b
+  | UWhile (_, _, _, body) -> call_targets body
+  | _ -> []
+
 type checked = {
   bool_vars : string list;  (** names of the program's boolean variables *)
   bool_arrays : string list;  (** names of the program's boolean arrays *)
@@ -488,8 +519,34 @@ type checked = {
 let check (program : Triple.ut_t list) : checked =
   let arrays = program_arrays program in
   let bool_arrays = program_bool_arrays program in
+  (* Each procedure's declared result type, from its [returns] clause (the last
+     triple, [main], is not callable and returns nothing). Result types are
+     explicit annotations, so this needs no inference. *)
+  let proc_ret f =
+    List.find_map
+      (fun (t : Triple.ut_t) ->
+        if String.equal t.f f then Some (Option.map snd t.result) else None)
+      program
+    |> Option.join
+  in
+  (* Result binders declared boolean, and targets of [x := f(..)] where [f]
+     returns a boolean: both make their name boolean, like an annotated
+     parameter or a syntactically-boolean assignment. *)
+  let result_bool_names =
+    List.filter_map
+      (fun (t : Triple.ut_t) ->
+        match t.result with Some (r, Ty.Bool) -> Some r | _ -> None)
+      program
+    |> SS.of_list
+  in
+  let call_bool_targets =
+    List.concat_map (fun (t : Triple.ut_t) -> call_targets t.u) program
+    |> List.filter_map (fun (x, f) ->
+        match proc_ret f with Some Ty.Bool -> Some x | _ -> None)
+    |> SS.of_list
+  in
   (* Boolean names: inferred from bodies and assertions, plus any parameter
-     annotated [: bool]. *)
+     annotated [: bool], plus boolean result binders and call targets. *)
   let annotated_bools =
     List.fold_left
       (fun s (t : Triple.ut_t) ->
@@ -503,24 +560,41 @@ let check (program : Triple.ut_t list) : checked =
      from a boolean (`y := b`) is itself boolean. *)
   let bools =
     saturate_bools
-      (SS.union (program_bools program) annotated_bools)
+      (SS.union
+         (SS.union (program_bools program) annotated_bools)
+         (SS.union result_bool_names call_bool_targets))
       (program_copy_edges program)
   in
   (* A name cannot be both an array and a boolean. *)
   (match SS.choose_opt (SS.inter arrays bools) with
   | Some x -> fail None "variable '%s' is used as both an array and a boolean" x
   | None -> ());
+  (* Validate each result binder against its declared type: it must be a scalar,
+     and an [int] binder must not be used as a boolean. *)
+  List.iter
+    (fun (t : Triple.ut_t) ->
+      match t.result with
+      | None -> ()
+      | Some (r, ty) ->
+          if SS.mem r arrays then
+            fail None "result binder '%s' cannot be an array" r;
+          if Ty.equal ty Ty.Int && SS.mem r bools then
+            fail None
+              "result binder '%s' is annotated int but used as a boolean" r)
+    program;
   (* A parameter's type: boolean if inferred or annotated so, else integer.
      (Array parameters are rejected by [check_params].) *)
   let param_ty n = if SS.mem n bools then Ty.Bool else Ty.Int in
   (* Every triple but the last is a named procedure; the last is [main] and is
-     not callable. A signature is the procedure's parameter types. *)
+     not callable. A signature is the parameter types and the result type. *)
   let procs =
     match List.rev program with
     | _main :: rev_procs ->
         List.rev_map
           (fun (t : Triple.ut_t) ->
-            (t.f, List.map (fun (n, _) -> param_ty n) t.ps))
+            ( t.f,
+              (List.map (fun (n, _) -> param_ty n) t.ps, Option.map snd t.result)
+            ))
           rev_procs
     | [] -> []
   in
@@ -537,5 +611,5 @@ let check (program : Triple.ut_t list) : checked =
     bool_vars = SS.elements bools;
     bool_arrays = SS.elements bool_arrays;
     proc_bool_params =
-      List.map (fun (f, tys) -> (f, List.map (Ty.equal Ty.Bool) tys)) procs;
+      List.map (fun (f, (tys, _)) -> (f, List.map (Ty.equal Ty.Bool) tys)) procs;
   }

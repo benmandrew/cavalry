@@ -1,0 +1,12 @@
+// A boolean-returning procedure. The bidirectional postcondition lets the
+// caller conclude the result at a concrete argument.
+procedure non_neg (n) returns { r : bool } =
+  requires { true }
+  ensures { (n >= 0 -> r) && (r -> n >= 0) }
+  writes { }
+  r := n >= 0
+end
+
+{ true }
+b := non_neg(5)
+{ b }

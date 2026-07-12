@@ -80,11 +80,16 @@ let collect_program c =
     | Located (_, c) -> collect_cmd c
     | IntExpr e -> collect_expr e
     | Seq (c, c') -> Str_set.union (collect_cmd c) (collect_cmd c')
-    | Assgn (x, e) | Let (x, e) -> Str_set.(union (singleton x) (collect_any e))
+    | Assgn (x, e) | Let (x, e) | ResAssgn (x, e) ->
+        Str_set.(union (singleton x) (collect_any e))
     | Proc (_f, ps) ->
         List.fold_left
           (fun s e -> collect_any e |> Str_set.union s)
           Str_set.empty ps
+    | CallAssgn (x, _f, ps) ->
+        List.fold_left
+          (fun s e -> collect_any e |> Str_set.union s)
+          (Str_set.singleton x) ps
     | If (b, e, e') ->
         Str_set.union (collect_expr b)
           (Str_set.union (collect_cmd e) (collect_cmd e'))
@@ -155,14 +160,14 @@ let arrays_program c =
   let rec cmd = function
     | Located (_, c) -> cmd c
     | IntExpr e | Print e -> expr e
-    | Assgn (_, e) | Let (_, e) -> any e
+    | Assgn (_, e) | Let (_, e) | ResAssgn (_, e) -> any e
     | Seq (a, b) -> Str_set.union (cmd a) (cmd b)
     | If (b, c, c') -> Str_set.union (expr b) (Str_set.union (cmd c) (cmd c'))
     | While (inv, variant, b, c) ->
         Str_set.union
           (Str_set.union (arrays_logic inv) (arrays_measure variant))
           (Str_set.union (expr b) (cmd c))
-    | Proc (_, ps) ->
+    | Proc (_, ps) | CallAssgn (_, _, ps) ->
         List.fold_left (fun s e -> Str_set.union s (any e)) Str_set.empty ps
     | ArrMake (a, n) -> Str_set.add a (expr n)
     | ArrAssgn (a, i, e) -> Str_set.add a (Str_set.union (expr i) (any e))
@@ -204,12 +209,15 @@ let bools_program c =
   let rec cmd = function
     | Located (_, c) -> cmd c
     | IntExpr e | Print e -> expr e
-    | Assgn (x, BoolE e) | Let (x, BoolE e) -> Str_set.add x (expr e)
-    | Assgn (_, IntE e) | Let (_, IntE e) -> expr e
+    | Assgn (x, BoolE e) | Let (x, BoolE e) | ResAssgn (x, BoolE e) ->
+        Str_set.add x (expr e)
+    | Assgn (_, IntE e) | Let (_, IntE e) | ResAssgn (_, IntE e) -> expr e
     | Seq (a, b) -> Str_set.union (cmd a) (cmd b)
     | If (b, c, c') -> Str_set.union (expr b) (Str_set.union (cmd c) (cmd c'))
     | While (_inv, _variant, b, c) -> Str_set.union (expr b) (cmd c)
-    | Proc (_, ps) ->
+    (* A call-assignment's target is boolean iff the callee returns a boolean;
+       that is decided in [collect] from the callee's [result] type, not here. *)
+    | Proc (_, ps) | CallAssgn (_, _, ps) ->
         List.fold_left (fun s e -> Str_set.union s (any e)) Str_set.empty ps
     | ArrMake (_, n) -> expr n
     | ArrAssgn (_, i, e) -> Str_set.union (expr i) (any e)
@@ -246,11 +254,11 @@ let bool_arrays_program c =
   let rec cmd = function
     | Located (_, c) -> cmd c
     | IntExpr e | Print e -> expr e
-    | Assgn (_, e) | Let (_, e) -> any e
+    | Assgn (_, e) | Let (_, e) | ResAssgn (_, e) -> any e
     | Seq (a, b) -> Str_set.union (cmd a) (cmd b)
     | If (b, c, c') -> Str_set.union (expr b) (Str_set.union (cmd c) (cmd c'))
     | While (_inv, _variant, b, c) -> Str_set.union (expr b) (cmd c)
-    | Proc (_, ps) ->
+    | Proc (_, ps) | CallAssgn (_, _, ps) ->
         List.fold_left (fun s e -> Str_set.union s (any e)) Str_set.empty ps
     | ArrMake (_, n) -> expr n
     | ArrAssgn (a, i, BoolE e) ->
@@ -325,8 +333,50 @@ let collect_procedure globals (t : Triple.t) =
   let c_vars = collect_program t.c in
   let v_vars = collect_measure t.variant in
   let vars = Str_set.(union v_vars (union p_vars (union q_vars c_vars))) in
+  (* The result binder is a procedure-local, even if it happens not to appear in
+     the body or postcondition (so it always gets a [vsymbol] for the WLP). *)
+  let vars =
+    match t.result with Some (r, _) -> Str_set.add r vars | None -> vars
+  in
   (* If global variables occur in the procedure, don't add them as local variables *)
   Str_set.fold (fun global vars -> Str_set.remove global vars) globals vars
+
+(* The declared result type of procedure [f], looked up by name. [None] if [f]
+   is unknown or returns nothing. *)
+let proc_result_ty (program : Triple.t list) f =
+  List.find_map
+    (fun (t : Triple.t) ->
+      if String.equal t.f f then Some (Option.map snd t.result) else None)
+    program
+  |> Option.join
+
+(* Targets [x] of a call-assignment [x := f(args)] whose callee [f] returns a
+   boolean: [x] must get a [bool]-sorted symbol to match the result it is bound
+   to. Mirrors the boolean classification {!Typecheck} performs. *)
+let call_bool_targets (program : Triple.t list) =
+  let rec cmd (c : Program.cmd) =
+    match c with
+    | CallAssgn (x, f, _) -> (
+        match proc_result_ty program f with
+        | Some Ty.Bool -> Str_set.singleton x
+        | _ -> Str_set.empty)
+    | Located (_, c) -> cmd c
+    | Seq (a, b) | If (_, a, b) -> Str_set.union (cmd a) (cmd b)
+    | While (_, _, _, body) -> cmd body
+    | _ -> Str_set.empty
+  in
+  List.fold_left
+    (fun s (t : Triple.t) -> Str_set.union s (cmd t.c))
+    Str_set.empty program
+
+(* Result binders declared boolean; like [call_bool_targets], they need a
+   [bool]-sorted symbol regardless of how the body uses them. *)
+let result_bools (program : Triple.t list) =
+  List.filter_map
+    (fun (t : Triple.t) ->
+      match t.result with Some (r, Ty.Bool) -> Some r | _ -> None)
+    program
+  |> Str_set.of_list
 
 let str_set_to_vars ~arrays ~bools ~bool_arrays vars =
   let f x vs =
@@ -348,7 +398,13 @@ let str_set_to_vars ~arrays ~bools ~bool_arrays vars =
 let collect (program : Triple.t list) =
   let procedures, main = split_last program in
   let arrays = all_arrays program in
-  let bools = all_bools program in
+  (* Boolean names come from the typed AST ([all_bools]), plus the two cases the
+     AST does not make locally visible: call-assignment targets bound to a
+     boolean result, and boolean result binders. *)
+  let bools =
+    Str_set.union (all_bools program)
+      (Str_set.union (call_bool_targets program) (result_bools program))
+  in
   let bool_arrays = all_bool_arrays program in
   let to_vars = str_set_to_vars ~arrays ~bools ~bool_arrays in
   let globals =

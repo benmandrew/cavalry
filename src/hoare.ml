@@ -286,13 +286,18 @@ module Proc_map = Map.Make (String)
 let rec assigned_vars procs c =
   match c with
   | Located (_, c) -> assigned_vars procs c
-  | Assgn (x, _) | Let (x, _) -> [ x ]
+  | Assgn (x, _) | Let (x, _) | ResAssgn (x, _) -> [ x ]
   | Seq (a, b) | If (_, a, b) -> assigned_vars procs a @ assigned_vars procs b
   | While (_, _, _, body) -> assigned_vars procs body
   | Proc (f, _) -> (
       match Proc_map.find_opt f procs with
       | Some ((t : Triple.t), _) -> t.ws
       | None -> [])
+  (* A call-assignment mutates its target [x] plus whatever the callee writes. *)
+  | CallAssgn (x, f, _) -> (
+      match Proc_map.find_opt f procs with
+      | Some ((t : Triple.t), _) -> x :: t.ws
+      | None -> [ x ])
   (* An element write changes the array's map; [array(n)] also resets its
      length, so both variables are modified. *)
   | ArrAssgn (a, _, _) -> [ a ]
@@ -333,9 +338,29 @@ module Wlp = struct
       in
       T.t_implies_simp premise body
 
-  let proc ~machine_int ?loc g_vars q l_vars ps (t : Triple.t) =
+  (* [result_target], when set, is the caller's variable [x] in [x := f(args)]:
+     the continuation [q] has [x] replaced by the callee's result binder [r]
+     before the callee's postcondition is assumed, and [r] is havoc'd alongside
+     the written globals so it ranges over every result the postcondition allows.
+     [r] is havoc'd even for a bare call statement ([result_target = None]) so it
+     never leaks into the goal as a free variable. *)
+  let proc ~machine_int ?loc ?result_target g_vars q l_vars ps (t : Triple.t) =
     let p_f = Logic.translate_term ~g_vars ~l_vars t.p in
     let q_f = Logic.translate_term ~g_vars ~l_vars t.q in
+    (* The callee's result binder (if it returns), and the continuation with the
+       call's target bound to it. *)
+    let result_syms, q =
+      match t.result with
+      | None -> ([], q)
+      | Some (r, _) ->
+          let r_vs = Vars.find r l_vars in
+          let q =
+            match result_target with
+            | Some x_vs -> T.t_subst_single x_vs (T.t_var r_vs) q
+            | None -> q
+          in
+          ([ r_vs ], q)
+    in
     (* An actual for a formal: an integer term, or -- for a boolean formal --
        the boolean right-hand side's formula coerced to a [bool] term, matching
        the [bool]-sorted formal variable. *)
@@ -356,7 +381,8 @@ module Wlp = struct
     let pre = tag ?loc Call_precondition (sub_params p_f) in
     let sub_written_vars p =
       (* Writing an array havocs both its element map and its length (a callee
-         may re-create it with [array(n)]); a scalar havocs just itself. *)
+         may re-create it with [array(n)]); a scalar havocs just itself. The
+         result binder [r] is havoc'd too (see [result_syms]). *)
       let ws_syms =
         List.concat_map
           (fun w ->
@@ -365,6 +391,7 @@ module Wlp = struct
             | Some l -> [ m; l ]
             | None -> [ m ])
           t.ws
+        @ result_syms
       in
       let ys = List.map Vars.fresh_like ws_syms in
       let map = List.map2 (fun w y -> (w, T.t_var y)) ws_syms ys in
@@ -401,6 +428,54 @@ module Wlp = struct
       in
       T.t_and_simp (defined ~g_vars ~l_vars ?loc e) overflow
     in
+    (* WLP of a call [f(ps)] with continuation [q]:
+         safe(e_i) for each actual argument (evaluated in the caller's scope)
+         /\ p_f[x_i <- e_i]
+         /\ forall y. (q_f[x_i <- e_i][x_i <- y_i][x_i@old <- x_i] -> q[x_i <- y_i])
+       [result_target] threads through to bind a call-assignment's target (see
+       [Wlp.proc]); [None] for a bare call statement. *)
+    let call ?result_target f ps q =
+      let safe_arg = function IntE e -> safe_e e | BoolE e -> safe_e e in
+      (* An actual as a term for the recursive-variant substitution: an integer
+         term, or a boolean coerced to a [bool] term (matching the formal). *)
+      let arg_term = function
+        | IntE e -> expr_to_term ~g_vars ~l_vars e
+        | BoolE e ->
+            T.t_if (expr_to_term ~g_vars ~l_vars e) T.t_bool_true T.t_bool_false
+      in
+      let args_safe =
+        List.fold_left (fun acc e -> T.t_and_simp acc (safe_arg e)) T.t_true ps
+      in
+      let triple, callee_l_vars = Proc_map.find f procs in
+      (* Termination of recursion: if this call targets the enclosing procedure
+         and it declares a variant [V], the measure at the actual arguments must
+         be non-negative and strictly below its value at the enclosing formals --
+         [0 <= V[e_i] < V[x_i]]. This is the variant rule applied across a
+         recursive call instead of a loop back-edge. Without a variant the
+         recursion is only checked for partial correctness. *)
+      let decrease =
+        match self with
+        | self_name, Some measure when String.equal f self_name ->
+            let v_formals =
+              Logic.translate_arith_term ~g_vars ~l_vars measure
+            in
+            let sub =
+              List.map2
+                (fun fp e -> (Vars.find fp callee_l_vars, arg_term e))
+                triple.Triple.ps ps
+            in
+            let v_actuals = T.t_subst (T.Mvs.of_list sub) v_formals in
+            tag ?loc Recursive_variant
+              (T.t_and
+                 (Arith.leq (T.t_nat_const 0) v_actuals)
+                 (Arith.lt v_actuals v_formals))
+        | _ -> T.t_true
+      in
+      T.t_and_simp decrease
+        (T.t_and_simp args_safe
+           (proc ~machine_int ?loc ?result_target g_vars q callee_l_vars ps
+              triple))
+    in
     match c with
     (* [Located] is peeled above; this arm is unreachable but keeps the match
        total (a nested wrapper would simply recurse). *)
@@ -410,7 +485,7 @@ module Wlp = struct
     | IntExpr e -> T.t_and_simp (safe_e e) q
     | Print e -> T.t_and_simp (safe_e e) q
     | Seq (c, c') -> cmd c (cmd c' q)
-    | Assgn (x, ae) | Let (x, ae) ->
+    | Assgn (x, ae) | Let (x, ae) | ResAssgn (x, ae) ->
         (* safe(e) /\ forall y. y = e -> q[ x <- y ]. The right-hand side may be
            integer or boolean; [e_t] and the fresh [y] take the target's sort
            ([fresh_like] rather than the integer [create_fresh]), so a boolean
@@ -477,55 +552,11 @@ module Wlp = struct
         T.t_and_simp
           (T.t_and_simp (safe_e i) safe_v)
           (T.t_and_simp bounds q_sub)
-    | Proc (f, ps) ->
-        (* safe(e_i) for each actual argument (evaluated in the caller's scope)
-            /\ p_f[x_i <- e_i]
-            /\ forall y.
-              (q_f[x_i <- e_i][x_i <- y_i][x_i@old <- x_i]
-              -> q[x_i <- y_i]) *)
-        let safe_arg = function IntE e -> safe_e e | BoolE e -> safe_e e in
-        (* An actual as a term for the recursive-variant substitution: an integer
-           term, or a boolean coerced to a [bool] term (matching the formal). *)
-        let arg_term = function
-          | IntE e -> expr_to_term ~g_vars ~l_vars e
-          | BoolE e ->
-              T.t_if
-                (expr_to_term ~g_vars ~l_vars e)
-                T.t_bool_true T.t_bool_false
-        in
-        let args_safe =
-          List.fold_left
-            (fun acc e -> T.t_and_simp acc (safe_arg e))
-            T.t_true ps
-        in
-        let triple, callee_l_vars = Proc_map.find f procs in
-        (* Termination of recursion: if this call targets the enclosing
-           procedure and it declares a variant [V], the measure at the actual
-           arguments must be non-negative and strictly below its value at the
-           enclosing formals -- [0 <= V[e_i] < V[x_i]]. This is the variant rule
-           applied across a recursive call instead of a loop back-edge. Without a
-           variant the recursion is only checked for partial correctness. *)
-        let decrease =
-          match self with
-          | self_name, Some measure when String.equal f self_name ->
-              let v_formals =
-                Logic.translate_arith_term ~g_vars ~l_vars measure
-              in
-              let sub =
-                List.map2
-                  (fun fp e -> (Vars.find fp callee_l_vars, arg_term e))
-                  triple.Triple.ps ps
-              in
-              let v_actuals = T.t_subst (T.Mvs.of_list sub) v_formals in
-              tag ?loc Recursive_variant
-                (T.t_and
-                   (Arith.leq (T.t_nat_const 0) v_actuals)
-                   (Arith.lt v_actuals v_formals))
-          | _ -> T.t_true
-        in
-        T.t_and_simp decrease
-          (T.t_and_simp args_safe
-             (proc ~machine_int ?loc g_vars q callee_l_vars ps triple))
+    | Proc (f, ps) -> call ?result_target:None f ps q
+    (* x := f(args): as a plain call, but the result is bound to [x] -- see
+       [Wlp.proc]'s [result_target]. *)
+    | CallAssgn (x, f, ps) ->
+        call ~result_target:(Vars.find_fallback x l_vars g_vars) f ps q
     | If (b, c, c') ->
         (* safe(b) /\ ( b -> wlp(c, q) ) /\ ( ~b -> wlp(c', q) ) *)
         let t = expr_to_term ~g_vars ~l_vars b in

@@ -1,0 +1,10 @@
+procedure f (n) =
+  requires { true }
+  ensures { true }
+  writes { }
+  n
+end
+
+{ true }
+x := f(3)
+{ true }

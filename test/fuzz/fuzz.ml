@@ -234,7 +234,8 @@ let seed_cmd s0 c =
 
 let run s0 c =
   let body = seed_cmd s0 c in
-  Runtime.exec_env ~fuel:2000 [ { Runtime.f = ""; ps = []; c = body } ]
+  Runtime.exec_env ~fuel:2000
+    [ { Runtime.f = ""; ps = []; c = body; result = None } ]
 
 (* p = /\_x  x = s0(x) : pins the initial state to exactly [s0]. *)
 let build_p s0 =
@@ -255,7 +256,7 @@ let build_true_q env =
     env (Logic.Bool true)
 
 let main_triple ~p ~q ~c : Triple.t =
-  { p; q; variant = None; ws = []; f = "main"; ps = []; c }
+  { p; q; variant = None; ws = []; f = "main"; ps = []; result = None; c }
 
 let verify_program (triples : Triple.t list) =
   Hoare.verify ?timeout:(Some verify_timeout) (Var_collection.collect triples)
@@ -329,6 +330,7 @@ let framing_triples (s0, hidden, kh, roles) : Triple.t list =
       ws = framing_writes roles;
       f = "f";
       ps = [];
+      result = None;
       c = framing_body hidden kh roles;
     }
   in
@@ -339,9 +341,21 @@ let framing_triples (s0, hidden, kh, roles) : Triple.t list =
    [f]. [f]'s global writes persist to main, so the final environment shows the
    real effect of the (partially undeclared) writes. *)
 let run_framing (s0, hidden, kh, roles) =
-  let f_proc = { Runtime.f = "f"; ps = []; c = framing_body hidden kh roles } in
+  let f_proc =
+    {
+      Runtime.f = "f";
+      ps = [];
+      c = framing_body hidden kh roles;
+      result = None;
+    }
+  in
   let main_proc =
-    { Runtime.f = "main"; ps = []; c = seed_cmd s0 (Program.Proc ("f", [])) }
+    {
+      Runtime.f = "main";
+      ps = [];
+      c = seed_cmd s0 (Program.Proc ("f", []));
+      result = None;
+    }
   in
   Runtime.exec_env ~fuel:2000 [ f_proc; main_proc ]
 
@@ -513,6 +527,10 @@ let rec cmd_to_cav c =
         (indent 2 (cmd_to_cav body))
   | Program.Proc (f, ps) ->
       Printf.sprintf "%s(%s)" f (String.concat ", " (List.map any_to_cav ps))
+  | Program.ResAssgn (x, e) -> Printf.sprintf "%s := %s" x (any_to_cav e)
+  | Program.CallAssgn (x, f, ps) ->
+      Printf.sprintf "%s := %s(%s)" x f
+        (String.concat ", " (List.map any_to_cav ps))
   | Program.IntExpr e -> expr_to_cav e
   | Program.Print e -> Printf.sprintf "print %s" (expr_to_cav e)
   | Program.ArrMake (a, n) -> Printf.sprintf "%s := array(%s)" a (expr_to_cav n)

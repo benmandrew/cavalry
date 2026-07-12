@@ -1,0 +1,14 @@
+// A value-returning procedure that also writes a global: the caller's WLP
+// havocs the result binder and the written global together.
+procedure incr (n) returns { r : int } =
+  requires { true }
+  ensures { r = n + 1 && g = _g + 1 }
+  writes { g }
+  g := g + 1;
+  r := n + 1
+end
+
+{ g = 0 }
+g := 0;
+x := incr(4)
+{ x = 5 && g = 1 }
