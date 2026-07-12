@@ -1,0 +1,398 @@
+<title>Cavalry — interpreter vs compiled benchmark</title>
+<style>
+  :root {
+    /* cool-biased neutrals for a systems/compiler subject */
+    --bg:            #f4f5f7;
+    --surface:       #fcfcfd;
+    --surface-2:     #eef0f3;
+    --border:        #dde0e6;
+    --ink:           #0d0f12;
+    --ink-2:         #4a4f57;
+    --ink-3:         #7b818b;
+    --native:        #2a78d6;  /* categorical slot 1 — compiled, native int */
+    --zarith:        #1baf7a;  /* categorical slot 2 — compiled, Zarith      */
+    --interp:        #8a9099;  /* baseline — the interpreter                 */
+    --good:          #0ca30c;
+    --accent-soft:   #e8f0fb;
+    --grid:          #e6e8ec;
+    --mono: ui-monospace, "SF Mono", "SFMono-Regular", Menlo, Consolas, monospace;
+    --sans: -apple-system, BlinkMacSystemFont, "SF Pro Text", system-ui, "Segoe UI", sans-serif;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root {
+      --bg:          #131518;
+      --surface:     #1a1d21;
+      --surface-2:   #21252a;
+      --border:      #2c3138;
+      --ink:         #f3f4f6;
+      --ink-2:       #b7bcc4;
+      --ink-3:       #838a93;
+      --native:      #3987e5;
+      --zarith:      #22bd86;
+      --interp:      #757c86;
+      --good:        #35c035;
+      --accent-soft: #17263b;
+      --grid:        #262a30;
+    }
+  }
+  :root[data-theme="light"] {
+    --bg:#f4f5f7; --surface:#fcfcfd; --surface-2:#eef0f3; --border:#dde0e6;
+    --ink:#0d0f12; --ink-2:#4a4f57; --ink-3:#7b818b; --native:#2a78d6;
+    --zarith:#1baf7a; --interp:#8a9099; --good:#0ca30c; --accent-soft:#e8f0fb; --grid:#e6e8ec;
+  }
+  :root[data-theme="dark"] {
+    --bg:#131518; --surface:#1a1d21; --surface-2:#21252a; --border:#2c3138;
+    --ink:#f3f4f6; --ink-2:#b7bcc4; --ink-3:#838a93; --native:#3987e5;
+    --zarith:#22bd86; --interp:#757c86; --good:#35c035; --accent-soft:#17263b; --grid:#262a30;
+  }
+
+  * { box-sizing: border-box; }
+  /* Defensive: keep the document itself the scroll container, in case the
+     host skeleton wraps content in a centering/height-locked <body>. */
+  html { height: auto; overflow-y: auto; overflow-x: hidden; }
+  body {
+    margin: 0; background: var(--bg); color: var(--ink);
+    font-family: var(--sans); line-height: 1.55;
+    -webkit-font-smoothing: antialiased;
+    display: block; height: auto; min-height: 0; max-width: 100%;
+    overflow-x: hidden; overflow-y: visible; place-items: initial;
+  }
+  .wrap { max-width: 960px; margin: 0 auto; padding: 48px 24px 96px; }
+
+  /* ---- header ---- */
+  .eyebrow {
+    font-family: var(--mono); font-size: 12px; letter-spacing: 0.14em;
+    text-transform: uppercase; color: var(--ink-3); margin: 0 0 14px;
+  }
+  h1 {
+    font-size: clamp(28px, 4.4vw, 42px); line-height: 1.08; margin: 0 0 16px;
+    letter-spacing: -0.02em; text-wrap: balance; font-weight: 650;
+  }
+  h1 .hl { color: var(--native); }
+  .lede { font-size: 18px; color: var(--ink-2); max-width: 60ch; margin: 0 0 22px; }
+  .meta {
+    display: flex; flex-wrap: wrap; gap: 8px; font-family: var(--mono);
+    font-size: 12px;
+  }
+  .chip {
+    background: var(--surface-2); border: 1px solid var(--border);
+    border-radius: 999px; padding: 4px 11px; color: var(--ink-2);
+    white-space: nowrap;
+  }
+
+  section { margin-top: 44px; }
+  h2 {
+    font-size: 13px; font-family: var(--mono); text-transform: uppercase;
+    letter-spacing: 0.1em; color: var(--ink-3); margin: 0 0 18px; font-weight: 600;
+    display: flex; align-items: baseline; gap: 10px;
+  }
+  h2::after { content: ""; flex: 1; height: 1px; background: var(--border); }
+  p.note { color: var(--ink-2); max-width: 68ch; }
+
+  /* ---- hero stats ---- */
+  .stats { display: grid; grid-template-columns: repeat(4, 1fr); gap: 14px; }
+  @media (max-width: 720px) { .stats { grid-template-columns: repeat(2, 1fr); } }
+  .stat {
+    background: var(--surface); border: 1px solid var(--border);
+    border-radius: 12px; padding: 18px 18px 16px;
+  }
+  .stat .num {
+    font-family: var(--mono); font-size: 30px; font-weight: 600; letter-spacing: -0.02em;
+    color: var(--ink); font-variant-numeric: tabular-nums; line-height: 1;
+  }
+  .stat .num .x { font-size: 18px; color: var(--ink-3); }
+  .stat .lbl { margin-top: 9px; font-size: 13px; color: var(--ink-2); line-height: 1.4; }
+
+  /* ---- startup callout ---- */
+  .callout {
+    background: var(--surface); border: 1px solid var(--border); border-radius: 12px;
+    padding: 22px 24px; display: grid; grid-template-columns: 1fr auto; gap: 24px;
+    align-items: center;
+  }
+  @media (max-width: 640px) { .callout { grid-template-columns: 1fr; } }
+  .callout h3 { margin: 0 0 6px; font-size: 17px; }
+  .callout p { margin: 0; color: var(--ink-2); font-size: 14.5px; max-width: 54ch; }
+  .ba { display: flex; align-items: center; gap: 14px; font-family: var(--mono); }
+  .ba .before { color: var(--ink-3); text-decoration: line-through; font-size: 20px; }
+  .ba .arrow { color: var(--ink-3); }
+  .ba .after { color: var(--good); font-size: 30px; font-weight: 650; }
+  .ba .after small { font-size: 14px; font-weight: 500; }
+
+  /* ---- chart ---- */
+  .card {
+    background: var(--surface); border: 1px solid var(--border);
+    border-radius: 14px; padding: 22px 24px 12px;
+  }
+  .legend { display: flex; gap: 18px; font-size: 13px; color: var(--ink-2); margin-bottom: 6px; flex-wrap: wrap; }
+  .legend span { display: inline-flex; align-items: center; gap: 7px; }
+  .dot { width: 11px; height: 11px; border-radius: 50%; box-shadow: 0 0 0 2px var(--surface); }
+  #chart { width: 100%; height: auto; display: block; font-family: var(--mono); }
+  .cap { font-size: 12.5px; color: var(--ink-3); margin: 8px 2px 0; }
+
+  /* ---- table ---- */
+  .scroll { overflow-x: auto; border: 1px solid var(--border); border-radius: 12px; }
+  table { border-collapse: collapse; width: 100%; font-size: 13.5px; min-width: 640px; }
+  thead th {
+    text-align: right; padding: 12px 14px; font-family: var(--mono); font-weight: 600;
+    font-size: 11.5px; letter-spacing: 0.04em; text-transform: uppercase;
+    color: var(--ink-3); background: var(--surface-2); border-bottom: 1px solid var(--border);
+    position: sticky; top: 0;
+  }
+  thead th.l, tbody td.l { text-align: left; }
+  tbody td {
+    padding: 11px 14px; text-align: right; border-bottom: 1px solid var(--border);
+    font-variant-numeric: tabular-nums; font-family: var(--mono); color: var(--ink-2);
+  }
+  tbody tr:last-child td { border-bottom: none; }
+  tbody td.l { font-family: var(--sans); color: var(--ink); }
+  tbody td .kind { display: block; font-size: 11.5px; color: var(--ink-3); font-family: var(--mono); }
+  td .sp { color: var(--native); font-weight: 600; }
+  td .spz { color: var(--zarith); font-weight: 600; }
+  tbody tr:hover td { background: var(--surface-2); }
+
+  .foot { margin-top: 12px; font-size: 12.5px; color: var(--ink-3); }
+  .foot code, p.note code, li code { font-family: var(--mono); background: var(--surface-2);
+    padding: 1px 5px; border-radius: 5px; font-size: 0.92em; }
+  ul.notes { color: var(--ink-2); max-width: 70ch; padding-left: 18px; }
+  ul.notes li { margin: 9px 0; }
+
+  /* tooltip */
+  #tip {
+    position: fixed; pointer-events: none; opacity: 0; transition: opacity .1s;
+    background: var(--ink); color: var(--bg); font-family: var(--mono); font-size: 12px;
+    padding: 8px 10px; border-radius: 8px; z-index: 10; line-height: 1.5; white-space: nowrap;
+    box-shadow: 0 6px 20px rgba(0,0,0,.25);
+  }
+  #tip b { color: var(--surface); }
+</style>
+
+<div class="wrap">
+  <p class="eyebrow">Cavalry · performance</p>
+  <h1>The compiler runs verified programs <span class="hl">@@RANGE@@</span> faster than the interpreter.</h1>
+  <p class="lede">Five workloads with distinct execution shapes, each timed three ways
+    with hyperfine. Every difference is statistically decisive — but <em>how much</em>
+    compilation buys depends entirely on what the program does.</p>
+  <div class="meta">@@META@@</div>
+
+  <section>
+    <h2>Headline</h2>
+    <div class="stats">
+      <div class="stat">
+        <div class="num">@@SPMAX@@<span class="x">&times;</span></div>
+        <div class="lbl">Best case: native compile vs interpreter, on the array-heavy sieve.</div>
+      </div>
+      <div class="stat">
+        <div class="num">@@SPMIN@@<span class="x">&times;</span></div>
+        <div class="lbl">Worst case — still an order of magnitude, on a tight arithmetic loop.</div>
+      </div>
+      <div class="stat">
+        <div class="num">&lt;10<span class="x">&#8722;300</span></div>
+        <div class="lbl">Two-sided Welch <em>p</em>-value on every workload. Not noise.</div>
+      </div>
+      <div class="stat">
+        <div class="num">10<span class="x">&times;</span></div>
+        <div class="lbl">Interpreter startup cut (100&#8202;ms&#8202;&#8594;&#8202;10&#8202;ms) by deferring the prover init.</div>
+      </div>
+    </div>
+  </section>
+
+  <section>
+    <h2>Interpreter startup</h2>
+    <div class="callout">
+      <div>
+        <h3>The interpreter no longer pays for the prover</h3>
+        <p><code>cav run</code> never proves anything, yet it was loading the Why3
+          configuration and Z3 driver at process start — because OCaml runs every
+          linked module's top-level bindings eagerly. Deferring that init behind
+          <code>lazy</code> (forced only when verifying or compiling) removed it from
+          the interpreter path entirely.</p>
+      </div>
+      <div class="ba">
+        <span class="before">100&#8202;ms</span>
+        <span class="arrow">&#8594;</span>
+        <span class="after">@@STARTUP_INTERP@@<small>&#8202;ms</small></span>
+      </div>
+    </div>
+    <p class="cap">Fixed startup, empty program: interp @@STARTUP_INTERP@@&#8202;ms · Zarith @@STARTUP_ZARITH@@&#8202;ms · native @@STARTUP_NATIVE@@&#8202;ms.
+      All timings below are end-to-end (they include this startup); the interpreter's share is small at these workload sizes.</p>
+  </section>
+
+  <section>
+    <h2>Speedup by workload</h2>
+    <div class="card">
+      <div class="legend">
+        <span><i class="dot" style="background:var(--native)"></i>native compile <span style="color:var(--ink-3)">(<code style="background:none;padding:0">--native-int</code>, 63-bit)</span></span>
+        <span><i class="dot" style="background:var(--zarith)"></i>Zarith compile <span style="color:var(--ink-3)">(default, unbounded int)</span></span>
+        <span><i class="dot" style="background:var(--interp)"></i>interpreter (baseline, 1&times;)</span>
+      </div>
+      <svg id="chart" aria-label="Speedup over the interpreter, log scale"></svg>
+    </div>
+    <p class="cap">Speedup = interpreter wall time &divide; variant wall time, on a log axis (each gridline is 10&times;).
+      Points are means of @@NRUNS@@+ runs; the horizontal tick on each native point is its 95% bootstrap confidence interval (too tight to see on most).</p>
+  </section>
+
+  <section>
+    <h2>Full results</h2>
+    <div class="scroll">
+      <table>
+        <thead>
+          <tr>
+            <th class="l">Workload</th>
+            <th>interp<br>ms &plusmn; &sigma;</th>
+            <th>Zarith<br>ms &plusmn; &sigma;</th>
+            <th>native<br>ms &plusmn; &sigma;</th>
+            <th>native<br>speedup</th>
+            <th>Zarith<br>speedup</th>
+            <th>Welch<br>t / p</th>
+          </tr>
+        </thead>
+        <tbody id="tbody"></tbody>
+      </table>
+    </div>
+    <p class="foot">Interpreter: n = @@NRUNS@@ runs each. Compiled variants ran @@RUNRANGE@@ runs (they finish faster, so
+      hyperfine fits more into its window). <em>p</em> is the two-sided Welch t-test, interpreter vs native;
+      values underflow the float range (t = @@TRANGE@@), reported as &lt;10<sup>&#8722;300</sup>.</p>
+  </section>
+
+  <section>
+    <h2>Why the spread is @@RANGE@@</h2>
+    <ul class="notes">
+      <li><b>Arithmetic &amp; control flow (@@SP_ARITH@@).</b> On loops of scalar
+        math — <code>sum_loop</code>, <code>collatz</code>, <code>primes_trial</code> —
+        the interpreter's cost is per-operation dispatch: walking the abstract
+        syntax tree (AST), and
+        threading a persistent variable map where the compiler emits a mutable
+        <code>ref</code>. A steady order-of-magnitude, workload-independent.</li>
+      <li><b>Recursion (@@SP_RECUR@@&times;).</b> <code>ackermann</code> makes millions of calls.
+        Each interpreted call rebuilds a local environment and does a hashtable
+        lookup for the procedure; the compiled binary makes a real OCaml call. Call
+        overhead compounds.</li>
+      <li><b>Arrays (@@SP_ARRAY@@&times;).</b> Both the interpreter and the compiler
+        mutate arrays in place, so <code>a[i] := v</code> is an O(1) store either way.
+        What is left is per-element interpreter overhead — bounds handling and the
+        index/value AST walk — a constant factor on top of the scalar gap, not the
+        algorithmic blow-up an earlier copy-on-write store made it.</li>
+      <li><b>Native vs Zarith (@@NZ_RANGE@@).</b> The <code>cav compile</code>
+        default is arbitrary-precision Zarith, matching the verified unbounded-integer
+        model. <code>--native-int</code> compiles to wrapping 63-bit ints and is sound
+        only because its verification gate additionally proves no overflow — worth an
+        extra ~1.3&times; on arithmetic, ~2&times; on the call-bound Ackermann.</li>
+    </ul>
+    <p class="note" style="margin-top:20px">All three variants were checked to produce identical
+      output before timing. Reproduce with <code>bash bench/run.sh</code> then
+      <code>python3 bench/analyze.py</code>; programs are generated by <code>bench/gen.py</code>.</p>
+  </section>
+</div>
+
+<div id="tip"></div>
+
+<script>
+  const data = @@DATA@@;
+
+  const css = k => getComputedStyle(document.documentElement).getPropertyValue(k).trim();
+  const fmt = x => x >= 100 ? x.toFixed(0) : x >= 10 ? x.toFixed(1) : x.toFixed(1);
+
+  /* ---------- dot plot on a log axis ---------- */
+  function drawChart() {
+    const svg = document.getElementById("chart");
+    const W = 900, rowH = 52, padT = 14, padB = 34;
+    const mL = 210, mR = 70;
+    const H = padT + data.length * rowH + padB;
+    svg.setAttribute("viewBox", `0 0 ${W} ${H}`);
+    svg.innerHTML = "";
+    const NS = "http://www.w3.org/2000/svg";
+    const el = (t, a) => { const e = document.createElementNS(NS, t); for (const k in a) e.setAttribute(k, a[k]); return e; };
+
+    const x0 = mL, x1 = W - mR;
+    const lo = 0, hi = 3;                 // log10 domain: 1x .. 1000x
+    const sx = v => x0 + (Math.log10(v) - lo) / (hi - lo) * (x1 - x0);
+
+    // gridlines 1,10,100,1000
+    for (let p = 0; p <= 3; p++) {
+      const gx = sx(10 ** p);
+      svg.appendChild(el("line", { x1:gx, x2:gx, y1:padT, y2:padT + data.length*rowH,
+        stroke: css("--grid"), "stroke-width": p === 0 ? 1.6 : 1 }));
+      const tk = el("text", { x:gx, y:H - 12, "text-anchor":"middle",
+        fill: css("--ink-3"), "font-size":12 });
+      tk.textContent = (10 ** p) + "×";
+      svg.appendChild(tk);
+    }
+
+    data.forEach((d, i) => {
+      const cy = padT + i * rowH + rowH / 2;
+      // row label
+      const nm = el("text", { x:0, y:cy - 3, fill:css("--ink"), "font-size":14.5,
+        "font-family":css("--sans"), "font-weight":600 });
+      nm.textContent = d.name;
+      svg.appendChild(nm);
+      const kd = el("text", { x:0, y:cy + 14, fill:css("--ink-3"), "font-size":11.5 });
+      kd.textContent = d.kind;
+      svg.appendChild(kd);
+
+      // connector interp(1x) -> zarith -> native
+      svg.appendChild(el("line", { x1:sx(1), x2:sx(d.spN), y1:cy, y2:cy,
+        stroke:css("--border"), "stroke-width":2, "stroke-linecap":"round" }));
+
+      // baseline tick at 1x
+      svg.appendChild(el("circle", { cx:sx(1), cy, r:4, fill:css("--interp") }));
+
+      // native CI whisker
+      svg.appendChild(el("line", { x1:sx(d.spNlo), x2:sx(d.spNhi), y1:cy, y2:cy,
+        stroke:css("--native"), "stroke-width":6, "stroke-linecap":"round", opacity:0.35 }));
+
+      // zarith + native dots (2px surface ring on overlap)
+      const zc = el("circle", { cx:sx(d.spZ), cy, r:7, fill:css("--zarith"),
+        stroke:css("--surface"), "stroke-width":2 });
+      const nc = el("circle", { cx:sx(d.spN), cy, r:7.5, fill:css("--native"),
+        stroke:css("--surface"), "stroke-width":2 });
+      [ [zc, d, "z"], [nc, d, "n"] ].forEach(([c, dd, which]) => {
+        c.style.cursor = "pointer";
+        c.addEventListener("mousemove", e => showTip(e, dd, which));
+        c.addEventListener("mouseleave", hideTip);
+        svg.appendChild(c);
+      });
+
+      // direct label on native point
+      const lab = el("text", { x:sx(d.spN) + 13, y:cy + 4, fill:css("--native"),
+        "font-size":13.5, "font-weight":700 });
+      lab.textContent = fmt(d.spN) + "×";
+      svg.appendChild(lab);
+    });
+  }
+
+  const tip = document.getElementById("tip");
+  function showTip(e, d, which) {
+    const isN = which === "n";
+    tip.innerHTML = isN
+      ? `<b>native</b> &mdash; ${d.native.toFixed(1)}&plusmn;${d.sdN.toFixed(1)} ms<br><b>${fmt(d.spN)}&times;</b> faster than interp`
+      : `<b>Zarith</b> &mdash; ${d.zarith.toFixed(1)}&plusmn;${d.sdZ.toFixed(1)} ms<br><b>${fmt(d.spZ)}&times;</b> faster than interp`;
+    tip.style.opacity = 1;
+    tip.style.left = Math.min(e.clientX + 14, innerWidth - 190) + "px";
+    tip.style.top = (e.clientY - 44) + "px";
+  }
+  function hideTip() { tip.style.opacity = 0; }
+
+  /* ---------- table ---------- */
+  function drawTable() {
+    const tb = document.getElementById("tbody");
+    data.forEach(d => {
+      const tr = document.createElement("tr");
+      tr.innerHTML =
+        `<td class="l">${d.name}<span class="kind">${d.kind}</span></td>` +
+        `<td>${d.interp.toFixed(1)}<span style="color:var(--ink-3)"> &plusmn;${d.sdI.toFixed(1)}</span></td>` +
+        `<td>${d.zarith.toFixed(1)}<span style="color:var(--ink-3)"> &plusmn;${d.sdZ.toFixed(1)}</span></td>` +
+        `<td>${d.native.toFixed(1)}<span style="color:var(--ink-3)"> &plusmn;${d.sdN.toFixed(1)}</span></td>` +
+        `<td><span class="sp">${fmt(d.spN)}&times;</span></td>` +
+        `<td><span class="spz">${fmt(d.spZ)}&times;</span></td>` +
+        `<td style="font-size:12px">${d.t.toFixed(0)} / &lt;10<sup>&#8722;300</sup></td>`;
+      tb.appendChild(tr);
+    });
+  }
+
+  drawChart();
+  drawTable();
+  const mq = matchMedia("(prefers-color-scheme: dark)");
+  mq.addEventListener && mq.addEventListener("change", drawChart);
+  new MutationObserver(drawChart).observe(document.documentElement, { attributes:true, attributeFilter:["data-theme"] });
+  addEventListener("resize", drawChart);
+</script>

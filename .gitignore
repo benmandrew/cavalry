@@ -39,3 +39,9 @@ node_modules/
 .vscode/*
 !.vscode/settings.json
 PLAN.md
+
+# Generated benchmark artifacts (bench/): source programs + compiled binaries,
+# and every timing artifact (raw hyperfine JSON, summary.{md,json}, the rendered
+# reports, machine metadata). Regenerate with `bash bench/run.sh`.
+bench/programs/
+bench/results/
