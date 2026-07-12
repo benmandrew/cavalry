@@ -169,6 +169,33 @@ let rec bools_logic (e : Logic.logic_expr) =
   | Logic.And (a, b) | Logic.Or (a, b) | Logic.Impl (a, b) ->
       SS.union (bools_logic a) (bools_logic b)
 
+(* Copy edges [(v, x)] from each assignment [x := v] of a bare variable: if [v]
+   is boolean then so is [x]. Saturating these (see [check]) infers the type of
+   a variable copied from a boolean, which [classify_bool] alone leaves
+   ambiguous. *)
+let rec copy_edges (e : Program.ut_expr) : (string * string) list =
+  let open Program in
+  match e with
+  | UAssgn (x, UVar v) | ULet (x, UVar v) -> [ (v, x) ]
+  | UAssgn (_, rhs) | ULet (_, rhs) -> copy_edges rhs
+  | USeq (a, b) -> copy_edges a @ copy_edges b
+  | ULoc (_, e) | UPrint e -> copy_edges e
+  | UIf (_, a, b) -> copy_edges a @ copy_edges b
+  | UWhile (_, _, _, body) -> copy_edges body
+  | _ -> []
+
+let program_copy_edges (program : Triple.ut_t list) =
+  List.concat_map (fun (t : Triple.ut_t) -> copy_edges t.u) program
+
+(* Propagate boolean-ness along copy edges to a fixpoint. *)
+let rec saturate_bools bools edges =
+  let bools' =
+    List.fold_left
+      (fun acc (v, x) -> if SS.mem v acc then SS.add x acc else acc)
+      bools edges
+  in
+  if SS.equal bools' bools then bools else saturate_bools bools' edges
+
 let program_bools (program : Triple.ut_t list) =
   List.fold_left
     (fun s (t : Triple.ut_t) ->
@@ -236,6 +263,70 @@ and expect env loc (expected : Ty.t) (e : Program.ut_expr) =
     fail loc "expected %s but got %s" (Ty.to_string expected)
       (Ty.to_string actual)
 
+(* ===== Assertion typing =====
+   The logic language carries no source locations, so its diagnostics name the
+   offending variable rather than a line. [bound] holds quantifier-bound names,
+   which shadow program variables and are integer-valued (like [Vars.create_fresh]). *)
+
+let rec synth_arith env bound (e : Logic.arith_expr) : Ty.t =
+  match e with
+  | Logic.Int _ -> Ty.Int
+  | Logic.Var x ->
+      if SS.mem x bound then Ty.Int
+      else if SS.mem x env.arrays then
+        fail None "array '%s' cannot be used as a scalar in an assertion" x
+      else if SS.mem x env.bools then Ty.Bool
+      else Ty.Int
+  | Logic.Plus (a, b)
+  | Logic.Sub (a, b)
+  | Logic.Mul (a, b)
+  | Logic.Div (a, b)
+  | Logic.Mod (a, b) ->
+      expect_arith env bound Ty.Int a;
+      expect_arith env bound Ty.Int b;
+      Ty.Int
+  | Logic.Get (a, i) ->
+      require_array env None a;
+      expect_arith env bound Ty.Int i;
+      Ty.Int
+  | Logic.Len a ->
+      require_array env None a;
+      Ty.Int
+
+and expect_arith env bound expected e =
+  let actual = synth_arith env bound e in
+  if not (Ty.equal actual expected) then
+    fail None "expected %s but got %s in an assertion" (Ty.to_string expected)
+      (Ty.to_string actual)
+
+let rec check_logic env bound (e : Logic.logic_expr) : unit =
+  match e with
+  | Logic.Bool _ -> ()
+  | Logic.BoolVar x ->
+      if SS.mem x bound then
+        fail None "quantified variable '%s' is not a boolean proposition" x
+      else if SS.mem x env.arrays then
+        fail None "array '%s' cannot be used as a proposition" x
+      else if not (SS.mem x env.bools) then
+        fail None "'%s' is not a boolean but is used as a proposition" x
+  | Logic.Not e -> check_logic env bound e
+  | Logic.And (a, b) | Logic.Or (a, b) | Logic.Impl (a, b) ->
+      check_logic env bound a;
+      check_logic env bound b
+  (* Equality is homogeneous over integers or booleans; the other comparisons
+     are integer-only. *)
+  | Logic.Eq (a, b) | Logic.Neq (a, b) ->
+      expect_arith env bound (synth_arith env bound a) b
+  | Logic.Lt (a, b) | Logic.Leq (a, b) | Logic.Gt (a, b) | Logic.Geq (a, b) ->
+      expect_arith env bound Ty.Int a;
+      expect_arith env bound Ty.Int b
+  | Logic.Forall (x, e) | Logic.Exists (x, e) ->
+      check_logic env (SS.add x bound) e
+
+let check_measure env = function
+  | Some m -> expect_arith env SS.empty Ty.Int m
+  | None -> ()
+
 (* ===== Command typing ===== *)
 
 let check_call env loc f args =
@@ -270,10 +361,9 @@ let rec check_cmd env loc (e : Program.ut_expr) : unit =
       expect env loc Ty.Bool c;
       check_cmd env loc a;
       check_cmd env loc b
-  | UWhile (_inv, _variant, c, body) ->
-      (* The invariant/variant are logic assertions, typed on the [Logic] side;
-         here we only constrain the loop guard to be boolean and check the
-         body. *)
+  | UWhile (inv, variant, c, body) ->
+      check_logic env SS.empty inv;
+      check_measure env variant;
       expect env loc Ty.Bool c;
       check_cmd env loc body
   | UPrint e -> expect env loc Ty.Int e
@@ -329,7 +419,13 @@ let check (program : Triple.ut_t list) : checked =
           s t.ps)
       SS.empty program
   in
-  let bools = SS.union (program_bools program) annotated_bools in
+  (* Base boolean names, then saturated along copy edges so a variable copied
+     from a boolean (`y := b`) is itself boolean. *)
+  let bools =
+    saturate_bools
+      (SS.union (program_bools program) annotated_bools)
+      (program_copy_edges program)
+  in
   (* A name cannot be both an array and a boolean. *)
   (match SS.choose_opt (SS.inter arrays bools) with
   | Some x -> fail None "variable '%s' is used as both an array and a boolean" x
@@ -352,6 +448,9 @@ let check (program : Triple.ut_t list) : checked =
   List.iter
     (fun (t : Triple.ut_t) ->
       check_params ~arrays ~bools t.ps;
+      check_logic env SS.empty t.p;
+      check_logic env SS.empty t.q;
+      check_measure env t.variant;
       check_cmd env None t.u)
     program;
   {

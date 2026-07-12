@@ -1,0 +1,7 @@
+// A variable copied from a boolean is itself inferred boolean: [same := pos]
+// makes [same] boolean, so it can be named in the postcondition.
+{ true }
+x := 5;
+pos := x > 0;
+same := pos
+{ same }

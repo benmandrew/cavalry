@@ -523,6 +523,12 @@ let%test_unit "Main.get_ast type error integer guard variable" =
   check_type_error ~substring:"expected bool but got int"
     "type_error_var_guard.cav"
 
+(* Assertions are type-checked: a boolean used in arithmetic inside a
+   postcondition is rejected. *)
+let%test_unit "Main.get_ast type error boolean in assertion" =
+  check_type_error ~substring:"in an assertion"
+    "type_error_bool_in_assertion.cav"
+
 (* Optional int parameter annotations are accepted and the program verifies. *)
 let%test_unit "Main.verify true annotated procedure" =
   check_verify "verify_true_annotated_proc.cav" Valid
@@ -557,6 +563,10 @@ let%test_unit "Main.verify false boolean in spec" =
 (* A boolean procedure parameter, referenced in the callee's contract. *)
 let%test_unit "Main.verify true boolean parameter" =
   check_verify "verify_true_bool_param.cav" Valid
+
+(* A variable copied from a boolean is inferred boolean ([same := pos]). *)
+let%test_unit "Main.verify true boolean copy" =
+  check_verify "verify_true_bool_copy.cav" Valid
 
 (* The same boolean-scalar program runs to a concrete result (x = 5 >= 0, so the
    [else] branch gives y = x = 5). *)
