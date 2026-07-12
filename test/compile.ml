@@ -96,6 +96,23 @@ let%test_unit "Compile.emit - boolean scalar is a bool ref" =
   List.iter [ "let g_b = ref false"; "g_b :=" ] ~f:(fun substring ->
       [%test_pred: string] (contains ~substring) out)
 
+let%test_unit "Compile.emit - boolean array element encodes 0/1" =
+  (* a := array(2); a[0] := true; if a[0] then 1 else 0 end -- a boolean array is
+     a backend-int array: the element is stored 1 and read by comparing to 0. *)
+  let body =
+    Seq
+      ( ArrMake ("a", Value (Int 2)),
+        Seq
+          ( ArrAssgn ("a", Value (Int 0), BoolE (Value (Bool true))),
+            If
+              ( BGet ("a", Value (Int 0)),
+                IntExpr (Value (Int 1)),
+                IntExpr (Value (Int 0)) ) ) )
+  in
+  let out = emit_main body in
+  List.iter [ "Array.make"; "Z.equal"; "if true" ] ~f:(fun substring ->
+      [%test_pred: string] (contains ~substring) out)
+
 let%test_unit "Compile.emit - while emits a Zarith-guarded loop" =
   (* while i < 10 do invariant { true } i := i + 1 end *)
   let body =
@@ -155,7 +172,7 @@ let%test_unit "Compile.emit - arrays: array ref, make, and indexed get/set" =
     Seq
       ( ArrMake ("a", Value (Int 3)),
         Seq
-          ( ArrAssgn ("a", Value (Int 1), Value (Int 5)),
+          ( ArrAssgn ("a", Value (Int 1), IntE (Value (Int 5))),
             IntExpr (Plus (Len "a", Get ("a", Value (Int 1)))) ) )
   in
   let out = emit_main body in

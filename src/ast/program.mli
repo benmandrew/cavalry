@@ -40,6 +40,7 @@ type _ expr =
   | Div : int expr * int expr -> int expr
   | Mod : int expr * int expr -> int expr
   | Get : string * int expr -> int expr
+  | BGet : string * int expr -> bool expr
   | Len : string -> int expr
 [@@deriving sexp_of]
 
@@ -61,7 +62,7 @@ type cmd =
   | While of Logic.expr * Logic.arith_expr option * bool expr * cmd
   | Print of int expr
   | ArrMake of string * int expr
-  | ArrAssgn of string * int expr * int expr
+  | ArrAssgn of string * int expr * anyexpr
   | Located of Loc.t * cmd
 [@@deriving sexp_of]
 
@@ -108,15 +109,17 @@ exception TypeError of string
 
 val translate_cmd :
   is_bool:(string -> bool) ->
+  is_bool_array:(string -> bool) ->
   proc_bool_params:(string -> bool list) ->
   ut_expr ->
   cmd
 (** Translate the untyped parser output into the typed {!cmd} AST. [is_bool]
-    reports whether a name is a boolean variable, so its occurrences and the
-    right-hand sides assigned to it elaborate at [bool] rather than [int];
-    [proc_bool_params f] gives, per formal of procedure [f], whether it is
-    boolean, so a call's actuals elaborate at their formals' types. Both come
-    from {!Typecheck}, which has already validated well-typedness.
+    reports whether a name is a boolean variable and [is_bool_array] whether it
+    is a boolean array, so occurrences and assigned right-hand sides elaborate
+    at [bool] rather than [int]; [proc_bool_params f] gives, per formal of
+    procedure [f], whether it is boolean, so a call's actuals elaborate at their
+    formals' types. All come from {!Typecheck}, which has already validated
+    well-typedness.
 
     @raise TypeError on malformed input (a checked program never triggers this).
 *)

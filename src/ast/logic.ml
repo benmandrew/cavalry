@@ -16,6 +16,8 @@ type arith_expr =
 type logic_expr =
   | Bool of bool
   | BoolVar of string (* a boolean program variable as a proposition *)
+  | BGet of
+      string * arith_expr (* a boolean array element a[i] as a proposition *)
   | Not of logic_expr
   | And of logic_expr * logic_expr
   | Or of logic_expr * logic_expr
@@ -57,7 +59,16 @@ let rec translate_arith_term ~g_vars ?l_vars ?(bound = Vars.empty) e =
   | Mul (e0, e1) -> Arith.mul (f e0) (f e1)
   | Div (e0, e1) -> Arith.div (f e0) (f e1)
   | Mod (e0, e1) -> Arith.modulo (f e0) (f e1)
-  | Get (a, i) -> Arith.aget (var a) (f i)
+  (* [a[i]] uses the boolean [get] when [a] is a boolean array, so its element
+     is [bool]-sorted (used by [=]/[!=] over booleans below). *)
+  | Get (a, i) ->
+      let av = resolve ~g_vars ?l_vars ~bound a in
+      let get =
+        if Why3.Ty.ty_equal av.T.vs_ty (Lazy.force Arith.ty_int_bool_map) then
+          Arith.aget_bool
+        else Arith.aget
+      in
+      get (T.t_var av) (f i)
   | Len a -> var (Vars.len_key a)
 
 let rec translate_term ~g_vars ?l_vars ?(bound = Vars.empty) e =
@@ -82,6 +93,10 @@ let rec translate_term ~g_vars ?l_vars ?(bound = Vars.empty) e =
   (* A boolean program variable asserted as a proposition: [v = True]. *)
   | BoolVar x ->
       T.t_equ (T.t_var (resolve ~g_vars ?l_vars ~bound x)) T.t_bool_true
+  (* A boolean array element asserted as a proposition: [a[i] = True]. *)
+  | BGet (a, i) ->
+      let av = resolve ~g_vars ?l_vars ~bound a in
+      T.t_equ (Arith.aget_bool (T.t_var av) (f_a i)) T.t_bool_true
   | Not e -> T.t_not (f_t e)
   | And (e0, e1) -> T.t_and (f_t e0) (f_t e1)
   | Or (e0, e1) -> T.t_or (f_t e0) (f_t e1)

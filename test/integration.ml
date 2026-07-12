@@ -529,6 +529,11 @@ let%test_unit "Main.get_ast type error boolean in assertion" =
   check_type_error ~substring:"in an assertion"
     "type_error_bool_in_assertion.cav"
 
+(* A boolean array element used in arithmetic. *)
+let%test_unit "Main.get_ast type error boolean array in arithmetic" =
+  check_type_error ~substring:"expected int but got bool"
+    "type_error_bool_array_arith.cav"
+
 (* Optional int parameter annotations are accepted and the program verifies. *)
 let%test_unit "Main.verify true annotated procedure" =
   check_verify "verify_true_annotated_proc.cav" Valid
@@ -567,6 +572,21 @@ let%test_unit "Main.verify true boolean parameter" =
 (* A variable copied from a boolean is inferred boolean ([same := pos]). *)
 let%test_unit "Main.verify true boolean copy" =
   check_verify "verify_true_bool_copy.cav" Valid
+
+(* A boolean array, with a quantified invariant/postcondition over its elements. *)
+let%test_unit "Main.verify true boolean array" =
+  check_verify "verify_true_bool_array.cav" Valid
+
+let%test_unit "Main.verify true boolean array read" =
+  check_verify "verify_true_bool_array_read.cav" Valid
+
+(* Its element read as a guard runs to a concrete result (a[1] is true). *)
+let%test_unit "Main.exec boolean array" =
+  [%test_result: int] (Main.exec "verify_true_bool_array_read.cav") ~expect:1
+
+(* A parenthesised quantifier grouped inside an assertion. *)
+let%test_unit "Main.verify true parenthesised quantifier" =
+  check_verify "verify_true_paren_quantifier.cav" Valid
 
 (* The same boolean-scalar program runs to a concrete result (x = 5 >= 0, so the
    [else] branch gives y = x = 5). *)

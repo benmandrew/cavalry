@@ -30,6 +30,7 @@ let collect_logic e =
   let rec collect_logic_expr = function
     | Bool _ -> Str_set.empty
     | BoolVar x -> Str_set.singleton x
+    | BGet (a, i) -> Str_set.add a (collect_arith_expr i)
     | Not e -> collect_logic_expr e
     | And (e, e') | Or (e, e') | Impl (e, e') ->
         Str_set.union (collect_logic_expr e) (collect_logic_expr e')
@@ -68,7 +69,7 @@ let collect_program c =
     | And (e, e') | Or (e, e') | Beq (e, e') | Bneq (e, e') ->
         Str_set.union (collect_expr e) (collect_expr e')
     | Not e -> collect_expr e
-    | Get (a, e) -> Str_set.add a (collect_expr e)
+    | Get (a, e) | BGet (a, e) -> Str_set.add a (collect_expr e)
     | Len a -> Str_set.singleton a
   in
   let collect_any = function
@@ -94,7 +95,7 @@ let collect_program c =
     | Print e -> collect_expr e
     | ArrMake (a, n) -> Str_set.add a (collect_expr n)
     | ArrAssgn (a, i, e) ->
-        Str_set.add a (Str_set.union (collect_expr i) (collect_expr e))
+        Str_set.add a (Str_set.union (collect_expr i) (collect_any e))
   in
   collect_cmd c
 
@@ -119,6 +120,7 @@ let arrays_logic e =
   let arith = arrays_arith in
   let rec logic = function
     | Bool _ | BoolVar _ -> Str_set.empty
+    | BGet (a, i) -> Str_set.add a (arith i)
     | Not e | Forall (_, e) | Exists (_, e) -> logic e
     | And (a, b) | Or (a, b) | Impl (a, b) -> Str_set.union (logic a) (logic b)
     | Eq (a, b) | Neq (a, b) | Lt (a, b) | Leq (a, b) | Gt (a, b) | Geq (a, b)
@@ -131,7 +133,7 @@ let arrays_program c =
   let open Program in
   let rec expr : type a. a expr -> Str_set.t = function
     | Value _ -> Str_set.empty
-    | Get (a, e) -> Str_set.add a (expr e)
+    | Get (a, e) | BGet (a, e) -> Str_set.add a (expr e)
     | Len a -> Str_set.singleton a
     | Plus (a, b)
     | Sub (a, b)
@@ -163,7 +165,7 @@ let arrays_program c =
     | Proc (_, ps) ->
         List.fold_left (fun s e -> Str_set.union s (any e)) Str_set.empty ps
     | ArrMake (a, n) -> Str_set.add a (expr n)
-    | ArrAssgn (a, i, e) -> Str_set.add a (Str_set.union (expr i) (expr e))
+    | ArrAssgn (a, i, e) -> Str_set.add a (Str_set.union (expr i) (any e))
   in
   cmd c
 
@@ -180,7 +182,7 @@ let bools_program c =
   in
   let rec expr : type a. a expr -> Str_set.t = function
     | Value v -> value v
-    | Get (_, e) -> expr e
+    | Get (_, e) | BGet (_, e) -> expr e
     | Len _ -> Str_set.empty
     | Plus (a, b)
     | Sub (a, b)
@@ -210,7 +212,50 @@ let bools_program c =
     | Proc (_, ps) ->
         List.fold_left (fun s e -> Str_set.union s (any e)) Str_set.empty ps
     | ArrMake (_, n) -> expr n
-    | ArrAssgn (_, i, e) -> Str_set.union (expr i) (expr e)
+    | ArrAssgn (_, i, e) -> Str_set.union (expr i) (any e)
+  in
+  cmd c
+
+(* Names used as boolean arrays: an array read as a [BGet], or the target of an
+   element assignment whose value is boolean ([BoolE]). A boolean-array name is
+   given a [map int bool] symbol by [str_set_to_vars]. *)
+let bool_arrays_program c =
+  let open Program in
+  let rec expr : type a. a expr -> Str_set.t = function
+    | Value _ -> Str_set.empty
+    | BGet (a, e) -> Str_set.add a (expr e)
+    | Get (_, e) -> expr e
+    | Len _ -> Str_set.empty
+    | Plus (a, b)
+    | Sub (a, b)
+    | Mul (a, b)
+    | Div (a, b)
+    | Mod (a, b)
+    | Eq (a, b)
+    | Neq (a, b)
+    | Lt (a, b)
+    | Leq (a, b)
+    | Gt (a, b)
+    | Geq (a, b) ->
+        Str_set.union (expr a) (expr b)
+    | And (a, b) | Or (a, b) | Beq (a, b) | Bneq (a, b) ->
+        Str_set.union (expr a) (expr b)
+    | Not a -> expr a
+  in
+  let any = function IntE e -> expr e | BoolE e -> expr e in
+  let rec cmd = function
+    | Located (_, c) -> cmd c
+    | IntExpr e | Print e -> expr e
+    | Assgn (_, e) | Let (_, e) -> any e
+    | Seq (a, b) -> Str_set.union (cmd a) (cmd b)
+    | If (b, c, c') -> Str_set.union (expr b) (Str_set.union (cmd c) (cmd c'))
+    | While (_inv, _variant, b, c) -> Str_set.union (expr b) (cmd c)
+    | Proc (_, ps) ->
+        List.fold_left (fun s e -> Str_set.union s (any e)) Str_set.empty ps
+    | ArrMake (_, n) -> expr n
+    | ArrAssgn (a, i, BoolE e) ->
+        Str_set.add a (Str_set.union (expr i) (expr e))
+    | ArrAssgn (_, i, IntE e) -> Str_set.union (expr i) (expr e)
   in
   cmd c
 
@@ -239,7 +284,20 @@ let bools_logic e =
   let open Logic in
   let rec go = function
     | BoolVar x -> Str_set.singleton x
-    | Bool _ | Eq _ | Neq _ | Lt _ | Leq _ | Gt _ | Geq _ -> Str_set.empty
+    | Bool _ | BGet _ | Eq _ | Neq _ | Lt _ | Leq _ | Gt _ | Geq _ ->
+        Str_set.empty
+    | Not e | Forall (_, e) | Exists (_, e) -> go e
+    | And (a, b) | Or (a, b) | Impl (a, b) -> Str_set.union (go a) (go b)
+  in
+  go e
+
+(* Boolean arrays an assertion mentions via an element proposition ([BGet]). *)
+let bool_arrays_logic e =
+  let open Logic in
+  let rec go = function
+    | BGet (a, _) -> Str_set.singleton a
+    | BoolVar _ | Bool _ | Eq _ | Neq _ | Lt _ | Leq _ | Gt _ | Geq _ ->
+        Str_set.empty
     | Not e | Forall (_, e) | Exists (_, e) -> go e
     | And (a, b) | Or (a, b) | Impl (a, b) -> Str_set.union (go a) (go b)
   in
@@ -253,6 +311,14 @@ let all_bools (program : Triple.t list) =
            (Str_set.union (bools_logic t.p) (bools_logic t.q))))
     Str_set.empty program
 
+let all_bool_arrays (program : Triple.t list) =
+  List.fold_left
+    (fun s (t : Triple.t) ->
+      Str_set.union s
+        (Str_set.union (bool_arrays_program t.c)
+           (Str_set.union (bool_arrays_logic t.p) (bool_arrays_logic t.q))))
+    Str_set.empty program
+
 let collect_procedure globals (t : Triple.t) =
   let p_vars = collect_logic t.p in
   let q_vars = collect_logic t.q in
@@ -262,13 +328,17 @@ let collect_procedure globals (t : Triple.t) =
   (* If global variables occur in the procedure, don't add them as local variables *)
   Str_set.fold (fun global vars -> Str_set.remove global vars) globals vars
 
-let str_set_to_vars ~arrays ~bools vars =
+let str_set_to_vars ~arrays ~bools ~bool_arrays vars =
   let f x vs =
     if Str_set.mem x arrays then
-      (* An array contributes two symbols: its [map int int] element store and a
-         companion integer length under [Vars.len_key]. *)
-      Vars.add x
-        (Vars.create_fresh_array x)
+      (* An array contributes two symbols: its element store ([map int int] or,
+         for a boolean array, [map int bool]) and a companion integer length
+         under [Vars.len_key]. *)
+      let store =
+        if Str_set.mem x bool_arrays then Vars.create_fresh_bool_array x
+        else Vars.create_fresh_array x
+      in
+      Vars.add x store
         (Vars.add (Vars.len_key x) (Vars.create_fresh (Vars.len_key x)) vs)
     else if Str_set.mem x bools then Vars.add x (Vars.create_fresh_bool x) vs
     else Vars.add x (Vars.create_fresh x) vs
@@ -279,16 +349,14 @@ let collect (program : Triple.t list) =
   let procedures, main = split_last program in
   let arrays = all_arrays program in
   let bools = all_bools program in
+  let bool_arrays = all_bool_arrays program in
+  let to_vars = str_set_to_vars ~arrays ~bools ~bool_arrays in
   let globals =
     Str_set.union (collect_procedure Str_set.empty main) (all_writes program)
   in
   let procedures =
     List.map
-      (fun proc ->
-        let vars =
-          str_set_to_vars ~arrays ~bools (collect_procedure globals proc)
-        in
-        (proc, vars))
+      (fun proc -> (proc, to_vars (collect_procedure globals proc)))
       procedures
   in
-  procedures @ [ (main, str_set_to_vars ~arrays ~bools globals) ]
+  procedures @ [ (main, to_vars globals) ]

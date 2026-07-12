@@ -133,6 +133,8 @@ let rec exec_expr : type a. Runtime.t -> a expr -> a =
       let v1 = exec_expr r a in
       v1 mod exec_expr r b
   | Get (a, i) -> (Runtime.find_array r a).(exec_expr r i)
+  (* Boolean arrays share the integer array store, encoded 0/1 like scalars. *)
+  | BGet (a, i) -> (Runtime.find_array r a).(exec_expr r i) <> 0
   | Len a -> Array.length (Runtime.find_array r a)
   | Eq (a, b) ->
       let v1 = exec_expr r a in
@@ -226,7 +228,12 @@ and exec_cmd ?(fuel = ref max_int) r c : int * Runtime.t =
       (0, Runtime.add_global_array r a arr)
   | ArrAssgn (a, i, e) ->
       let idx = exec_expr r i in
-      let v = exec_expr r e in
+      (* A boolean value is stored 0/1, like a boolean scalar. *)
+      let v =
+        match e with
+        | IntE e -> exec_expr r e
+        | BoolE e -> if exec_expr r e then 1 else 0
+      in
       (* Mutate in place: [exec_cmd] threads the environment linearly (every
          caller discards its input once it holds the successor), so no live
          environment aliases this array. Same array object, same map -- O(1). *)

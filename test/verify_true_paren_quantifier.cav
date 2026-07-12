@@ -1,0 +1,11 @@
+// A parenthesised quantifier grouped inside an && chain in the invariant.
+{ n >= 0 }
+a := array(n);
+i := 0;
+while i < len(a) do
+  invariant { 0 <= i && i <= len(a) && (forall j . 0 <= j && j < i -> a[j] = 0) }
+  variant { len(a) - i }
+  a[i] := 0;
+  i := i + 1
+end
+{ forall j . 0 <= j && j < len(a) -> a[j] = 0 }

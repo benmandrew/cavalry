@@ -1,0 +1,12 @@
+// A boolean array element read as a guard: a[1] was set to true, so the first
+// branch is taken. Runnable and verifiable. (a[0] is the default, false.)
+{ true }
+a := array(3);
+a[1] := true;
+if a[1] then
+  x := 1
+else
+  x := 2
+end;
+x
+{ x = 1 }

@@ -87,6 +87,10 @@
    verify_true_bool_param.cav
    verify_true_bool_copy.cav
    type_error_bool_in_assertion.cav
+   verify_true_bool_array.cav
+   verify_true_bool_array_read.cav
+   type_error_bool_array_arith.cav
+   verify_true_paren_quantifier.cav
    type_error_bool_arith.cav
    type_error_var_guard.cav
    verify_false_writes_undeclared.cav

@@ -1,0 +1,7 @@
+// a is a boolean array (a[0] := true), so using its element in arithmetic is a
+// type error.
+{ true }
+a := array(3);
+a[0] := true;
+x := a[0] + 1
+{ true }

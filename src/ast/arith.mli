@@ -31,15 +31,27 @@ val ty_int_map : Ty.ty Lazy.t
     {!min_int}). *)
 
 val aget : Term.term -> Term.term -> Term.term
-(** [aget a i] is the element [a[i]] ([map.Map]'s [get]). *)
+(** [aget a i] is the element [a[i]] ([map.Map]'s [get]) of an integer array. *)
+
+val aget_bool : Term.term -> Term.term -> Term.term
+(** [aget a i] for a boolean array: a [bool]-sorted element term. *)
 
 val aset : Term.term -> Term.term -> Term.term -> Term.term
 (** [aset a i v] is the array [a] with index [i] updated to [v] ([map.Map]'s
     [set]); other indices and the separately-tracked length are unchanged. *)
 
+val aset_bool : Term.term -> Term.term -> Term.term -> Term.term
+(** [aset a i v] for a boolean array (over a [map int bool]). *)
+
 val azero : Term.term Lazy.t
 (** The all-zeros element store an [array(n)] begins from ([map.Const]'s
     [const 0]). Lazy for the same reason as {!ty_int_map}. *)
+
+val ty_int_bool_map : Ty.ty Lazy.t
+(** The Why3 type of a boolean array's element store: [map int bool]. *)
+
+val bfalse : Term.term Lazy.t
+(** The all-[False] element store a boolean [array(n)] begins from. *)
 
 val eq : Term.term -> Term.term -> Term.term
 val neq : Term.term -> Term.term -> Term.term

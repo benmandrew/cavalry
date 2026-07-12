@@ -45,6 +45,9 @@ val create_fresh_bool : string -> Why3.Term.vsymbol
 val create_fresh_array : string -> Why3.Term.vsymbol
 (** A fresh array-valued ([map int int]) variable. *)
 
+val create_fresh_bool_array : string -> Why3.Term.vsymbol
+(** A fresh boolean-array ([map int bool]) variable. *)
+
 val fresh_like : T.vsymbol -> Why3.Term.vsymbol
 (** A fresh variable of the same type as the argument, for havoc'ing a variable
     without assuming it is an integer. *)

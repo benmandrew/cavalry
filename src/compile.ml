@@ -126,7 +126,7 @@ let rec assigned = function
 (* Array globals to declare = every name used as an array anywhere in the
    program bodies (created, element-written, indexed, or measured). *)
 let rec arrays_expr : type a. a expr -> Str_set.t = function
-  | Get (a, i) -> Str_set.add a (arrays_expr i)
+  | Get (a, i) | BGet (a, i) -> Str_set.add a (arrays_expr i)
   | Len a -> Str_set.singleton a
   | Value _ -> Str_set.empty
   | Plus (a, b)
@@ -155,7 +155,8 @@ let rec arrays = function
   | Assgn (_, BoolE e) | Let (_, BoolE e) -> arrays_expr e
   | ArrMake (a, n) -> Str_set.add a (arrays_expr n)
   | ArrAssgn (a, i, e) ->
-      Str_set.add a (Str_set.union (arrays_expr i) (arrays_expr e))
+      let any = function IntE e -> arrays_expr e | BoolE e -> arrays_expr e in
+      Str_set.add a (Str_set.union (arrays_expr i) (any e))
   | Proc (_, ps) ->
       let any = function IntE e -> arrays_expr e | BoolE e -> arrays_expr e in
       List.fold_left (fun s e -> Str_set.union s (any e)) Str_set.empty ps
@@ -213,6 +214,12 @@ let emit_bool ~ops ~locals (e : bool expr) : string =
     match e with
     | Value (Bool b) -> string_of_bool b
     | Value (BoolVar x) -> emit_read ~locals x
+    (* A boolean array is a backend-int array encoded 0/1: read the element and
+       compare it to zero. *)
+    | BGet (a, i) ->
+        Printf.sprintf "(not (%s (!%s).(%s) %s))" ops.eq (gref a)
+          (ops.idx (emit_int ~ops ~locals i))
+          ops.zero
     | Eq (a, b) -> cmp ops.eq a b
     | Neq (a, b) -> Printf.sprintf "(not %s)" (cmp ops.eq a b)
     | Lt (a, b) -> cmp ops.lt a b
@@ -264,9 +271,17 @@ let rec emit_cmd ~ops ~locals c : string =
         (ops.idx (emit_int ~ops ~locals n))
         ops.zero ops.zero
   | ArrAssgn (a, i, e) ->
-      (* a[i] := e; command value is the assigned element. *)
-      Printf.sprintf "(let v = %s in (!%s).(%s) <- v; v)"
-        (emit_int ~ops ~locals e) (gref a)
+      (* a[i] := e; command value is the assigned element. A boolean value is
+         stored 0/1 (like a boolean scalar), keeping the array a backend-int
+         array. *)
+      let v =
+        match e with
+        | IntE e -> emit_int ~ops ~locals e
+        | BoolE e ->
+            Printf.sprintf "(if %s then %s else %s)" (emit_bool ~ops ~locals e)
+              (ops.lit 1) ops.zero
+      in
+      Printf.sprintf "(let v = %s in (!%s).(%s) <- v; v)" v (gref a)
         (ops.idx (emit_int ~ops ~locals i))
   | IntExpr e -> emit_int ~ops ~locals e
   | If (b, c, c') ->
