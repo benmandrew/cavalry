@@ -510,7 +510,7 @@ let rec cmd_to_cav c =
         (expr_to_cav b) (logic_to_cav inv) variant_clause
         (indent 2 (cmd_to_cav body))
   | Program.Proc (f, ps) ->
-      Printf.sprintf "%s(%s)" f (String.concat ", " (List.map expr_to_cav ps))
+      Printf.sprintf "%s(%s)" f (String.concat ", " (List.map any_to_cav ps))
   | Program.IntExpr e -> expr_to_cav e
   | Program.Print e -> Printf.sprintf "print %s" (expr_to_cav e)
   | Program.ArrMake (a, n) -> Printf.sprintf "%s := array(%s)" a (expr_to_cav n)

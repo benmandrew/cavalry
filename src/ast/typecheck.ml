@@ -179,7 +179,7 @@ let program_bools (program : Triple.ut_t list) =
 
 (* ===== Expression typing ===== *)
 
-type env = { arrays : SS.t; bools : SS.t; procs : (string * int) list }
+type env = { arrays : SS.t; bools : SS.t; procs : (string * Ty.t list) list }
 
 let require_array env loc a =
   if not (SS.mem a env.arrays) then
@@ -241,12 +241,13 @@ and expect env loc (expected : Ty.t) (e : Program.ut_expr) =
 let check_call env loc f args =
   match List.assoc_opt f env.procs with
   | None -> fail loc "call to undeclared procedure '%s'" f
-  | Some arity ->
+  | Some tys ->
+      let arity = List.length tys in
       let n = List.length args in
       if n <> arity then
         fail loc "procedure '%s' expects %d argument(s) but got %d" f arity n;
-      (* Parameters are integer scalars, so every actual must be an [int]. *)
-      List.iter (expect env loc Ty.Int) args
+      (* Each actual must match its formal's type. *)
+      List.iter2 (fun ty arg -> expect env loc ty arg) tys args
 
 let rec check_cmd env loc (e : Program.ut_expr) : unit =
   let open Program in
@@ -291,54 +292,70 @@ let rec check_cmd env loc (e : Program.ut_expr) : unit =
   | UOr _ | UNot _ ->
       expect env loc Ty.Int e
 
-(* Validate optional parameter annotations. Parameters are integer scalars
-   today, so an [int] annotation is accepted (and redundant) while [bool] or an
-   array type is rejected as not-yet-supported rather than silently ignored. *)
-let check_params (ps : (string * Ty.t option) list) =
+(* Validate optional parameter annotations against the inferred classification.
+   Integer and boolean parameters are supported; arrays (always globals) are
+   not. An [int] annotation must not contradict a boolean use. *)
+let check_params ~arrays ~bools (ps : (string * Ty.t option) list) =
   List.iter
-    (function
-      | _, None | _, Some Ty.Int -> ()
-      | name, Some t ->
-          fail None
-            "parameter '%s' has type %s, but only integer parameters are \
-             supported"
-            name (Ty.to_string t))
+    (fun (name, ann) ->
+      if SS.mem name arrays then
+        fail None "array parameter '%s' is not supported" name;
+      match ann with
+      | None | Some Ty.Bool -> ()
+      | Some Ty.Int ->
+          if SS.mem name bools then
+            fail None "parameter '%s' is annotated int but used as a boolean"
+              name
+      | Some (Ty.Array _) ->
+          fail None "array parameter '%s' is not supported" name)
     ps
 
-let check (program : Triple.ut_t list) : string list =
+type checked = {
+  bool_vars : string list;  (** names of the program's boolean variables *)
+  proc_bool_params : (string * bool list) list;
+      (** per procedure, whether each formal parameter is boolean *)
+}
+
+let check (program : Triple.ut_t list) : checked =
   let arrays = program_arrays program in
-  let bools = program_bools program in
+  (* Boolean names: inferred from bodies and assertions, plus any parameter
+     annotated [: bool]. *)
+  let annotated_bools =
+    List.fold_left
+      (fun s (t : Triple.ut_t) ->
+        List.fold_left
+          (fun s (p, ann) ->
+            match ann with Some Ty.Bool -> SS.add p s | _ -> s)
+          s t.ps)
+      SS.empty program
+  in
+  let bools = SS.union (program_bools program) annotated_bools in
   (* A name cannot be both an array and a boolean. *)
   (match SS.choose_opt (SS.inter arrays bools) with
   | Some x -> fail None "variable '%s' is used as both an array and a boolean" x
   | None -> ());
-  (* Boolean procedure parameters are not yet supported; reject an inferred one
-     (an annotated one is caught by [check_params]). *)
-  let params =
-    List.fold_left
-      (fun s (t : Triple.ut_t) ->
-        List.fold_left (fun s (p, _) -> SS.add p s) s t.ps)
-      SS.empty program
-  in
-  (match SS.choose_opt (SS.inter params bools) with
-  | Some x ->
-      fail None
-        "parameter '%s' is boolean, but only integer parameters are supported" x
-  | None -> ());
+  (* A parameter's type: boolean if inferred or annotated so, else integer.
+     (Array parameters are rejected by [check_params].) *)
+  let param_ty n = if SS.mem n bools then Ty.Bool else Ty.Int in
   (* Every triple but the last is a named procedure; the last is [main] and is
-     not callable. Signatures are (name, arity). *)
+     not callable. A signature is the procedure's parameter types. *)
   let procs =
     match List.rev program with
     | _main :: rev_procs ->
         List.rev_map
-          (fun (t : Triple.ut_t) -> (t.f, List.length t.ps))
+          (fun (t : Triple.ut_t) ->
+            (t.f, List.map (fun (n, _) -> param_ty n) t.ps))
           rev_procs
     | [] -> []
   in
   let env = { arrays; bools; procs } in
   List.iter
     (fun (t : Triple.ut_t) ->
-      check_params t.ps;
+      check_params ~arrays ~bools t.ps;
       check_cmd env None t.u)
     program;
-  SS.elements bools
+  {
+    bool_vars = SS.elements bools;
+    proc_bool_params =
+      List.map (fun (f, tys) -> (f, List.map (Ty.equal Ty.Bool) tys)) procs;
+  }

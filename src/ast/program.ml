@@ -41,7 +41,7 @@ type cmd =
   | Seq of cmd * cmd
   | Assgn of string * anyexpr
   | Let of string * anyexpr
-  | Proc of string * int expr list
+  | Proc of string * anyexpr list
   | If of bool expr * cmd * cmd
   | While of Logic.expr * Logic.arith_expr option * bool expr * cmd
     (* invariant, optional variant (decreasing measure), guard, body *)
@@ -144,14 +144,20 @@ let expr_to_cmd e = IntExpr (t_int_expr e)
 let t_rhs ~is_bool x e =
   if is_bool x then BoolE (t_bool_expr ~is_bool e) else IntE (t_int_expr e)
 
-let rec t_cmd ~is_bool c =
-  let recur = t_cmd ~is_bool in
+let rec t_cmd ~is_bool ~proc_bool_params c =
+  let recur = t_cmd ~is_bool ~proc_bool_params in
   match c with
   | ULoc (loc, e) -> Located (loc, recur e)
   | USeq (c, c') -> Seq (recur c, recur c')
   | UAssgn (s, e) -> Assgn (s, t_rhs ~is_bool s e)
   | ULet (s, e) -> Let (s, t_rhs ~is_bool s e)
-  | UProc (f, ps) -> Proc (f, List.map ps ~f:t_int_expr)
+  | UProc (f, ps) ->
+      (* Each actual is elaborated at its formal's type: a boolean parameter
+         takes a boolean argument. [Typecheck] has matched the arity. *)
+      let arg is_b e =
+        if is_b then BoolE (t_bool_expr ~is_bool e) else IntE (t_int_expr e)
+      in
+      Proc (f, List.map2_exn (proc_bool_params f) ps ~f:arg)
   | UIf (e, c, c') -> If (t_bool_expr ~is_bool e, recur c, recur c')
   | UWhile (inv, variant, e, c) ->
       While (inv, variant, t_bool_expr ~is_bool e, recur c)
@@ -160,4 +166,4 @@ let rec t_cmd ~is_bool c =
   | UArrAssgn (a, i, e) -> ArrAssgn (a, t_int_expr i, t_int_expr e)
   | v -> expr_to_cmd v
 
-let translate_cmd ~is_bool = t_cmd ~is_bool
+let translate_cmd ~is_bool ~proc_bool_params = t_cmd ~is_bool ~proc_bool_params

@@ -508,9 +508,9 @@ let%test_unit "Main.get_ast type error undeclared procedure" =
 let%test_unit "Main.get_ast type error call arity" =
   check_type_error ~substring:"argument" "type_error_arity.cav"
 
-(* Only integer parameters are supported, so a bool-annotated one is rejected. *)
-let%test_unit "Main.get_ast type error bool parameter" =
-  check_type_error ~substring:"only integer parameters"
+(* A parameter annotated int but used as a boolean is a type error. *)
+let%test_unit "Main.get_ast type error parameter annotation mismatch" =
+  check_type_error ~substring:"annotated int but used as a boolean"
     "type_error_bool_param.cav"
 
 (* A boolean variable used in arithmetic. *)
@@ -553,6 +553,10 @@ let%test_unit "Main.verify true boolean in invariant" =
 (* A false boolean postcondition is caught. *)
 let%test_unit "Main.verify false boolean in spec" =
   check_verify "verify_false_bool_spec.cav" Invalid
+
+(* A boolean procedure parameter, referenced in the callee's contract. *)
+let%test_unit "Main.verify true boolean parameter" =
+  check_verify "verify_true_bool_param.cav" Valid
 
 (* The same boolean-scalar program runs to a concrete result (x = 5 >= 0, so the
    [else] branch gives y = x = 5). *)

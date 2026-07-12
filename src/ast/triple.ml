@@ -27,13 +27,13 @@ type t = {
    the typed AST and everything downstream ([Hoare], [Runtime], [Compile]) work
    with plain parameter names. [is_bool] (also from {!Typecheck}) directs the
    elaboration of boolean variables. *)
-let translate ~is_bool { p; f; variant; ws; ps; u; q } =
+let translate ~is_bool ~proc_bool_params { p; f; variant; ws; ps; u; q } =
   {
     p;
     f;
     variant;
     ws;
     ps = List.map fst ps;
-    c = Program.translate_cmd ~is_bool u;
+    c = Program.translate_cmd ~is_bool ~proc_bool_params u;
     q;
   }

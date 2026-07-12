@@ -331,11 +331,17 @@ module Wlp = struct
   let proc ~machine_int ?loc g_vars q l_vars ps (t : Triple.t) =
     let p_f = Logic.translate_term ~g_vars ~l_vars t.p in
     let q_f = Logic.translate_term ~g_vars ~l_vars t.q in
+    (* An actual for a formal: an integer term, or -- for a boolean formal --
+       the boolean right-hand side's formula coerced to a [bool] term, matching
+       the [bool]-sorted formal variable. *)
+    let actual_term = function
+      | IntE e -> expr_to_term ~g_vars ~l_vars e
+      | BoolE e ->
+          T.t_if (expr_to_term ~g_vars ~l_vars e) T.t_bool_true T.t_bool_false
+    in
     let sub_params p =
       let map =
-        List.map2
-          (fun fp e -> (Vars.find fp l_vars, expr_to_term ~g_vars ~l_vars e))
-          t.ps ps
+        List.map2 (fun fp e -> (Vars.find fp l_vars, actual_term e)) t.ps ps
       in
       T.(t_subst (Mvs.of_list map) p)
     in
@@ -455,8 +461,20 @@ module Wlp = struct
             /\ forall y.
               (q_f[x_i <- e_i][x_i <- y_i][x_i@old <- x_i]
               -> q[x_i <- y_i]) *)
+        let safe_arg = function IntE e -> safe_e e | BoolE e -> safe_e e in
+        (* An actual as a term for the recursive-variant substitution: an integer
+           term, or a boolean coerced to a [bool] term (matching the formal). *)
+        let arg_term = function
+          | IntE e -> expr_to_term ~g_vars ~l_vars e
+          | BoolE e ->
+              T.t_if
+                (expr_to_term ~g_vars ~l_vars e)
+                T.t_bool_true T.t_bool_false
+        in
         let args_safe =
-          List.fold_left (fun acc e -> T.t_and_simp acc (safe_e e)) T.t_true ps
+          List.fold_left
+            (fun acc e -> T.t_and_simp acc (safe_arg e))
+            T.t_true ps
         in
         let triple, callee_l_vars = Proc_map.find f procs in
         (* Termination of recursion: if this call targets the enclosing
@@ -473,8 +491,7 @@ module Wlp = struct
               in
               let sub =
                 List.map2
-                  (fun fp e ->
-                    (Vars.find fp callee_l_vars, expr_to_term ~g_vars ~l_vars e))
+                  (fun fp e -> (Vars.find fp callee_l_vars, arg_term e))
                   triple.Triple.ps ps
               in
               let v_actuals = T.t_subst (T.Mvs.of_list sub) v_formals in

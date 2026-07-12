@@ -60,7 +60,9 @@ let%test_unit "Ast.Program.type_expr" =
       ( UAssgn ("x", UPlus (UInt 1, UInt 2)),
         UIf (UEq (UInt 1, UInt 2), UInt 5, UMul (UVar "x", UInt 5)) )
   in
-  let result = translate_cmd ~is_bool:(fun _ -> false) ut in
+  let result =
+    translate_cmd ~is_bool:(fun _ -> false) ~proc_bool_params:(fun _ -> []) ut
+  in
   test_ast_eq ~expected result
 
 let%test_unit "Ast.Runtime.exec - assgn" =
@@ -228,7 +230,14 @@ let%test_unit "Ast.Runtime.exec - function" =
   let program ret =
     List.map
       [ fn; main ret ]
-      ~f:(fun ut -> Triple.translate ~is_bool:(fun _ -> false) ut |> to_proc_t)
+      ~f:(fun ut ->
+        (* [f] takes one integer parameter. *)
+        Triple.translate
+          ~is_bool:(fun _ -> false)
+          ~proc_bool_params:(fun name ->
+            if String.equal name "f" then [ false ] else [])
+          ut
+        |> to_proc_t)
   in
   let result = exec (program "x") in
   [%test_result: int] result ~expect:8;

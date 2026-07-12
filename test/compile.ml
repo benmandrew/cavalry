@@ -124,7 +124,7 @@ let%test_unit "Compile.emit - procedure: formals are locals, Assgn hits global"
            Seq
              ( Assgn ("y", IntE (Value (Int 5))),
                Seq
-                 ( Proc ("f", [ Value (VarInst "y") ]),
+                 ( Proc ("f", [ IntE (Value (VarInst "y")) ]),
                    IntExpr (Value (VarInst "x")) ) ) ))
   in
   let out = Var_collection.collect [ proc; main ] |> Cavalry.Compile.emit in

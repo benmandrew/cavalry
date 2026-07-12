@@ -185,7 +185,12 @@ and exec_cmd ?(fuel = ref max_int) r c : int * Runtime.t =
       let v = if exec_expr r e then 1 else 0 in
       (0, Runtime.add_local_var r x v)
   | Proc (f, ps) ->
-      let ps = List.map (exec_expr r) ps in
+      (* Boolean arguments are passed 0/1, like boolean variables. *)
+      let eval = function
+        | IntE e -> exec_expr r e
+        | BoolE e -> if exec_expr r e then 1 else 0
+      in
+      let ps = List.map eval ps in
       let v, r_proc =
         match Runtime.find_proc r f with
         | { ps = fps; c; _ } ->

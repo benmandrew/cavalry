@@ -157,9 +157,8 @@ let rec arrays = function
   | ArrAssgn (a, i, e) ->
       Str_set.add a (Str_set.union (arrays_expr i) (arrays_expr e))
   | Proc (_, ps) ->
-      List.fold_left
-        (fun s e -> Str_set.union s (arrays_expr e))
-        Str_set.empty ps
+      let any = function IntE e -> arrays_expr e | BoolE e -> arrays_expr e in
+      List.fold_left (fun s e -> Str_set.union s (any e)) Str_set.empty ps
 
 (* Boolean scalar globals: assignment targets whose right-hand side is boolean.
    They compile to a [bool ref] rather than the default [int ref] (see [emit]).
@@ -277,13 +276,15 @@ let rec emit_cmd ~ops ~locals c : string =
       Printf.sprintf "(while %s do ignore (%s : %s) done; %s)"
         (emit_bool ~ops ~locals b) (emit_cmd ~ops ~locals c) ops.ty ops.zero
   | Proc (f, args) ->
+      let emit_arg = function
+        | IntE e -> emit_int ~ops ~locals e
+        | BoolE e -> emit_bool ~ops ~locals e
+      in
       let args =
         match args with
         | [] -> " ()"
         | _ ->
-            List.map
-              (fun a -> Printf.sprintf " (%s)" (emit_int ~ops ~locals a))
-              args
+            List.map (fun a -> Printf.sprintf " (%s)" (emit_arg a)) args
             |> String.concat ""
       in
       Printf.sprintf "(%s%s)" (pname f) args

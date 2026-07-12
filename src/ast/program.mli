@@ -56,7 +56,7 @@ type cmd =
   | Seq of cmd * cmd
   | Assgn of string * anyexpr
   | Let of string * anyexpr
-  | Proc of string * int expr list
+  | Proc of string * anyexpr list
   | If of bool expr * cmd * cmd
   | While of Logic.expr * Logic.arith_expr option * bool expr * cmd
   | Print of int expr
@@ -106,11 +106,17 @@ exception TypeError of string
     e.g. a boolean where an integer is required, or an expression used where a
     command is expected. Carries the offending node, rendered by [show]. *)
 
-val translate_cmd : is_bool:(string -> bool) -> ut_expr -> cmd
+val translate_cmd :
+  is_bool:(string -> bool) ->
+  proc_bool_params:(string -> bool list) ->
+  ut_expr ->
+  cmd
 (** Translate the untyped parser output into the typed {!cmd} AST. [is_bool]
     reports whether a name is a boolean variable, so its occurrences and the
-    right-hand sides assigned to it elaborate at [bool] rather than [int]; it is
-    supplied by {!Typecheck}, which has already validated well-typedness.
+    right-hand sides assigned to it elaborate at [bool] rather than [int];
+    [proc_bool_params f] gives, per formal of procedure [f], whether it is
+    boolean, so a call's actuals elaborate at their formals' types. Both come
+    from {!Typecheck}, which has already validated well-typedness.
 
     @raise TypeError on malformed input (a checked program never triggers this).
 *)

@@ -82,7 +82,7 @@ let collect_program c =
     | Assgn (x, e) | Let (x, e) -> Str_set.(union (singleton x) (collect_any e))
     | Proc (_f, ps) ->
         List.fold_left
-          (fun s e -> collect_expr e |> Str_set.union s)
+          (fun s e -> collect_any e |> Str_set.union s)
           Str_set.empty ps
     | If (b, e, e') ->
         Str_set.union (collect_expr b)
@@ -161,7 +161,7 @@ let arrays_program c =
           (Str_set.union (arrays_logic inv) (arrays_measure variant))
           (Str_set.union (expr b) (cmd c))
     | Proc (_, ps) ->
-        List.fold_left (fun s e -> Str_set.union s (expr e)) Str_set.empty ps
+        List.fold_left (fun s e -> Str_set.union s (any e)) Str_set.empty ps
     | ArrMake (a, n) -> Str_set.add a (expr n)
     | ArrAssgn (a, i, e) -> Str_set.add a (Str_set.union (expr i) (expr e))
   in
@@ -198,6 +198,7 @@ let bools_program c =
         Str_set.union (expr a) (expr b)
     | Not a -> expr a
   in
+  let any = function IntE e -> expr e | BoolE e -> expr e in
   let rec cmd = function
     | Located (_, c) -> cmd c
     | IntExpr e | Print e -> expr e
@@ -207,7 +208,7 @@ let bools_program c =
     | If (b, c, c') -> Str_set.union (expr b) (Str_set.union (cmd c) (cmd c'))
     | While (_inv, _variant, b, c) -> Str_set.union (expr b) (cmd c)
     | Proc (_, ps) ->
-        List.fold_left (fun s e -> Str_set.union s (expr e)) Str_set.empty ps
+        List.fold_left (fun s e -> Str_set.union s (any e)) Str_set.empty ps
     | ArrMake (_, n) -> expr n
     | ArrAssgn (_, i, e) -> Str_set.union (expr i) (expr e)
   in

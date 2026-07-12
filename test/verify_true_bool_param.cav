@@ -1,0 +1,17 @@
+// A boolean procedure parameter, named in the contract: [cond] is annotated
+// bool, used as a guard, and constrains the postcondition. The call passes a
+// boolean argument.
+procedure set_if (cond: bool) =
+  requires { true }
+  ensures { cond -> r = 1 }
+  writes { r }
+  if cond then
+    r := 1
+  else
+    r := 0
+  end
+end
+{ true }
+r := 0;
+set_if(1 < 2)
+{ r = 1 }
