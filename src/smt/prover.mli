@@ -1,12 +1,15 @@
 (** The SMT backend: a thin wrapper over Why3 driving Z3. The prover (pinned to
-    4.16.0) and its driver are loaded once at module initialisation, failing
-    fast with [exit 1] if [why3 config detect] has not found it. *)
+    4.16.0) and its driver are loaded {e lazily} on the first proof, failing
+    fast with [exit 1] if [why3 config detect] has not found it. Deferring the
+    load keeps [cav run], which never proves anything, off that cost -- OCaml
+    otherwise runs a linked module's top-level bindings at process startup. *)
 
 open Why3
 
-val env : Env.env
+val env : Env.env Lazy.t
 (** The Why3 environment (theory load path), shared so callers can build tasks
-    that reference the standard library. *)
+    that reference the standard library. Forced on first use (see the module
+    note on lazy loading). *)
 
 (** A goal's outcome: [Valid] (proven), [Invalid] (a counter-model or [unknown]
     -- not proven), or [Failed] (timeout, out-of-memory, or prover error),

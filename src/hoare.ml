@@ -358,7 +358,9 @@ module Wlp = struct
         let a_v = Vars.find_fallback a l_vars g_vars in
         let len_v = Vars.find_fallback (Vars.len_key a) l_vars g_vars in
         let q_sub =
-          T.t_subst (T.Mvs.of_list [ (a_v, Arith.azero); (len_v, n_t) ]) q
+          T.t_subst
+            (T.Mvs.of_list [ (a_v, Lazy.force Arith.azero); (len_v, n_t) ])
+            q
         in
         let nonneg =
           tag ?loc Array_length_nonneg (Arith.leq (T.t_nat_const 0) n_t)
@@ -579,7 +581,9 @@ let verify_procedure ?timeout ~machine_int ~is_main g_vars procs
      never has a symbol applied to it (e.g. a postcondition of [true]). *)
   let uses_map =
     Arith.uses_map goal
-    || List.exists (fun v -> Ty.ty_equal v.T.vs_ty Arith.ty_int_map) merged_vars
+    || List.exists
+         (fun v -> Ty.ty_equal v.T.vs_ty (Lazy.force Arith.ty_int_map))
+         merged_vars
   in
   let split_task = Arith.task ~div:(Arith.uses_div goal) ~map:uses_map in
   let obligations = Smt.Prover.split_obligations split_task merged_vars goal in

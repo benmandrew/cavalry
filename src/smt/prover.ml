@@ -1,14 +1,21 @@
 open Core
 open Why3
 
+(* Why3 configuration and the Z3 driver are loaded *lazily*: OCaml evaluates
+   every linked module's top-level bindings at process startup, so binding these
+   eagerly made [cav run] -- which never proves anything -- pay the full Why3
+   config-detection and driver-load cost. Deferring them behind [lazy] keeps
+   that ~100 ms off the interpreter path; the thunks are forced from
+   [run_prover]/[counterexample], the only places a prover is actually run. *)
 let config =
-  let dir =
-    None
-    (* (Some "/Users/benmandrew/.opam/cavalry/share/why3/provers-detection-data.conf") *)
-  in
-  Whyconf.init_config dir
+  lazy
+    (let dir =
+       None
+       (* (Some "/Users/benmandrew/.opam/cavalry/share/why3/provers-detection-data.conf") *)
+     in
+     Whyconf.init_config dir)
 
-let main = Whyconf.get_main config
+let main = lazy (Whyconf.get_main (Lazy.force config))
 
 (* Pinned to match the [z3] constraint in dune-project/cavalry.opam. The filter
    is versioned so that a why3 config pointing at a different Z3 fails fast here
@@ -18,48 +25,56 @@ let main = Whyconf.get_main config
 let z3_version = "4.16.0"
 
 let z3 =
-  let open Printf in
-  let fp = Whyconf.parse_filter_prover ("Z3," ^ z3_version) in
-  let provers = Whyconf.filter_provers config fp in
-  (* [filter_provers] also matches Z3's alternative configurations, e.g. "Z3
-     (counterexamples)" and "Z3 (noBV)"; pin the plain build (empty [altern])
-     for a deterministic verdict prover. *)
-  let base =
-    Whyconf.Mprover.filter
-      (fun p _ -> String.is_empty p.Whyconf.prover_altern)
-      provers
-  in
-  let chosen = if Whyconf.Mprover.is_empty base then provers else base in
-  if Whyconf.Mprover.is_empty chosen then (
-    eprintf "Prover Z3 %s not installed or not configured\n" z3_version;
-    exit 1);
-  snd (Whyconf.Mprover.max_binding chosen)
+  lazy
+    (let open Printf in
+     let fp = Whyconf.parse_filter_prover ("Z3," ^ z3_version) in
+     let provers = Whyconf.filter_provers (Lazy.force config) fp in
+     (* [filter_provers] also matches Z3's alternative configurations, e.g. "Z3
+        (counterexamples)" and "Z3 (noBV)"; pin the plain build (empty [altern])
+        for a deterministic verdict prover. *)
+     let base =
+       Whyconf.Mprover.filter
+         (fun p _ -> String.is_empty p.Whyconf.prover_altern)
+         provers
+     in
+     let chosen = if Whyconf.Mprover.is_empty base then provers else base in
+     if Whyconf.Mprover.is_empty chosen then (
+       eprintf "Prover Z3 %s not installed or not configured\n" z3_version;
+       exit 1);
+     snd (Whyconf.Mprover.max_binding chosen))
 
-let env = Env.create_env (Whyconf.loadpath main)
+let env = lazy (Env.create_env (Whyconf.loadpath (Lazy.force main)))
 
 let z3_driver =
-  let open Format in
-  try Driver.load_driver_for_prover main env z3
-  with e ->
-    eprintf "Failed to load driver for Z3: %a\n" Exn_printer.exn_printer e;
-    exit 1
+  lazy
+    (let open Format in
+     try
+       Driver.load_driver_for_prover (Lazy.force main) (Lazy.force env)
+         (Lazy.force z3)
+     with e ->
+       eprintf "Failed to load driver for Z3: %a\n" Exn_printer.exn_printer e;
+       exit 1)
 
 (* Z3's [counterexamples] alternative, loaded best-effort: it drives the
    *advisory* counterexample on a failed obligation, so if it is missing or its
    driver fails to load we simply produce no counterexample -- never affecting
    the verdict. *)
 let z3_ce =
-  try
-    let fp =
-      Whyconf.parse_filter_prover
-        (Printf.sprintf "Z3,%s,counterexamples" z3_version)
-    in
-    let provers = Whyconf.filter_provers config fp in
-    if Whyconf.Mprover.is_empty provers then None
-    else
-      let cp = snd (Whyconf.Mprover.max_binding provers) in
-      Some (cp, Driver.load_driver_for_prover main env cp)
-  with _ -> None
+  lazy
+    (try
+       let fp =
+         Whyconf.parse_filter_prover
+           (Printf.sprintf "Z3,%s,counterexamples" z3_version)
+       in
+       let provers = Whyconf.filter_provers (Lazy.force config) fp in
+       if Whyconf.Mprover.is_empty provers then None
+       else
+         let cp = snd (Whyconf.Mprover.max_binding provers) in
+         Some
+           ( cp,
+             Driver.load_driver_for_prover (Lazy.force main) (Lazy.force env) cp
+           )
+     with _ -> None)
 
 type result = Valid | Invalid | Failed of string [@@deriving sexp_of, ord]
 
@@ -93,8 +108,9 @@ let run_prover timeout task =
     | Some limit_time ->
         { Call_provers.limit_time; limit_mem = -1; limit_steps = -1 }
   in
+  let main = Lazy.force main and z3 = Lazy.force z3 in
   Driver.prove_task ~limits:limit ~config:main ~command:z3.Whyconf.command
-    z3_driver task
+    (Lazy.force z3_driver) task
   |> Call_provers.wait_on_call
 
 let prove_term_status timeout base_task term =
@@ -184,7 +200,7 @@ let skolemise f =
    expand an array literal into a concrete list using its length -- which lives
    in a separate [#len#] model entry the AST layer knows how to pair up. *)
 let counterexample timeout base_task expose f =
-  match z3_ce with
+  match Lazy.force z3_ce with
   | None -> []
   | Some (cp, driver) -> (
       let expose_names =
@@ -202,8 +218,8 @@ let counterexample timeout base_task expose f =
             { Call_provers.limit_time; limit_mem = -1; limit_steps = -1 }
       in
       let r =
-        Driver.prove_task ~command:cp.Whyconf.command ~config:main ~limits
-          driver task
+        Driver.prove_task ~command:cp.Whyconf.command ~config:(Lazy.force main)
+          ~limits driver task
         |> Call_provers.wait_on_call
       in
       match r.Call_provers.pr_models with
