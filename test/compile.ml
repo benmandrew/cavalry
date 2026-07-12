@@ -16,9 +16,9 @@ let%test_unit "Compile.emit - straight-line arithmetic" =
   (* x := 3; y := x + 4; print(y); x *)
   let body =
     Seq
-      ( Assgn ("x", Value (Int 3)),
+      ( Assgn ("x", IntE (Value (Int 3))),
         Seq
-          ( Assgn ("y", Plus (Value (VarInst "x"), Value (Int 4))),
+          ( Assgn ("y", IntE (Plus (Value (VarInst "x"), Value (Int 4)))),
             Seq (Print (Value (VarInst "y")), IntExpr (Value (VarInst "x"))) )
       )
   in
@@ -47,7 +47,9 @@ let%test_unit "Compile.emit - straight-line arithmetic" =
               (out : string)])
 
 let%test_unit "Compile.emit - result epilogue prints main's value" =
-  let body = Seq (Assgn ("x", Value (Int 1)), IntExpr (Value (VarInst "x"))) in
+  let body =
+    Seq (Assgn ("x", IntE (Value (Int 1))), IntExpr (Value (VarInst "x")))
+  in
   let out = emit_main body in
   [%test_pred: string] (contains ~substring:"let _result =") out
 
@@ -80,6 +82,20 @@ let%test_unit "Compile.emit - boolean connectives use short-circuit operators" =
   List.iter [ "&&"; "||"; "not" ] ~f:(fun substring ->
       [%test_pred: string] (contains ~substring) out)
 
+let%test_unit "Compile.emit - boolean scalar is a bool ref" =
+  (* b := 3 < 5; if b then 1 else 0 end -- the boolean global is a [bool ref]
+     initialised to [false], not an [int ref], and its read feeds the guard. *)
+  let body =
+    Seq
+      ( Assgn ("b", BoolE (Lt (Value (Int 3), Value (Int 5)))),
+        If
+          (Value (BoolVar "b"), IntExpr (Value (Int 1)), IntExpr (Value (Int 0)))
+      )
+  in
+  let out = emit_main body in
+  List.iter [ "let g_b = ref false"; "g_b :=" ] ~f:(fun substring ->
+      [%test_pred: string] (contains ~substring) out)
+
 let%test_unit "Compile.emit - while emits a Zarith-guarded loop" =
   (* while i < 10 do invariant { true } i := i + 1 end *)
   let body =
@@ -87,7 +103,7 @@ let%test_unit "Compile.emit - while emits a Zarith-guarded loop" =
       ( Logic.Bool true,
         None,
         Lt (Value (VarInst "i"), Value (Int 10)),
-        Assgn ("i", Plus (Value (VarInst "i"), Value (Int 1))) )
+        Assgn ("i", IntE (Plus (Value (VarInst "i"), Value (Int 1)))) )
   in
   let out = emit_main body in
   List.iter [ "while "; "Z.lt"; "do"; "done"; "g_i := " ] ~f:(fun substring ->
@@ -99,16 +115,16 @@ let%test_unit "Compile.emit - procedure: formals are locals, Assgn hits global"
      { true } x := 2; y := 5; f(y); x { true } *)
   let proc =
     triple ~f:"f" ~ps:[ "a" ] ~ws:[ "x" ]
-      (Assgn ("x", Plus (Value (VarInst "x"), Value (VarInst "a"))))
+      (Assgn ("x", IntE (Plus (Value (VarInst "x"), Value (VarInst "a")))))
   in
   let main =
     triple
       (Seq
-         ( Assgn ("x", Value (Int 2)),
+         ( Assgn ("x", IntE (Value (Int 2))),
            Seq
-             ( Assgn ("y", Value (Int 5)),
+             ( Assgn ("y", IntE (Value (Int 5))),
                Seq
-                 ( Proc ("f", [ Value (VarInst "y") ]),
+                 ( Proc ("f", [ IntE (Value (VarInst "y")) ]),
                    IntExpr (Value (VarInst "x")) ) ) ))
   in
   let out = Var_collection.collect [ proc; main ] |> Cavalry.Compile.emit in
@@ -127,7 +143,7 @@ let%test_unit "Compile.emit - procedure: formals are locals, Assgn hits global"
           [%message "missing fragment" (substring : string) (out : string)])
 
 let%test_unit "Compile.emit - zero-arg procedure takes unit" =
-  let proc = triple ~f:"f" (Assgn ("y", Value (Int 1))) in
+  let proc = triple ~f:"f" (Assgn ("y", IntE (Value (Int 1)))) in
   let main = triple (Proc ("f", [])) in
   let out = Var_collection.collect [ proc; main ] |> Cavalry.Compile.emit in
   List.iter [ "let rec p_f () ="; "(p_f ())" ] ~f:(fun substring ->

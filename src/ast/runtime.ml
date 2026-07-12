@@ -101,6 +101,9 @@ let exec_value r (type a) (v : a value) : a =
   | Int i -> i
   | Bool b -> b
   | VarInst x -> Runtime.find_var r x
+  (* Boolean variables share the integer store, encoded 0/1 (see the [Assgn]
+     case); a read decodes back to a boolean. *)
+  | BoolVar x -> Runtime.find_var r x <> 0
 
 let rec exec_expr : type a. Runtime.t -> a expr -> a =
  fun r v ->
@@ -153,6 +156,12 @@ let rec exec_expr : type a. Runtime.t -> a expr -> a =
   | And (a, b) -> exec_expr r a && exec_expr r b
   | Or (a, b) -> exec_expr r a || exec_expr r b
   | Not a -> not (exec_expr r a)
+  | Beq (a, b) ->
+      let v1 = exec_expr r a in
+      v1 = exec_expr r b
+  | Bneq (a, b) ->
+      let v1 = exec_expr r a in
+      v1 <> exec_expr r b
 
 and exec_cmd ?(fuel = ref max_int) r c : int * Runtime.t =
   let exec_cmd r c = exec_cmd ~fuel r c in
@@ -161,16 +170,27 @@ and exec_cmd ?(fuel = ref max_int) r c : int * Runtime.t =
   | Seq (c, c') ->
       let _, r' = exec_cmd r c in
       exec_cmd r' c'
-  | Assgn (x, e) ->
+  (* A boolean right-hand side is stored 0/1 in the same integer store; the
+     statement's own (discarded) value is 0. *)
+  | Assgn (x, IntE e) ->
       let v = exec_expr r e in
-      let r' = Runtime.add_global_var r x v in
-      (v, r')
-  | Let (x, e) ->
+      (v, Runtime.add_global_var r x v)
+  | Assgn (x, BoolE e) ->
+      let v = if exec_expr r e then 1 else 0 in
+      (0, Runtime.add_global_var r x v)
+  | Let (x, IntE e) ->
       let v = exec_expr r e in
-      let r' = Runtime.add_local_var r x v in
-      (v, r')
+      (v, Runtime.add_local_var r x v)
+  | Let (x, BoolE e) ->
+      let v = if exec_expr r e then 1 else 0 in
+      (0, Runtime.add_local_var r x v)
   | Proc (f, ps) ->
-      let ps = List.map (exec_expr r) ps in
+      (* Boolean arguments are passed 0/1, like boolean variables. *)
+      let eval = function
+        | IntE e -> exec_expr r e
+        | BoolE e -> if exec_expr r e then 1 else 0
+      in
+      let ps = List.map eval ps in
       let v, r_proc =
         match Runtime.find_proc r f with
         | { ps = fps; c; _ } ->

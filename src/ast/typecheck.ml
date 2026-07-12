@@ -47,7 +47,7 @@ let rec arrays_arith (e : Logic.arith_expr) =
 
 let rec arrays_logic (e : Logic.logic_expr) =
   match e with
-  | Logic.Bool _ -> SS.empty
+  | Logic.Bool _ | Logic.BoolVar _ -> SS.empty
   | Logic.Not e | Logic.Forall (_, e) | Logic.Exists (_, e) -> arrays_logic e
   | Logic.And (a, b) | Logic.Or (a, b) | Logic.Impl (a, b) ->
       SS.union (arrays_logic a) (arrays_logic b)
@@ -103,13 +103,118 @@ let program_arrays (program : Triple.ut_t list) =
               (SS.union (arrays_logic t.q) (arrays_measure t.variant)))))
     SS.empty program
 
+(* ===== Boolean-variable inference =====
+   A variable is boolean when a boolean context forces it, with no annotation
+   required: it is assigned a syntactically-boolean expression (a comparison, a
+   connective, or a literal), or it appears as a bare variable in a boolean
+   position -- a loop/if guard, or an operand of &&/||/!. A bare variable merely
+   copied from another (`y := b`) is *not* inferred boolean; that ambiguous case
+   is left to a future annotation. Consistency -- that such a name is not also
+   used as an integer or array -- is checked afterwards by the main pass. *)
+
+let is_syntactically_bool (e : Program.ut_expr) =
+  match e with
+  | UBool _ | UEq _ | UNeq _ | ULt _ | ULeq _ | UGt _ | UGeq _ | UAnd _ | UOr _
+  | UNot _ ->
+      true
+  | _ -> false
+
+let rec classify_bool (e : Program.ut_expr) =
+  let open Program in
+  let ( ++ ) = SS.union in
+  (* A bare variable occupying a position that demands a boolean. *)
+  let bvar = function UVar x -> SS.singleton x | _ -> SS.empty in
+  match e with
+  | UAssgn (x, rhs) | ULet (x, rhs) ->
+      let here =
+        if is_syntactically_bool rhs then SS.singleton x else SS.empty
+      in
+      here ++ classify_bool rhs
+  | UAnd (a, b) | UOr (a, b) ->
+      bvar a ++ bvar b ++ classify_bool a ++ classify_bool b
+  | UNot a -> bvar a ++ classify_bool a
+  | UIf (c, a, b) ->
+      bvar c ++ classify_bool c ++ classify_bool a ++ classify_bool b
+  | UWhile (_inv, _variant, c, body) ->
+      bvar c ++ classify_bool c ++ classify_bool body
+  | USeq (a, b) -> classify_bool a ++ classify_bool b
+  | ULoc (_, e) | UPrint e -> classify_bool e
+  | UArrMake (_, n) -> classify_bool n
+  | UArrAssgn (_, i, e) -> classify_bool i ++ classify_bool e
+  | UProc (_, args) ->
+      List.fold_left (fun s a -> s ++ classify_bool a) SS.empty args
+  | UEq (a, b)
+  | UNeq (a, b)
+  | ULt (a, b)
+  | ULeq (a, b)
+  | UGt (a, b)
+  | UGeq (a, b)
+  | UPlus (a, b)
+  | USub (a, b)
+  | UMul (a, b)
+  | UDiv (a, b)
+  | UMod (a, b) ->
+      classify_bool a ++ classify_bool b
+  | UGet (_, i) -> classify_bool i
+  | UInt _ | UBool _ | UVar _ | ULen _ -> SS.empty
+
+(* Boolean names mentioned as bare propositions in an assertion. *)
+let rec bools_logic (e : Logic.logic_expr) =
+  match e with
+  | Logic.BoolVar x -> SS.singleton x
+  | Logic.Bool _ | Logic.Eq _ | Logic.Neq _ | Logic.Lt _ | Logic.Leq _
+  | Logic.Gt _ | Logic.Geq _ ->
+      SS.empty
+  | Logic.Not e | Logic.Forall (_, e) | Logic.Exists (_, e) -> bools_logic e
+  | Logic.And (a, b) | Logic.Or (a, b) | Logic.Impl (a, b) ->
+      SS.union (bools_logic a) (bools_logic b)
+
+(* Copy edges [(v, x)] from each assignment [x := v] of a bare variable: if [v]
+   is boolean then so is [x]. Saturating these (see [check]) infers the type of
+   a variable copied from a boolean, which [classify_bool] alone leaves
+   ambiguous. *)
+let rec copy_edges (e : Program.ut_expr) : (string * string) list =
+  let open Program in
+  match e with
+  | UAssgn (x, UVar v) | ULet (x, UVar v) -> [ (v, x) ]
+  | UAssgn (_, rhs) | ULet (_, rhs) -> copy_edges rhs
+  | USeq (a, b) -> copy_edges a @ copy_edges b
+  | ULoc (_, e) | UPrint e -> copy_edges e
+  | UIf (_, a, b) -> copy_edges a @ copy_edges b
+  | UWhile (_, _, _, body) -> copy_edges body
+  | _ -> []
+
+let program_copy_edges (program : Triple.ut_t list) =
+  List.concat_map (fun (t : Triple.ut_t) -> copy_edges t.u) program
+
+(* Propagate boolean-ness along copy edges to a fixpoint. *)
+let rec saturate_bools bools edges =
+  let bools' =
+    List.fold_left
+      (fun acc (v, x) -> if SS.mem v acc then SS.add x acc else acc)
+      bools edges
+  in
+  if SS.equal bools' bools then bools else saturate_bools bools' edges
+
+let program_bools (program : Triple.ut_t list) =
+  List.fold_left
+    (fun s (t : Triple.ut_t) ->
+      SS.union s
+        (SS.union (classify_bool t.u)
+           (SS.union (bools_logic t.p) (bools_logic t.q))))
+    SS.empty program
+
 (* ===== Expression typing ===== *)
 
-type env = { arrays : SS.t; procs : (string * int) list }
+type env = { arrays : SS.t; bools : SS.t; procs : (string * Ty.t list) list }
 
 let require_array env loc a =
   if not (SS.mem a env.arrays) then
     fail loc "'%s' is used as an array but is not one" a
+
+(* The type a bare scalar variable has: boolean if inferred so, otherwise
+   integer. (Array names never reach here -- they are rejected as scalars.) *)
+let scalar_type env x = if SS.mem x env.bools then Ty.Bool else Ty.Int
 
 let rec synth env loc (e : Program.ut_expr) : Ty.t =
   let open Program in
@@ -118,8 +223,8 @@ let rec synth env loc (e : Program.ut_expr) : Ty.t =
   | UBool _ -> Ty.Bool
   | UVar x ->
       if SS.mem x env.arrays then
-        fail loc "array '%s' cannot be used as an integer value" x
-      else Ty.Int
+        fail loc "array '%s' cannot be used as a scalar value" x
+      else scalar_type env x
   | UGet (a, i) ->
       require_array env loc a;
       expect env loc Ty.Int i;
@@ -131,14 +236,14 @@ let rec synth env loc (e : Program.ut_expr) : Ty.t =
       expect env loc Ty.Int a;
       expect env loc Ty.Int b;
       Ty.Int
-  | UEq (a, b)
-  | UNeq (a, b)
-  | ULt (a, b)
-  | ULeq (a, b)
-  | UGt (a, b)
-  | UGeq (a, b) ->
+  | ULt (a, b) | ULeq (a, b) | UGt (a, b) | UGeq (a, b) ->
       expect env loc Ty.Int a;
       expect env loc Ty.Int b;
+      Ty.Bool
+  (* Equality is homogeneous: both operands must have the same type (integer or
+     boolean), and the result is boolean. *)
+  | UEq (a, b) | UNeq (a, b) ->
+      expect env loc (synth env loc a) b;
       Ty.Bool
   | UAnd (a, b) | UOr (a, b) ->
       expect env loc Ty.Bool a;
@@ -158,17 +263,82 @@ and expect env loc (expected : Ty.t) (e : Program.ut_expr) =
     fail loc "expected %s but got %s" (Ty.to_string expected)
       (Ty.to_string actual)
 
+(* ===== Assertion typing =====
+   The logic language carries no source locations, so its diagnostics name the
+   offending variable rather than a line. [bound] holds quantifier-bound names,
+   which shadow program variables and are integer-valued (like [Vars.create_fresh]). *)
+
+let rec synth_arith env bound (e : Logic.arith_expr) : Ty.t =
+  match e with
+  | Logic.Int _ -> Ty.Int
+  | Logic.Var x ->
+      if SS.mem x bound then Ty.Int
+      else if SS.mem x env.arrays then
+        fail None "array '%s' cannot be used as a scalar in an assertion" x
+      else if SS.mem x env.bools then Ty.Bool
+      else Ty.Int
+  | Logic.Plus (a, b)
+  | Logic.Sub (a, b)
+  | Logic.Mul (a, b)
+  | Logic.Div (a, b)
+  | Logic.Mod (a, b) ->
+      expect_arith env bound Ty.Int a;
+      expect_arith env bound Ty.Int b;
+      Ty.Int
+  | Logic.Get (a, i) ->
+      require_array env None a;
+      expect_arith env bound Ty.Int i;
+      Ty.Int
+  | Logic.Len a ->
+      require_array env None a;
+      Ty.Int
+
+and expect_arith env bound expected e =
+  let actual = synth_arith env bound e in
+  if not (Ty.equal actual expected) then
+    fail None "expected %s but got %s in an assertion" (Ty.to_string expected)
+      (Ty.to_string actual)
+
+let rec check_logic env bound (e : Logic.logic_expr) : unit =
+  match e with
+  | Logic.Bool _ -> ()
+  | Logic.BoolVar x ->
+      if SS.mem x bound then
+        fail None "quantified variable '%s' is not a boolean proposition" x
+      else if SS.mem x env.arrays then
+        fail None "array '%s' cannot be used as a proposition" x
+      else if not (SS.mem x env.bools) then
+        fail None "'%s' is not a boolean but is used as a proposition" x
+  | Logic.Not e -> check_logic env bound e
+  | Logic.And (a, b) | Logic.Or (a, b) | Logic.Impl (a, b) ->
+      check_logic env bound a;
+      check_logic env bound b
+  (* Equality is homogeneous over integers or booleans; the other comparisons
+     are integer-only. *)
+  | Logic.Eq (a, b) | Logic.Neq (a, b) ->
+      expect_arith env bound (synth_arith env bound a) b
+  | Logic.Lt (a, b) | Logic.Leq (a, b) | Logic.Gt (a, b) | Logic.Geq (a, b) ->
+      expect_arith env bound Ty.Int a;
+      expect_arith env bound Ty.Int b
+  | Logic.Forall (x, e) | Logic.Exists (x, e) ->
+      check_logic env (SS.add x bound) e
+
+let check_measure env = function
+  | Some m -> expect_arith env SS.empty Ty.Int m
+  | None -> ()
+
 (* ===== Command typing ===== *)
 
 let check_call env loc f args =
   match List.assoc_opt f env.procs with
   | None -> fail loc "call to undeclared procedure '%s'" f
-  | Some arity ->
+  | Some tys ->
+      let arity = List.length tys in
       let n = List.length args in
       if n <> arity then
         fail loc "procedure '%s' expects %d argument(s) but got %d" f arity n;
-      (* Parameters are integer scalars, so every actual must be an [int]. *)
-      List.iter (expect env loc Ty.Int) args
+      (* Each actual must match its formal's type. *)
+      List.iter2 (fun ty arg -> expect env loc ty arg) tys args
 
 let rec check_cmd env loc (e : Program.ut_expr) : unit =
   let open Program in
@@ -183,16 +353,17 @@ let rec check_cmd env loc (e : Program.ut_expr) : unit =
           "array '%s' cannot be assigned as a scalar (use '%s[i] := ...' or \
            '%s := array(n)')"
           x x x;
-      expect env loc Ty.Int e
+      (* A boolean variable takes a boolean right-hand side, an integer one an
+         integer -- assigning across types is a type error. *)
+      expect env loc (scalar_type env x) e
   | UProc (f, args) -> check_call env loc f args
   | UIf (c, a, b) ->
       expect env loc Ty.Bool c;
       check_cmd env loc a;
       check_cmd env loc b
-  | UWhile (_inv, _variant, c, body) ->
-      (* The invariant/variant are logic assertions, typed on the [Logic] side;
-         here we only constrain the loop guard to be boolean and check the
-         body. *)
+  | UWhile (inv, variant, c, body) ->
+      check_logic env SS.empty inv;
+      check_measure env variant;
       expect env loc Ty.Bool c;
       check_cmd env loc body
   | UPrint e -> expect env loc Ty.Int e
@@ -211,35 +382,79 @@ let rec check_cmd env loc (e : Program.ut_expr) : unit =
   | UOr _ | UNot _ ->
       expect env loc Ty.Int e
 
-(* Validate optional parameter annotations. Parameters are integer scalars
-   today, so an [int] annotation is accepted (and redundant) while [bool] or an
-   array type is rejected as not-yet-supported rather than silently ignored. *)
-let check_params (ps : (string * Ty.t option) list) =
+(* Validate optional parameter annotations against the inferred classification.
+   Integer and boolean parameters are supported; arrays (always globals) are
+   not. An [int] annotation must not contradict a boolean use. *)
+let check_params ~arrays ~bools (ps : (string * Ty.t option) list) =
   List.iter
-    (function
-      | _, None | _, Some Ty.Int -> ()
-      | name, Some t ->
-          fail None
-            "parameter '%s' has type %s, but only integer parameters are \
-             supported"
-            name (Ty.to_string t))
+    (fun (name, ann) ->
+      if SS.mem name arrays then
+        fail None "array parameter '%s' is not supported" name;
+      match ann with
+      | None | Some Ty.Bool -> ()
+      | Some Ty.Int ->
+          if SS.mem name bools then
+            fail None "parameter '%s' is annotated int but used as a boolean"
+              name
+      | Some (Ty.Array _) ->
+          fail None "array parameter '%s' is not supported" name)
     ps
 
-let check (program : Triple.ut_t list) : unit =
+type checked = {
+  bool_vars : string list;  (** names of the program's boolean variables *)
+  proc_bool_params : (string * bool list) list;
+      (** per procedure, whether each formal parameter is boolean *)
+}
+
+let check (program : Triple.ut_t list) : checked =
   let arrays = program_arrays program in
+  (* Boolean names: inferred from bodies and assertions, plus any parameter
+     annotated [: bool]. *)
+  let annotated_bools =
+    List.fold_left
+      (fun s (t : Triple.ut_t) ->
+        List.fold_left
+          (fun s (p, ann) ->
+            match ann with Some Ty.Bool -> SS.add p s | _ -> s)
+          s t.ps)
+      SS.empty program
+  in
+  (* Base boolean names, then saturated along copy edges so a variable copied
+     from a boolean (`y := b`) is itself boolean. *)
+  let bools =
+    saturate_bools
+      (SS.union (program_bools program) annotated_bools)
+      (program_copy_edges program)
+  in
+  (* A name cannot be both an array and a boolean. *)
+  (match SS.choose_opt (SS.inter arrays bools) with
+  | Some x -> fail None "variable '%s' is used as both an array and a boolean" x
+  | None -> ());
+  (* A parameter's type: boolean if inferred or annotated so, else integer.
+     (Array parameters are rejected by [check_params].) *)
+  let param_ty n = if SS.mem n bools then Ty.Bool else Ty.Int in
   (* Every triple but the last is a named procedure; the last is [main] and is
-     not callable. Signatures are (name, arity). *)
+     not callable. A signature is the procedure's parameter types. *)
   let procs =
     match List.rev program with
     | _main :: rev_procs ->
         List.rev_map
-          (fun (t : Triple.ut_t) -> (t.f, List.length t.ps))
+          (fun (t : Triple.ut_t) ->
+            (t.f, List.map (fun (n, _) -> param_ty n) t.ps))
           rev_procs
     | [] -> []
   in
-  let env = { arrays; procs } in
+  let env = { arrays; bools; procs } in
   List.iter
     (fun (t : Triple.ut_t) ->
-      check_params t.ps;
+      check_params ~arrays ~bools t.ps;
+      check_logic env SS.empty t.p;
+      check_logic env SS.empty t.q;
+      check_measure env t.variant;
       check_cmd env None t.u)
-    program
+    program;
+  {
+    bool_vars = SS.elements bools;
+    proc_bool_params =
+      List.map (fun (f, tys) -> (f, List.map (Ty.equal Ty.Bool) tys)) procs;
+  }

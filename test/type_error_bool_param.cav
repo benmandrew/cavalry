@@ -1,10 +1,15 @@
-// Parameter annotations are validated: only integer parameters are supported,
-// so a `bool`-annotated parameter is rejected (boolean variables are a later
-// milestone).
-procedure f (a: bool) =
-  requires { true } ensures { true } writes { }
-  x := 1
+// The parameter is annotated int but used as a boolean (an if-guard): the
+// annotation contradicts the inferred type. (Boolean parameters themselves are
+// supported -- see verify_true_bool_param.cav.)
+procedure f (a: int) =
+  requires { true } ensures { true } writes { x }
+  if a then
+    x := 1
+  else
+    x := 2
+  end
 end
 { true }
-x := 0
+x := 0;
+f(1)
 { true }

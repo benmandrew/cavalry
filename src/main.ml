@@ -12,10 +12,15 @@ let get_ast path =
   lexbuf.Lexing.lex_curr_p <- { lexbuf.Lexing.lex_curr_p with pos_fname = path };
   let ut_ast = Parser.top Lexer.main lexbuf in
   In_channel.close file;
-  (* Reject ill-typed programs up front with a located diagnostic, before the
-     (context-free) elaboration and the variable environment run. *)
-  Typecheck.check ut_ast;
-  List.map Triple.translate ut_ast |> Var_collection.collect
+  (* Reject ill-typed programs up front with a located diagnostic, and learn
+     which variables are boolean so elaboration can type their occurrences. *)
+  let { Typecheck.bool_vars; proc_bool_params } = Typecheck.check ut_ast in
+  let is_bool x = List.mem x bool_vars in
+  let proc_bool_params f =
+    match List.assoc_opt f proc_bool_params with Some bs -> bs | None -> []
+  in
+  List.map (Triple.translate ~is_bool ~proc_bool_params) ut_ast
+  |> Var_collection.collect
 
 let verify = Hoare.verify
 let verify_report = Hoare.verify_report

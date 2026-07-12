@@ -29,6 +29,8 @@ type arith_expr =
     {!arith_expr} comparisons, closed under the connectives and quantifiers. *)
 type logic_expr =
   | Bool of bool
+  | BoolVar of string
+      (** a boolean program variable asserted as a proposition *)
   | Not of logic_expr
   | And of logic_expr * logic_expr
   | Or of logic_expr * logic_expr

@@ -78,6 +78,17 @@
    type_error_arity.cav
    type_error_bool_param.cav
    verify_true_annotated_proc.cav
+   verify_true_bool_scalar.cav
+   verify_true_bool_flag.cav
+   verify_true_bool_eq.cav
+   verify_true_bool_spec.cav
+   verify_false_bool_spec.cav
+   verify_true_bool_invariant.cav
+   verify_true_bool_param.cav
+   verify_true_bool_copy.cav
+   type_error_bool_in_assertion.cav
+   type_error_bool_arith.cav
+   type_error_var_guard.cav
    verify_false_writes_undeclared.cav
    verify_false_loop_unquantified.cav
    compile_overflow.cav

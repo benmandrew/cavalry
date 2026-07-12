@@ -1,0 +1,6 @@
+// A boolean variable named in the postcondition: [pos] records x > 0, and the
+// spec asserts it holds.
+{ true }
+x := 5;
+pos := x > 0
+{ pos }

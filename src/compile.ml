@@ -141,7 +141,8 @@ let rec arrays_expr : type a. a expr -> Str_set.t = function
   | Gt (a, b)
   | Geq (a, b) ->
       Str_set.union (arrays_expr a) (arrays_expr b)
-  | And (a, b) | Or (a, b) -> Str_set.union (arrays_expr a) (arrays_expr b)
+  | And (a, b) | Or (a, b) | Beq (a, b) | Bneq (a, b) ->
+      Str_set.union (arrays_expr a) (arrays_expr b)
   | Not a -> arrays_expr a
 
 let rec arrays = function
@@ -149,14 +150,30 @@ let rec arrays = function
   | Seq (c, c') -> Str_set.union (arrays c) (arrays c')
   | If (_, c, c') -> Str_set.union (arrays c) (arrays c')
   | While (_, _, _, c) -> arrays c
-  | Assgn (_, e) | Let (_, e) | Print e | IntExpr e -> arrays_expr e
+  | Print e | IntExpr e -> arrays_expr e
+  | Assgn (_, IntE e) | Let (_, IntE e) -> arrays_expr e
+  | Assgn (_, BoolE e) | Let (_, BoolE e) -> arrays_expr e
   | ArrMake (a, n) -> Str_set.add a (arrays_expr n)
   | ArrAssgn (a, i, e) ->
       Str_set.add a (Str_set.union (arrays_expr i) (arrays_expr e))
   | Proc (_, ps) ->
-      List.fold_left
-        (fun s e -> Str_set.union s (arrays_expr e))
-        Str_set.empty ps
+      let any = function IntE e -> arrays_expr e | BoolE e -> arrays_expr e in
+      List.fold_left (fun s e -> Str_set.union s (any e)) Str_set.empty ps
+
+(* Boolean scalar globals: assignment targets whose right-hand side is boolean.
+   They compile to a [bool ref] rather than the default [int ref] (see [emit]).
+   A boolean global read but never assigned is, like any uninitialised variable,
+   left undeclared so [ocamlopt] rejects it -- matching the interpreter. *)
+let rec bool_scalars = function
+  | Located (_, c) -> bool_scalars c
+  | Seq (c, c') -> Str_set.union (bool_scalars c) (bool_scalars c')
+  | Assgn (x, BoolE _) | Let (x, BoolE _) -> Str_set.singleton x
+  | If (_, c, c') -> Str_set.union (bool_scalars c) (bool_scalars c')
+  | While (_, _, _, c) -> bool_scalars c
+  | Assgn (_, IntE _)
+  | Let (_, IntE _)
+  | Print _ | IntExpr _ | Proc _ | ArrMake _ | ArrAssgn _ ->
+      Str_set.empty
 
 (* [locals] is the set of program names currently bound in the local store
    (formals + in-scope [let]s). A read resolves local-first then global, the
@@ -195,6 +212,7 @@ let emit_bool ~ops ~locals (e : bool expr) : string =
   let rec go (e : bool expr) : string =
     match e with
     | Value (Bool b) -> string_of_bool b
+    | Value (BoolVar x) -> emit_read ~locals x
     | Eq (a, b) -> cmp ops.eq a b
     | Neq (a, b) -> Printf.sprintf "(not %s)" (cmp ops.eq a b)
     | Lt (a, b) -> cmp ops.lt a b
@@ -204,6 +222,8 @@ let emit_bool ~ops ~locals (e : bool expr) : string =
     | And (a, b) -> Printf.sprintf "(%s && %s)" (go a) (go b)
     | Or (a, b) -> Printf.sprintf "(%s || %s)" (go a) (go b)
     | Not a -> Printf.sprintf "(not %s)" (go a)
+    | Beq (a, b) -> Printf.sprintf "(%s = %s)" (go a) (go b)
+    | Bneq (a, b) -> Printf.sprintf "(%s <> %s)" (go a) (go b)
   in
   go e
 
@@ -224,10 +244,17 @@ let rec emit_cmd ~ops ~locals c : string =
   match c with
   | Located (_, c) -> emit_cmd ~ops ~locals c
   | Seq _ -> emit_block ~ops ~locals (flatten c)
-  | Assgn (x, e) ->
+  | Assgn (x, IntE e) ->
       Printf.sprintf "(%s := %s; %s)" (gref x) (emit_int ~ops ~locals e)
         (emit_read ~locals x)
-  | Let (_, e) -> emit_int ~ops ~locals e (* trailing/standalone: value only *)
+  | Assgn (x, BoolE e) ->
+      (* Store the boolean; the statement's own value is 0 (as in the
+         interpreter), so the epilogue's [int] result stays well-typed. *)
+      Printf.sprintf "(%s := %s; %s)" (gref x) (emit_bool ~ops ~locals e)
+        ops.zero
+  | Let (_, IntE e) ->
+      emit_int ~ops ~locals e (* trailing/standalone: value only *)
+  | Let (_, BoolE _) -> ops.zero
   | Print e ->
       Printf.sprintf "(print_string (%s (%s)); print_newline (); %s)"
         ops.to_string (emit_int ~ops ~locals e) ops.zero
@@ -249,13 +276,15 @@ let rec emit_cmd ~ops ~locals c : string =
       Printf.sprintf "(while %s do ignore (%s : %s) done; %s)"
         (emit_bool ~ops ~locals b) (emit_cmd ~ops ~locals c) ops.ty ops.zero
   | Proc (f, args) ->
+      let emit_arg = function
+        | IntE e -> emit_int ~ops ~locals e
+        | BoolE e -> emit_bool ~ops ~locals e
+      in
       let args =
         match args with
         | [] -> " ()"
         | _ ->
-            List.map
-              (fun a -> Printf.sprintf " (%s)" (emit_int ~ops ~locals a))
-              args
+            List.map (fun a -> Printf.sprintf " (%s)" (emit_arg a)) args
             |> String.concat ""
       in
       Printf.sprintf "(%s%s)" (pname f) args
@@ -264,7 +293,12 @@ and emit_block ~ops ~locals : cmd list -> string = function
   | [] -> ops.zero
   | [ s ] -> emit_cmd ~ops ~locals s
   | Let (x, e) :: rest ->
-      Printf.sprintf "(let %s = %s in\n%s)" (lname x) (emit_int ~ops ~locals e)
+      let rhs =
+        match e with
+        | IntE e -> emit_int ~ops ~locals e
+        | BoolE e -> emit_bool ~ops ~locals e
+      in
+      Printf.sprintf "(let %s = %s in\n%s)" (lname x) rhs
         (emit_block ~ops ~locals:(Str_set.add x locals) rest)
   | s :: rest ->
       Printf.sprintf "(ignore (%s : %s);\n%s)" (emit_cmd ~ops ~locals s) ops.ty
@@ -297,10 +331,24 @@ let emit ?(native_int = false) (program : (Triple.t * Vars.t) list) : string =
       (fun acc (t, _) -> Str_set.union acc (assigned t.Triple.c))
       Str_set.empty program
   in
+  let bool_refs =
+    List.fold_left
+      (fun acc (t, _) -> Str_set.union acc (bool_scalars t.Triple.c))
+      Str_set.empty program
+  in
+  (* Boolean scalars are [bool ref]s initialised to [false]; the remaining
+     scalars are integer [ref]s initialised to the backend zero. *)
   let decls =
-    Str_set.elements refs
-    |> List.map (fun x -> Printf.sprintf "let %s = ref %s" (gref x) ops.zero)
-    |> String.concat "\n"
+    let int_refs = Str_set.diff refs bool_refs in
+    let int_decls =
+      Str_set.elements int_refs
+      |> List.map (fun x -> Printf.sprintf "let %s = ref %s" (gref x) ops.zero)
+    in
+    let bool_decls =
+      Str_set.elements bool_refs
+      |> List.map (fun x -> Printf.sprintf "let %s = ref false" (gref x))
+    in
+    String.concat "\n" (int_decls @ bool_decls)
   in
   (* Array globals start as an empty [array ref]; [a := array(n)] replaces it
      with a zero-filled array of the requested length. *)

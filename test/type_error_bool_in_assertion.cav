@@ -1,0 +1,6 @@
+// Assertions are type-checked too: b is boolean, so using it in arithmetic
+// inside the postcondition is a type error.
+{ true }
+b := 1 < 2;
+x := 3
+{ b + 1 = 2 }

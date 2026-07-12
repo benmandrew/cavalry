@@ -39,6 +39,9 @@ val create_fresh : string -> Why3.Term.vsymbol
 (** A fresh integer-valued ([int]) [vsymbol] with a unique name derived from the
     argument. *)
 
+val create_fresh_bool : string -> Why3.Term.vsymbol
+(** A fresh boolean-valued ([bool]) [vsymbol]. *)
+
 val create_fresh_array : string -> Why3.Term.vsymbol
 (** A fresh array-valued ([map int int]) variable. *)
 

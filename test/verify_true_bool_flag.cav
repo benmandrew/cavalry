@@ -1,0 +1,15 @@
+// A boolean flag in a loop guard: [found] is set when the value is located, and
+// [!found] short-circuits the guard. [i] increments every iteration so the
+// variant [n - i] still decreases (total correctness).
+{ n >= 0 && n <= len(a) }
+i := 0;
+found := false;
+while i < n && !found do
+  invariant { 0 <= i && i <= n && n <= len(a) }
+  variant { n - i }
+  if a[i] = x then
+    found := true
+  end;
+  i := i + 1
+end
+{ 0 <= i && i <= n }

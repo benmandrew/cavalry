@@ -7,6 +7,8 @@
 %public logic_expr:
   | b = BOOL
       { Bool (b) }
+  | v = VAR
+      { Ast.Logic.BoolVar (v) }
   | NOT e = logic_expr
       { Not (e) }
   | e0 = logic_expr AND e1 = logic_expr

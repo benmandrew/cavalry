@@ -1,0 +1,6 @@
+// `b` is boolean (assigned a comparison), so using it in arithmetic is a type
+// error.
+{ true }
+b := 1 < 2;
+x := b + 1
+{ true }

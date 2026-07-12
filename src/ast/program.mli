@@ -6,14 +6,16 @@
     Program {e assertions} live separately in {!Logic}; this module is the code
     that runs. *)
 
-(** Leaf values, GADT-indexed by their OCaml type. [VarInst] is a variable
-    occurrence (always integer-valued, hence [int value]); it names a binding
-    resolved later against the {!Vars} environment. *)
+(** Leaf values, GADT-indexed by their OCaml type. [VarInst] and [BoolVar] are
+    variable occurrences -- integer- and boolean-valued respectively; which one
+    a name elaborates to is fixed by {!Typecheck} and threaded into
+    {!translate_cmd}. Both name a binding resolved later against {!Vars}. *)
 type _ value =
   | Unit : unit -> unit value
   | Int : int -> int value
   | Bool : bool -> bool value
   | VarInst : string -> int value
+  | BoolVar : string -> bool value
 [@@deriving sexp_of]
 
 (** Pure expressions, indexed by result type so the type system rules out
@@ -27,6 +29,8 @@ type _ expr =
   | Leq : int expr * int expr -> bool expr
   | Gt : int expr * int expr -> bool expr
   | Geq : int expr * int expr -> bool expr
+  | Beq : bool expr * bool expr -> bool expr
+  | Bneq : bool expr * bool expr -> bool expr
   | And : bool expr * bool expr -> bool expr
   | Or : bool expr * bool expr -> bool expr
   | Not : bool expr -> bool expr
@@ -39,6 +43,10 @@ type _ expr =
   | Len : string -> int expr
 [@@deriving sexp_of]
 
+(** An assignment right-hand side, whose type ([int] or [bool]) is recovered by
+    the tag the GADT erased. *)
+type anyexpr = IntE of int expr | BoolE of bool expr [@@deriving sexp_of]
+
 (** Commands (statements). [Let] introduces a local binding, [Assgn] mutates an
     existing variable, [Proc] is a call by name. [While] carries its loop
     invariant and optional variant (decreasing measure) alongside guard and
@@ -46,9 +54,9 @@ type _ expr =
 type cmd =
   | IntExpr of int expr
   | Seq of cmd * cmd
-  | Assgn of string * int expr
-  | Let of string * int expr
-  | Proc of string * int expr list
+  | Assgn of string * anyexpr
+  | Let of string * anyexpr
+  | Proc of string * anyexpr list
   | If of bool expr * cmd * cmd
   | While of Logic.expr * Logic.arith_expr option * bool expr * cmd
   | Print of int expr
@@ -98,8 +106,17 @@ exception TypeError of string
     e.g. a boolean where an integer is required, or an expression used where a
     command is expected. Carries the offending node, rendered by [show]. *)
 
-val translate_cmd : ut_expr -> cmd
-(** Type-check and translate the untyped parser output into the typed {!cmd}
-    AST.
+val translate_cmd :
+  is_bool:(string -> bool) ->
+  proc_bool_params:(string -> bool list) ->
+  ut_expr ->
+  cmd
+(** Translate the untyped parser output into the typed {!cmd} AST. [is_bool]
+    reports whether a name is a boolean variable, so its occurrences and the
+    right-hand sides assigned to it elaborate at [bool] rather than [int];
+    [proc_bool_params f] gives, per formal of procedure [f], whether it is
+    boolean, so a call's actuals elaborate at their formals' types. Both come
+    from {!Typecheck}, which has already validated well-typedness.
 
-    @raise TypeError on malformed input. *)
+    @raise TypeError on malformed input (a checked program never triggers this).
+*)
