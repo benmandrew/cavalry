@@ -9,6 +9,11 @@ val get_ast : string -> (Triple.t * Vars.t) list
 (** Parse the source file at the given path and run variable collection,
     producing the annotated triples that {!verify} and {!Hoare} consume. *)
 
+val get_ast_string : ?fname:string -> string -> (Triple.t * Vars.t) list
+(** As {!get_ast}, but parse a source {e string} rather than read a file. The
+    browser front-end feeds editor contents through here; [fname] only tags
+    diagnostic locations. *)
+
 val verify :
   ?debug:bool ->
   ?timeout:float ->
@@ -17,6 +22,13 @@ val verify :
   Smt.Prover.result
 (** Verify a parsed program. See {!Hoare.verify} for [machine_int] and the other
     parameters. *)
+
+val obligations_smtlib :
+  ?machine_int:bool ->
+  (Triple.t * Vars.t) list ->
+  (string * (string * Ast.Loc.t option * string) list) list
+(** Print every proof obligation to SMT-LIB2 instead of proving it (the browser
+    path). See {!Hoare.obligations_smtlib}. *)
 
 val verify_report :
   ?debug:bool ->

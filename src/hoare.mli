@@ -36,6 +36,17 @@ val verify :
     [safe]/[Arith.in_bounds]), including inside loops and across procedure
     calls. The default reasons over unbounded integers. *)
 
+val obligations_smtlib :
+  ?machine_int:bool ->
+  (Triple.t * Vars.t) list ->
+  (string * (string * Loc.t option * string) list) list
+(** Browser path: print every proof obligation of every procedure to SMT-LIB2
+    instead of proving it. Returns, per procedure, its name paired with its
+    obligations as [(explanation, location, smtlib)]; [location] is the source
+    position of the offending construct ([None] for whole-procedure obligations
+    like a plain postcondition). The strings are solved client-side in a Z3-wasm
+    worker; no prover is run here. *)
+
 (** Why a verification obligation failed. Recovered from the failing subgoal's
     explanation attribute; see {!expl_of_reason} for the human wording. *)
 type reason =

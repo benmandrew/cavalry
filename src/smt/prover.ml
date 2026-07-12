@@ -1,6 +1,22 @@
 open Core
 open Why3
 
+(* Browser override. In the browser there is no filesystem and no native Z3
+   binary, so Why3's config detection ([init_config] / [why3 config detect])
+   cannot run -- it fails trying to read [provers-detection-data.conf]. When
+   [configure_browser] has been called, [main]/[env]/[z3_driver] are built
+   instead from files embedded in the js_of_ocaml pseudo-filesystem: [env] reads
+   theories from the embedded loadpath, and the driver is loaded from an embedded
+   [.drv] via a hand-built [config_prover] with the datadir pinned to the
+   embedded tree -- bypassing detection entirely. On native builds [browser] is
+   [None] and the original Whyconf path runs unchanged. *)
+type browser_env = { loadpath : string list; driver_file : string }
+
+let browser : browser_env option ref = ref None
+
+let configure_browser ~loadpath ~driver_file =
+  browser := Some { loadpath; driver_file }
+
 (* Why3 configuration and the Z3 driver are loaded *lazily*: OCaml evaluates
    every linked module's top-level bindings at process startup, so binding these
    eagerly made [cav run] -- which never proves anything -- pay the full Why3
@@ -15,7 +31,22 @@ let config =
      in
      Whyconf.init_config dir)
 
-let main = lazy (Whyconf.get_main (Lazy.force config))
+(* [main] is only needed to pass to [load_driver_for_prover]; the theory
+   environment is built separately (see [env]). In browser mode its datadir is
+   pinned to the embedded tree (the driver file's grandparent, i.e. [/why3]) so
+   the driver's [import]s resolve there. Its loadpath is deliberately left as the
+   default -- [set_loadpath] appends rather than replaces, which under node
+   (where the opam datadir is also visible) would make a stdlib file resolvable
+   two ways and clash as [AmbiguousPath]; env avoids [main]'s loadpath entirely. *)
+let main =
+  lazy
+    (match !browser with
+    | Some b ->
+        let datadir = Filename.dirname (Filename.dirname b.driver_file) in
+        Whyconf.set_datadir
+          (Whyconf.get_main (Whyconf.default_config ""))
+          datadir
+    | None -> Whyconf.get_main (Lazy.force config))
 
 (* Pinned to match the [z3] constraint in dune-project/cavalry.opam. The filter
    is versioned so that a why3 config pointing at a different Z3 fails fast here
@@ -43,14 +74,44 @@ let z3 =
        exit 1);
      snd (Whyconf.Mprover.max_binding chosen))
 
-let env = lazy (Env.create_env (Whyconf.loadpath (Lazy.force main)))
+let env =
+  lazy
+    (match !browser with
+    | Some b -> Env.create_env b.loadpath
+    | None -> Env.create_env (Whyconf.loadpath (Lazy.force main)))
+
+(* Fabricate a [config_prover] for the embedded driver, so the browser path can
+   call [load_driver_for_prover] without a detected prover. Only [driver] (the
+   embedded [.drv] path) and [prover] matter here; [command] and the rest are
+   unused because we never spawn -- we only print. *)
+let browser_config_prover driver_file : Whyconf.config_prover =
+  {
+    Whyconf.prover =
+      {
+        Whyconf.prover_name = "Z3";
+        prover_version = z3_version;
+        prover_altern = "";
+      };
+    command = "";
+    command_steps = None;
+    driver = (None, driver_file);
+    in_place = false;
+    editor = "";
+    interactive = false;
+    extra_options = [];
+    extra_drivers = [];
+  }
 
 let z3_driver =
   lazy
     (let open Format in
      try
-       Driver.load_driver_for_prover (Lazy.force main) (Lazy.force env)
-         (Lazy.force z3)
+       let cp =
+         match !browser with
+         | Some b -> browser_config_prover b.driver_file
+         | None -> Lazy.force z3
+       in
+       Driver.load_driver_for_prover (Lazy.force main) (Lazy.force env) cp
      with e ->
        eprintf "Failed to load driver for Z3: %a\n" Exn_printer.exn_printer e;
        exit 1)
@@ -112,6 +173,21 @@ let run_prover timeout task =
   Driver.prove_task ~limits:limit ~config:main ~command:z3.Whyconf.command
     (Lazy.force z3_driver) task
   |> Call_provers.wait_on_call
+
+(* Serialise the goal [term] on [base_task] to the exact SMT-LIB2 text Z3 would
+   receive, without spawning any prover. This is the browser path's substitute
+   for [run_prover]: the returned string is handed to a Z3-wasm worker, whose
+   [sat]/[unsat]/[unknown] answer is mapped back through [result_of_answer]. The
+   driver's own logic file is reused so the theory prelude matches the native
+   prove path exactly. *)
+let smtlib_of_term base_task term =
+  let goal_id = Decl.create_prsymbol (Ident.id_fresh "goal") in
+  let task = Task.add_prop_decl base_task Decl.Pgoal goal_id term in
+  let buf = Buffer.create 1024 in
+  let fmt = Format.formatter_of_buffer buf in
+  Driver.print_task (Lazy.force z3_driver) fmt task;
+  Format.pp_print_flush fmt ();
+  Buffer.contents buf
 
 let prove_term_status timeout base_task term =
   let goal_id = Decl.create_prsymbol (Ident.id_fresh "goal") in

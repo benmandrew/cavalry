@@ -6,6 +6,14 @@
 
 open Why3
 
+val configure_browser : loadpath:string list -> driver_file:string -> unit
+(** Switch the SMT layer to the browser path: build {!env} and the print driver
+    from files embedded in the js_of_ocaml pseudo-filesystem instead of via Why3
+    config detection (which needs a real filesystem and Z3 binary). Must be
+    called -- with the embedded stdlib loadpath and an embedded [.drv] path --
+    before anything forces {!env}. A no-op's inverse: on native builds this is
+    never called and Whyconf detection runs as before. *)
+
 val env : Env.env Lazy.t
 (** The Why3 environment (theory load path), shared so callers can build tasks
     that reference the standard library. Forced on first use (see the module
@@ -31,6 +39,12 @@ val result_of_answer : output:string -> Call_provers.prover_answer -> result
 val status_of_answer : Call_provers.prover_answer -> status
 (** Classifies a raw answer's confidence for {!type-status}. Exposed for the
     same stubbed-answer testing as {!result_of_answer}. *)
+
+val smtlib_of_term : Task.task -> Term.term -> string
+(** [smtlib_of_term task term] serialises [term] as the goal on [task] to the
+    SMT-LIB2 text Z3 would receive, {e without} running any prover. The browser
+    path prints obligations with this and solves them in a Z3-wasm worker
+    instead of {!prove_term}. *)
 
 val prove :
   float option -> Task.task -> Term.vsymbol list -> Term.term -> result

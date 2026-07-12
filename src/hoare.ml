@@ -678,8 +678,13 @@ let render_counterexample (ce : (string * CST.concrete_syntax_term) list) :
   in
   List.map (fun (n, t) -> (n, render_value n t)) ce
 
-let verify_procedure ?timeout ~machine_int ~is_main g_vars procs
-    ((t : Triple.t), l_vars) =
+(* Build a procedure's split proof obligations without discharging any of them.
+   Shared by [verify_procedure] (which proves each) and the browser path
+   ([obligations_smtlib], which prints each to SMT-LIB2). Returns the split
+   subgoals, whether the map theory is needed, and the entry-state variables
+   (the latter for counterexample exposure). *)
+let build_obligations ~machine_int ~is_main g_vars procs ((t : Triple.t), l_vars)
+    =
   let p, q =
     if is_main then
       (Logic.translate_term ~g_vars t.p, Logic.translate_term ~g_vars t.q)
@@ -729,6 +734,12 @@ let verify_procedure ?timeout ~machine_int ~is_main g_vars procs
   in
   let split_task = Arith.task ~div:(Arith.uses_div goal) ~map:uses_map in
   let obligations = Smt.Prover.split_obligations split_task merged_vars goal in
+  (obligations, uses_map, merged_vars)
+
+let verify_procedure ?timeout ~machine_int ~is_main g_vars procs proc =
+  let obligations, uses_map, merged_vars =
+    build_obligations ~machine_int ~is_main g_vars procs proc
+  in
   (* Discharge each obligation on its own task, detecting division per subgoal:
      a subgoal that does not mention [div]/[mod] need not carry the
      ComputerDivision axioms (a conservative split inherited from the Alt-Ergo
@@ -839,6 +850,36 @@ let verify_report ?debug:d ?timeout ?(machine_int = false) program =
 
 let verify ?debug ?timeout ?machine_int program =
   (verify_report ?debug ?timeout ?machine_int program).result
+
+(* Browser path: print every proof obligation of every procedure (main included)
+   to SMT-LIB2 instead of discharging it. Mirrors [verify_report]'s procedure
+   registration so a recursive call resolves to its own contract, but runs no
+   prover -- the strings are solved client-side in a Z3-wasm worker. Returns, per
+   procedure, its name paired with its obligations as [(explanation, smtlib)]. *)
+let obligations_smtlib ?(machine_int = false) program =
+  let procs, (main, globals) = split_last program in
+  let step ~is_main (proc_map, acc) proc =
+    let (t : Triple.t) = fst proc in
+    let proc_map' =
+      if is_main then proc_map else Proc_map.add t.f proc proc_map
+    in
+    let obligations, uses_map, _ =
+      build_obligations ~machine_int ~is_main globals proc_map' proc
+    in
+    let smt =
+      List.map
+        (fun (f, expl, loc) ->
+          let task = Arith.task ~div:(Arith.uses_div f) ~map:uses_map in
+          (expl, Option.map Loc.of_why3 loc, Smt.Prover.smtlib_of_term task f))
+        obligations
+    in
+    (proc_map', (t.f, smt) :: acc)
+  in
+  let proc_map, acc =
+    List.fold_left (step ~is_main:false) (Proc_map.empty, []) procs
+  in
+  let _, acc = step ~is_main:true (proc_map, acc) (main, globals) in
+  List.rev acc
 
 (* Render a report's counterexample as an indented block for display, or the
    empty string if there is nothing user-facing to show. Internal symbols the
