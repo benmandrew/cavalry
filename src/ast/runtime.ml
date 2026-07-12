@@ -14,8 +14,12 @@ module Runtime = struct
   type t = {
     global_vars : int BoundVars.t;
     (* Arrays are always globals (created by [a := array(n)], written by
-       [a\[i\] := e]). Stored functionally, copy-on-write, so threading an
-       environment mirrors scalar assignment and the map-based WLP semantics. *)
+       [a\[i\] := e]). The name->array *map* is persistent like the scalar
+       stores, but the array a name points at is mutated *in place*: the
+       environment is threaded linearly, so no live environment ever aliases an
+       array a newer one has written, and an element store need not copy it.
+       (Scalars stay in a persistent map because programs bind only a handful of
+       them -- a 2-3 node tree beats hashing a string key on every access.) *)
     global_arrays : int array BoundVars.t;
     local_vars : int BoundVars.t;
     procs : BoundProcs.t;
@@ -100,47 +104,51 @@ let exec_value r (type a) (v : a value) : a =
 
 let rec exec_expr : type a. Runtime.t -> a expr -> a =
  fun r v ->
-  let binary_app r a b = (exec_expr r a, exec_expr r b) in
+  (* Both operands are evaluated with explicit [let]s rather than a shared
+     [(exec_expr a, exec_expr b)] tuple: without flambda that tuple is a real
+     per-operation allocation, and this is the interpreter's hottest path.
+     Cavalry expressions are side-effect-free, so the left-to-right order is
+     unobservable. *)
   match v with
   | Value v -> exec_value r v
   | Plus (a, b) ->
-      let v1, v2 = binary_app r a b in
-      add_ovf v1 v2
+      let v1 = exec_expr r a in
+      add_ovf v1 (exec_expr r b)
   | Sub (a, b) ->
-      let v1, v2 = binary_app r a b in
-      sub_ovf v1 v2
+      let v1 = exec_expr r a in
+      sub_ovf v1 (exec_expr r b)
   | Mul (a, b) ->
-      let v1, v2 = binary_app r a b in
-      mul_ovf v1 v2
+      let v1 = exec_expr r a in
+      mul_ovf v1 (exec_expr r b)
   (* Truncated division/remainder (native [/], [mod]); [b = 0] raises
      [Division_by_zero]. [verify] discharges a [divisor <> 0] obligation, so a
      verified program never reaches that. *)
   | Div (a, b) ->
-      let v1, v2 = binary_app r a b in
-      v1 / v2
+      let v1 = exec_expr r a in
+      v1 / exec_expr r b
   | Mod (a, b) ->
-      let v1, v2 = binary_app r a b in
-      v1 mod v2
+      let v1 = exec_expr r a in
+      v1 mod exec_expr r b
   | Get (a, i) -> (Runtime.find_array r a).(exec_expr r i)
   | Len a -> Array.length (Runtime.find_array r a)
   | Eq (a, b) ->
-      let v1, v2 = binary_app r a b in
-      v1 = v2
+      let v1 = exec_expr r a in
+      v1 = exec_expr r b
   | Neq (a, b) ->
-      let v1, v2 = binary_app r a b in
-      v1 != v2
+      let v1 = exec_expr r a in
+      v1 != exec_expr r b
   | Lt (a, b) ->
-      let v1, v2 = binary_app r a b in
-      v1 < v2
+      let v1 = exec_expr r a in
+      v1 < exec_expr r b
   | Leq (a, b) ->
-      let v1, v2 = binary_app r a b in
-      v1 <= v2
+      let v1 = exec_expr r a in
+      v1 <= exec_expr r b
   | Gt (a, b) ->
-      let v1, v2 = binary_app r a b in
-      v1 > v2
+      let v1 = exec_expr r a in
+      v1 > exec_expr r b
   | Geq (a, b) ->
-      let v1, v2 = binary_app r a b in
-      v1 >= v2
+      let v1 = exec_expr r a in
+      v1 >= exec_expr r b
 
 and exec_cmd ?(fuel = ref max_int) r c : int * Runtime.t =
   let exec_cmd r c = exec_cmd ~fuel r c in
@@ -165,8 +173,10 @@ and exec_cmd ?(fuel = ref max_int) r c : int * Runtime.t =
             let r_fun = List.fold_left2 Runtime.add_local_var r fps ps in
             exec_cmd r_fun c
       in
-      (* Ignore changes to procedure-local context, but keep global scalar and
-         array writes. *)
+      (* Keep the callee's global scalar and array writes, but drop its local
+         context by restoring the caller's [local_vars]. (Arrays are mutated in
+         place, so [global_arrays] here differs from the caller's only when the
+         callee created a new array with [array(n)].) *)
       ( v,
         {
           r with
@@ -193,11 +203,12 @@ and exec_cmd ?(fuel = ref max_int) r c : int * Runtime.t =
   | ArrAssgn (a, i, e) ->
       let idx = exec_expr r i in
       let v = exec_expr r e in
-      (* Copy-on-write keeps each environment's array independent, matching the
-         functional threading used for scalars. *)
-      let arr = Array.copy (Runtime.find_array r a) in
+      (* Mutate in place: [exec_cmd] threads the environment linearly (every
+         caller discards its input once it holds the successor), so no live
+         environment aliases this array. Same array object, same map -- O(1). *)
+      let arr = Runtime.find_array r a in
       arr.(idx) <- v;
-      (v, Runtime.add_global_array r a arr)
+      (v, r)
   | IntExpr v -> (exec_expr r v, r)
 
 let exec (ast : proc_t list) =
