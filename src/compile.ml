@@ -141,7 +141,8 @@ let rec arrays_expr : type a. a expr -> Str_set.t = function
   | Gt (a, b)
   | Geq (a, b) ->
       Str_set.union (arrays_expr a) (arrays_expr b)
-  | And (a, b) | Or (a, b) -> Str_set.union (arrays_expr a) (arrays_expr b)
+  | And (a, b) | Or (a, b) | Beq (a, b) | Bneq (a, b) ->
+      Str_set.union (arrays_expr a) (arrays_expr b)
   | Not a -> arrays_expr a
 
 let rec arrays = function
@@ -222,6 +223,8 @@ let emit_bool ~ops ~locals (e : bool expr) : string =
     | And (a, b) -> Printf.sprintf "(%s && %s)" (go a) (go b)
     | Or (a, b) -> Printf.sprintf "(%s || %s)" (go a) (go b)
     | Not a -> Printf.sprintf "(not %s)" (go a)
+    | Beq (a, b) -> Printf.sprintf "(%s = %s)" (go a) (go b)
+    | Bneq (a, b) -> Printf.sprintf "(%s <> %s)" (go a) (go b)
   in
   go e
 

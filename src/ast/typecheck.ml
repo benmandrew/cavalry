@@ -195,14 +195,14 @@ let rec synth env loc (e : Program.ut_expr) : Ty.t =
       expect env loc Ty.Int a;
       expect env loc Ty.Int b;
       Ty.Int
-  | UEq (a, b)
-  | UNeq (a, b)
-  | ULt (a, b)
-  | ULeq (a, b)
-  | UGt (a, b)
-  | UGeq (a, b) ->
+  | ULt (a, b) | ULeq (a, b) | UGt (a, b) | UGeq (a, b) ->
       expect env loc Ty.Int a;
       expect env loc Ty.Int b;
+      Ty.Bool
+  (* Equality is homogeneous: both operands must have the same type (integer or
+     boolean), and the result is boolean. *)
+  | UEq (a, b) | UNeq (a, b) ->
+      expect env loc (synth env loc a) b;
       Ty.Bool
   | UAnd (a, b) | UOr (a, b) ->
       expect env loc Ty.Bool a;

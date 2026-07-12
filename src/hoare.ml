@@ -139,6 +139,14 @@ let rec expr_to_term : type a.
   | Or (e, e') ->
       T.t_or (expr_to_term ~g_vars ?l_vars e) (expr_to_term ~g_vars ?l_vars e')
   | Not e -> T.t_not (expr_to_term ~g_vars ?l_vars e)
+  (* Boolean (in)equality of two formulas is (non-)equivalence. *)
+  | Beq (e, e') ->
+      T.t_iff (expr_to_term ~g_vars ?l_vars e) (expr_to_term ~g_vars ?l_vars e')
+  | Bneq (e, e') ->
+      T.t_not
+        (T.t_iff
+           (expr_to_term ~g_vars ?l_vars e)
+           (expr_to_term ~g_vars ?l_vars e'))
   | Plus (e, e') -> plus (f e) (f e')
   | Sub (e, e') -> sub (f e) (f e')
   | Mul (e, e') -> mul (f e) (f e')
@@ -208,6 +216,10 @@ let rec safe : type a.
       let self = safe ~g_vars ?l_vars ?loc in
       T.t_and_simp (self a)
         (T.t_implies_simp (T.t_not (expr_to_term ~g_vars ?l_vars a)) (self b))
+  (* [=]/[!=] evaluate both operands unconditionally. *)
+  | Beq (a, b) | Bneq (a, b) ->
+      let self = safe ~g_vars ?l_vars ?loc in
+      T.t_and_simp (self a) (self b)
   | Not a -> safe ~g_vars ?l_vars ?loc a
 
 (* Well-definedness obligation for an expression: the conjunction of
@@ -256,6 +268,9 @@ let rec defined : type a.
       let self = defined ~g_vars ?l_vars ?loc in
       T.t_and_simp (self a)
         (T.t_implies_simp (T.t_not (expr_to_term ~g_vars ?l_vars a)) (self b))
+  | Beq (a, b) | Bneq (a, b) ->
+      let self = defined ~g_vars ?l_vars ?loc in
+      T.t_and_simp (self a) (self b)
   | Not a -> defined ~g_vars ?l_vars ?loc a
 
 module Proc_map = Map.Make (String)

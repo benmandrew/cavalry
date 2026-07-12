@@ -29,6 +29,8 @@ type _ expr =
   | Leq : int expr * int expr -> bool expr
   | Gt : int expr * int expr -> bool expr
   | Geq : int expr * int expr -> bool expr
+  | Beq : bool expr * bool expr -> bool expr
+  | Bneq : bool expr * bool expr -> bool expr
   | And : bool expr * bool expr -> bool expr
   | Or : bool expr * bool expr -> bool expr
   | Not : bool expr -> bool expr

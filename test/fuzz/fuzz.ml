@@ -433,6 +433,10 @@ let rec expr_to_cav : type a. a Program.expr -> string =
   | Program.Or (a, b) ->
       Printf.sprintf "(%s || %s)" (expr_to_cav a) (expr_to_cav b)
   | Program.Not a -> Printf.sprintf "(! %s)" (expr_to_cav a)
+  | Program.Beq (a, b) ->
+      Printf.sprintf "(%s = %s)" (expr_to_cav a) (expr_to_cav b)
+  | Program.Bneq (a, b) ->
+      Printf.sprintf "(%s != %s)" (expr_to_cav a) (expr_to_cav b)
   | Program.Get (a, i) -> Printf.sprintf "%s[%s]" a (expr_to_cav i)
   | Program.Len a -> Printf.sprintf "len(%s)" a
 

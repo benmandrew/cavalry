@@ -80,6 +80,7 @@
    verify_true_annotated_proc.cav
    verify_true_bool_scalar.cav
    verify_true_bool_flag.cav
+   verify_true_bool_eq.cav
    type_error_bool_arith.cav
    type_error_var_guard.cav
    verify_false_writes_undeclared.cav

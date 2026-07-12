@@ -156,6 +156,12 @@ let rec exec_expr : type a. Runtime.t -> a expr -> a =
   | And (a, b) -> exec_expr r a && exec_expr r b
   | Or (a, b) -> exec_expr r a || exec_expr r b
   | Not a -> not (exec_expr r a)
+  | Beq (a, b) ->
+      let v1 = exec_expr r a in
+      v1 = exec_expr r b
+  | Bneq (a, b) ->
+      let v1 = exec_expr r a in
+      v1 <> exec_expr r b
 
 and exec_cmd ?(fuel = ref max_int) r c : int * Runtime.t =
   let exec_cmd r c = exec_cmd ~fuel r c in

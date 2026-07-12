@@ -536,6 +536,13 @@ let%test_unit "Main.verify true boolean scalar" =
 let%test_unit "Main.verify true boolean flag loop" =
   check_verify "verify_true_bool_flag.cav" Valid
 
+(* Boolean equality [p = q] between two boolean variables. *)
+let%test_unit "Main.verify true boolean equality" =
+  check_verify "verify_true_bool_eq.cav" Valid
+
+let%test_unit "Main.exec boolean equality" =
+  [%test_result: int] (Main.exec "verify_true_bool_eq.cav") ~expect:1
+
 (* The same boolean-scalar program runs to a concrete result (x = 5 >= 0, so the
    [else] branch gives y = x = 5). *)
 let%test_unit "Main.exec boolean scalar" =

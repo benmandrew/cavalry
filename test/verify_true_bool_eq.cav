@@ -1,0 +1,13 @@
+// Boolean equality: p and q are both true (x = 5 is > 0 and > 3), so p = q
+// takes the first branch. Verifiable and runnable.
+{ true }
+x := 5;
+p := x > 0;
+q := x > 3;
+if p = q then
+  r := 1
+else
+  r := 2
+end;
+r
+{ r = 1 }
