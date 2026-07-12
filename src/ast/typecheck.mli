@@ -15,6 +15,7 @@ exception Type_error of Loc.t option * string
 
 type checked = {
   bool_vars : string list;  (** names of the program's boolean variables *)
+  bool_arrays : string list;  (** names of the program's boolean arrays *)
   proc_bool_params : (string * bool list) list;
       (** per procedure, whether each formal parameter is boolean *)
 }

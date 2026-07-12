@@ -9,6 +9,8 @@
       { Bool (b) }
   | v = VAR
       { Ast.Logic.BoolVar (v) }
+  | a = VAR LBRACKET i = arith_expr RBRACKET
+      { Ast.Logic.BGet (a, i) }
   | NOT e = logic_expr
       { Not (e) }
   | e0 = logic_expr AND e1 = logic_expr

@@ -26,7 +26,8 @@ type _ expr =
   | Mul : int expr * int expr -> int expr
   | Div : int expr * int expr -> int expr
   | Mod : int expr * int expr -> int expr
-  | Get : string * int expr -> int expr (* array element a[i] *)
+  | Get : string * int expr -> int expr (* integer array element a[i] *)
+  | BGet : string * int expr -> bool expr (* boolean array element a[i] *)
   | Len : string -> int expr (* array length len(a) *)
 [@@deriving sexp_of]
 
@@ -47,7 +48,7 @@ type cmd =
     (* invariant, optional variant (decreasing measure), guard, body *)
   | Print of int expr
   | ArrMake of string * int expr (* a := array(n) *)
-  | ArrAssgn of string * int expr * int expr (* a[i] := e *)
+  | ArrAssgn of string * int expr * anyexpr (* a[i] := e (integer or boolean) *)
   | Located of Loc.t * cmd
     (* a command annotated with its source location, used to point error
        messages at the construct whose obligation failed *)
@@ -91,12 +92,13 @@ exception TypeError of string
    or the integer comparison. A bare variable is boolean iff [is_bool] says so;
    the syntactic boolean forms are boolean regardless. [Typecheck] has validated
    that both operands agree, so testing the left one suffices. *)
-let rec is_bool_operand ~is_bool = function
+let rec is_bool_operand ~is_bool ~is_bool_array = function
   | UBool _ | UEq _ | UNeq _ | ULt _ | ULeq _ | UGt _ | UGeq _ | UAnd _ | UOr _
   | UNot _ ->
       true
   | UVar x -> is_bool x
-  | ULoc (_, e) -> is_bool_operand ~is_bool e
+  | UGet (a, _) -> is_bool_array a
+  | ULoc (_, e) -> is_bool_operand ~is_bool ~is_bool_array e
   | _ -> false
 
 let rec t_int_expr = function
@@ -111,18 +113,21 @@ let rec t_int_expr = function
   | ULen a -> Len a
   | e -> raise (TypeError (show_ut_expr e))
 
-and t_bool_expr ~is_bool e =
-  let recur = t_bool_expr ~is_bool in
+and t_bool_expr ~is_bool ~is_bool_array e =
+  let recur = t_bool_expr ~is_bool ~is_bool_array in
+  let bool_operand = is_bool_operand ~is_bool ~is_bool_array in
   match e with
   | UBool v -> Value (Bool v)
   (* A bare variable in boolean position is a boolean variable; [Typecheck] has
      already established that [v] is boolean-typed. *)
   | UVar v -> Value (BoolVar v)
+  (* [a[i]] in boolean position is an element of a boolean array. *)
+  | UGet (a, i) -> BGet (a, t_int_expr i)
   | UEq (a, b) ->
-      if is_bool_operand ~is_bool a then Beq (recur a, recur b)
+      if bool_operand a then Beq (recur a, recur b)
       else Eq (t_int_expr a, t_int_expr b)
   | UNeq (a, b) ->
-      if is_bool_operand ~is_bool a then Bneq (recur a, recur b)
+      if bool_operand a then Bneq (recur a, recur b)
       else Neq (t_int_expr a, t_int_expr b)
   | ULt (a, b) -> Lt (t_int_expr a, t_int_expr b)
   | ULeq (a, b) -> Leq (t_int_expr a, t_int_expr b)
@@ -141,29 +146,34 @@ let expr_to_cmd e = IntExpr (t_int_expr e)
 (* Elaborate an assignment right-hand side at its target's type: a boolean-typed
    variable ([is_bool x]) takes a boolean expression, any other an integer one.
    [Typecheck] guarantees the source expression matches. *)
-let t_rhs ~is_bool x e =
-  if is_bool x then BoolE (t_bool_expr ~is_bool e) else IntE (t_int_expr e)
+let t_rhs ~is_bool ~is_bool_array x e =
+  if is_bool x then BoolE (t_bool_expr ~is_bool ~is_bool_array e)
+  else IntE (t_int_expr e)
 
-let rec t_cmd ~is_bool ~proc_bool_params c =
-  let recur = t_cmd ~is_bool ~proc_bool_params in
+let rec t_cmd ~is_bool ~is_bool_array ~proc_bool_params c =
+  let recur = t_cmd ~is_bool ~is_bool_array ~proc_bool_params in
+  let bexpr = t_bool_expr ~is_bool ~is_bool_array in
   match c with
   | ULoc (loc, e) -> Located (loc, recur e)
   | USeq (c, c') -> Seq (recur c, recur c')
-  | UAssgn (s, e) -> Assgn (s, t_rhs ~is_bool s e)
-  | ULet (s, e) -> Let (s, t_rhs ~is_bool s e)
+  | UAssgn (s, e) -> Assgn (s, t_rhs ~is_bool ~is_bool_array s e)
+  | ULet (s, e) -> Let (s, t_rhs ~is_bool ~is_bool_array s e)
   | UProc (f, ps) ->
       (* Each actual is elaborated at its formal's type: a boolean parameter
          takes a boolean argument. [Typecheck] has matched the arity. *)
-      let arg is_b e =
-        if is_b then BoolE (t_bool_expr ~is_bool e) else IntE (t_int_expr e)
-      in
+      let arg is_b e = if is_b then BoolE (bexpr e) else IntE (t_int_expr e) in
       Proc (f, List.map2_exn (proc_bool_params f) ps ~f:arg)
-  | UIf (e, c, c') -> If (t_bool_expr ~is_bool e, recur c, recur c')
-  | UWhile (inv, variant, e, c) ->
-      While (inv, variant, t_bool_expr ~is_bool e, recur c)
+  | UIf (e, c, c') -> If (bexpr e, recur c, recur c')
+  | UWhile (inv, variant, e, c) -> While (inv, variant, bexpr e, recur c)
   | UPrint e -> Print (t_int_expr e)
   | UArrMake (a, n) -> ArrMake (a, t_int_expr n)
-  | UArrAssgn (a, i, e) -> ArrAssgn (a, t_int_expr i, t_int_expr e)
+  (* An element assignment carries a boolean value for a boolean array. *)
+  | UArrAssgn (a, i, e) ->
+      let v =
+        if is_bool_array a then BoolE (bexpr e) else IntE (t_int_expr e)
+      in
+      ArrAssgn (a, t_int_expr i, v)
   | v -> expr_to_cmd v
 
-let translate_cmd ~is_bool ~proc_bool_params = t_cmd ~is_bool ~proc_bool_params
+let translate_cmd ~is_bool ~is_bool_array ~proc_bool_params =
+  t_cmd ~is_bool ~is_bool_array ~proc_bool_params

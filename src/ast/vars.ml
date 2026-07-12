@@ -23,6 +23,11 @@ let create_fresh_bool x =
 let create_fresh_array x =
   Why3.Term.create_vsymbol (Why3.Ident.id_fresh x) (Lazy.force Arith.ty_int_map)
 
+(* A boolean-array variable ([map int bool]). *)
+let create_fresh_bool_array x =
+  Why3.Term.create_vsymbol (Why3.Ident.id_fresh x)
+    (Lazy.force Arith.ty_int_bool_map)
+
 (* A fresh variable of the *same type* as [vs]. Havoc'ing a variable must
    introduce a replacement of matching type, so an array (map) havocs to a fresh
    map, not a fresh integer. *)

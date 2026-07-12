@@ -48,6 +48,7 @@ let rec arrays_arith (e : Logic.arith_expr) =
 let rec arrays_logic (e : Logic.logic_expr) =
   match e with
   | Logic.Bool _ | Logic.BoolVar _ -> SS.empty
+  | Logic.BGet (a, i) -> SS.add a (arrays_arith i)
   | Logic.Not e | Logic.Forall (_, e) | Logic.Exists (_, e) -> arrays_logic e
   | Logic.And (a, b) | Logic.Or (a, b) | Logic.Impl (a, b) ->
       SS.union (arrays_logic a) (arrays_logic b)
@@ -162,12 +163,24 @@ let rec classify_bool (e : Program.ut_expr) =
 let rec bools_logic (e : Logic.logic_expr) =
   match e with
   | Logic.BoolVar x -> SS.singleton x
-  | Logic.Bool _ | Logic.Eq _ | Logic.Neq _ | Logic.Lt _ | Logic.Leq _
-  | Logic.Gt _ | Logic.Geq _ ->
+  | Logic.Bool _ | Logic.BGet _ | Logic.Eq _ | Logic.Neq _ | Logic.Lt _
+  | Logic.Leq _ | Logic.Gt _ | Logic.Geq _ ->
       SS.empty
   | Logic.Not e | Logic.Forall (_, e) | Logic.Exists (_, e) -> bools_logic e
   | Logic.And (a, b) | Logic.Or (a, b) | Logic.Impl (a, b) ->
       SS.union (bools_logic a) (bools_logic b)
+
+(* Boolean arrays mentioned via an element proposition ([a[i]]) in an assertion. *)
+let rec bool_arrays_logic (e : Logic.logic_expr) =
+  match e with
+  | Logic.BGet (a, _) -> SS.singleton a
+  | Logic.BoolVar _ | Logic.Bool _ | Logic.Eq _ | Logic.Neq _ | Logic.Lt _
+  | Logic.Leq _ | Logic.Gt _ | Logic.Geq _ ->
+      SS.empty
+  | Logic.Not e | Logic.Forall (_, e) | Logic.Exists (_, e) ->
+      bool_arrays_logic e
+  | Logic.And (a, b) | Logic.Or (a, b) | Logic.Impl (a, b) ->
+      SS.union (bool_arrays_logic a) (bool_arrays_logic b)
 
 (* Copy edges [(v, x)] from each assignment [x := v] of a bare variable: if [v]
    is boolean then so is [x]. Saturating these (see [check]) infers the type of
@@ -204,9 +217,67 @@ let program_bools (program : Triple.ut_t list) =
            (SS.union (bools_logic t.p) (bools_logic t.q))))
     SS.empty program
 
+(* An array is boolean-element when a boolean context forces its elements: an
+   element assigned a syntactically-boolean expression ([a[i] := b < c]), or an
+   element [a[i]] used as a bare boolean (a guard or an operand of &&/||/!).
+   Mirrors [classify_bool] for scalars. *)
+let rec classify_bool_array (e : Program.ut_expr) =
+  let open Program in
+  let ( ++ ) = SS.union in
+  (* An element access occupying a position that demands a boolean. *)
+  let barr = function UGet (a, _) -> SS.singleton a | _ -> SS.empty in
+  match e with
+  | UArrAssgn (a, i, e) ->
+      let here = if is_syntactically_bool e then SS.singleton a else SS.empty in
+      here ++ classify_bool_array i ++ classify_bool_array e
+  | UAnd (a, b) | UOr (a, b) ->
+      barr a ++ barr b ++ classify_bool_array a ++ classify_bool_array b
+  | UNot a -> barr a ++ classify_bool_array a
+  | UIf (c, a, b) ->
+      barr c ++ classify_bool_array c ++ classify_bool_array a
+      ++ classify_bool_array b
+  | UWhile (_inv, _variant, c, body) ->
+      barr c ++ classify_bool_array c ++ classify_bool_array body
+  | USeq (a, b) -> classify_bool_array a ++ classify_bool_array b
+  | ULoc (_, e) | UPrint e | UAssgn (_, e) | ULet (_, e) ->
+      classify_bool_array e
+  | UArrMake (_, n) -> classify_bool_array n
+  | UProc (_, args) ->
+      List.fold_left (fun s a -> s ++ classify_bool_array a) SS.empty args
+  | UEq (a, b)
+  | UNeq (a, b)
+  | ULt (a, b)
+  | ULeq (a, b)
+  | UGt (a, b)
+  | UGeq (a, b)
+  | UPlus (a, b)
+  | USub (a, b)
+  | UMul (a, b)
+  | UDiv (a, b)
+  | UMod (a, b) ->
+      classify_bool_array a ++ classify_bool_array b
+  | UGet (_, i) -> classify_bool_array i
+  | UInt _ | UBool _ | UVar _ | ULen _ -> SS.empty
+
+let program_bool_arrays (program : Triple.ut_t list) =
+  List.fold_left
+    (fun s (t : Triple.ut_t) ->
+      SS.union s
+        (SS.union (classify_bool_array t.u)
+           (SS.union (bool_arrays_logic t.p) (bool_arrays_logic t.q))))
+    SS.empty program
+
 (* ===== Expression typing ===== *)
 
-type env = { arrays : SS.t; bools : SS.t; procs : (string * Ty.t list) list }
+type env = {
+  arrays : SS.t;
+  bools : SS.t;
+  bool_arrays : SS.t;
+  procs : (string * Ty.t list) list;
+}
+
+(* The element type of an array: boolean if inferred so, otherwise integer. *)
+let element_type env a = if SS.mem a env.bool_arrays then Ty.Bool else Ty.Int
 
 let require_array env loc a =
   if not (SS.mem a env.arrays) then
@@ -228,7 +299,7 @@ let rec synth env loc (e : Program.ut_expr) : Ty.t =
   | UGet (a, i) ->
       require_array env loc a;
       expect env loc Ty.Int i;
-      Ty.Int
+      element_type env a
   | ULen a ->
       require_array env loc a;
       Ty.Int
@@ -288,7 +359,7 @@ let rec synth_arith env bound (e : Logic.arith_expr) : Ty.t =
   | Logic.Get (a, i) ->
       require_array env None a;
       expect_arith env bound Ty.Int i;
-      Ty.Int
+      element_type env a
   | Logic.Len a ->
       require_array env None a;
       Ty.Int
@@ -309,6 +380,12 @@ let rec check_logic env bound (e : Logic.logic_expr) : unit =
         fail None "array '%s' cannot be used as a proposition" x
       else if not (SS.mem x env.bools) then
         fail None "'%s' is not a boolean but is used as a proposition" x
+  | Logic.BGet (a, i) ->
+      require_array env None a;
+      if not (SS.mem a env.bool_arrays) then
+        fail None
+          "array '%s' is not boolean, so its element cannot be a proposition" a;
+      expect_arith env bound Ty.Int i
   | Logic.Not e -> check_logic env bound e
   | Logic.And (a, b) | Logic.Or (a, b) | Logic.Impl (a, b) ->
       check_logic env bound a;
@@ -373,7 +450,8 @@ let rec check_cmd env loc (e : Program.ut_expr) : unit =
   | UArrAssgn (a, i, e) ->
       require_array env loc a;
       expect env loc Ty.Int i;
-      expect env loc Ty.Int e
+      (* The value matches the array's element type. *)
+      expect env loc (element_type env a) e
   (* A bare expression as a statement (its value is discarded, e.g. a program's
      final result). It must be a well-typed integer expression -- the same
      restriction [Program.expr_to_cmd] elaborates against. *)
@@ -402,12 +480,14 @@ let check_params ~arrays ~bools (ps : (string * Ty.t option) list) =
 
 type checked = {
   bool_vars : string list;  (** names of the program's boolean variables *)
+  bool_arrays : string list;  (** names of the program's boolean arrays *)
   proc_bool_params : (string * bool list) list;
       (** per procedure, whether each formal parameter is boolean *)
 }
 
 let check (program : Triple.ut_t list) : checked =
   let arrays = program_arrays program in
+  let bool_arrays = program_bool_arrays program in
   (* Boolean names: inferred from bodies and assertions, plus any parameter
      annotated [: bool]. *)
   let annotated_bools =
@@ -444,7 +524,7 @@ let check (program : Triple.ut_t list) : checked =
           rev_procs
     | [] -> []
   in
-  let env = { arrays; bools; procs } in
+  let env = { arrays; bools; bool_arrays; procs } in
   List.iter
     (fun (t : Triple.ut_t) ->
       check_params ~arrays ~bools t.ps;
@@ -455,6 +535,7 @@ let check (program : Triple.ut_t list) : checked =
     program;
   {
     bool_vars = SS.elements bools;
+    bool_arrays = SS.elements bool_arrays;
     proc_bool_params =
       List.map (fun (f, tys) -> (f, List.map (Ty.equal Ty.Bool) tys)) procs;
   }

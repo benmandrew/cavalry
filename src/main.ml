@@ -14,12 +14,15 @@ let get_ast path =
   In_channel.close file;
   (* Reject ill-typed programs up front with a located diagnostic, and learn
      which variables are boolean so elaboration can type their occurrences. *)
-  let { Typecheck.bool_vars; proc_bool_params } = Typecheck.check ut_ast in
+  let { Typecheck.bool_vars; bool_arrays; proc_bool_params } =
+    Typecheck.check ut_ast
+  in
   let is_bool x = List.mem x bool_vars in
+  let is_bool_array x = List.mem x bool_arrays in
   let proc_bool_params f =
     match List.assoc_opt f proc_bool_params with Some bs -> bs | None -> []
   in
-  List.map (Triple.translate ~is_bool ~proc_bool_params) ut_ast
+  List.map (Triple.translate ~is_bool ~is_bool_array ~proc_bool_params) ut_ast
   |> Var_collection.collect
 
 let verify = Hoare.verify

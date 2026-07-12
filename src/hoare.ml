@@ -153,6 +153,9 @@ let rec expr_to_term : type a.
   | Div (e, e') -> div (f e) (f e')
   | Mod (e, e') -> modulo (f e) (f e')
   | Get (a, i) -> aget (T.t_var (resolve a)) (f i)
+  (* A boolean array element is a [bool] term; coerce it to a formula with
+     [= True], as for a boolean variable. *)
+  | BGet (a, i) -> T.t_equ (aget_bool (T.t_var (resolve a)) (f i)) T.t_bool_true
   | Len a -> T.t_var (resolve (Vars.len_key a))
 
 (* [0 <= i < len(a)]: the well-definedness obligation for accessing [a\[i\]],
@@ -200,6 +203,8 @@ let rec safe : type a.
          was itself proven [safe] on write; only the index expression can
          overflow. [Len] is a tracked variable, in range by assumption. *)
       self i
+  (* A boolean element carries no arithmetic; only its index can overflow. *)
+  | BGet (_, i) -> self i
   | Len _ -> T.t_true
   | Eq (a, b) | Neq (a, b) | Lt (a, b) | Leq (a, b) | Gt (a, b) | Geq (a, b) ->
       T.t_and_simp (self a) (self b)
@@ -247,7 +252,7 @@ let rec defined : type a.
           (Arith.neq (expr_to_term ~g_vars ?l_vars b) (T.t_nat_const 0))
       in
       T.t_and_simp (T.t_and_simp (self a) (self b)) nonzero
-  | Get (a, i) ->
+  | Get (a, i) | BGet (a, i) ->
       let bounds =
         index_in_bounds ~g_vars ?l_vars ?loc a (expr_to_term ~g_vars ?l_vars i)
       in
@@ -430,15 +435,19 @@ module Wlp = struct
         in
         T.t_and_simp safe assign
     | ArrMake (a, n) ->
-        (* a := array(n): length := n, elements := all zeros.
+        (* a := array(n): length := n, elements := the all-zeros ([False] for a
+           boolean array) map.
            safe(n) /\ 0 <= n /\ q[ a <- const 0 ][ len(a) <- n ] *)
         let n_t = expr_to_term ~g_vars ~l_vars n in
         let a_v = Vars.find_fallback a l_vars g_vars in
         let len_v = Vars.find_fallback (Vars.len_key a) l_vars g_vars in
+        let default =
+          if Ty.ty_equal a_v.T.vs_ty (Lazy.force Arith.ty_int_bool_map) then
+            Lazy.force Arith.bfalse
+          else Lazy.force Arith.azero
+        in
         let q_sub =
-          T.t_subst
-            (T.Mvs.of_list [ (a_v, Lazy.force Arith.azero); (len_v, n_t) ])
-            q
+          T.t_subst (T.Mvs.of_list [ (a_v, default); (len_v, n_t) ]) q
         in
         let nonneg =
           tag ?loc Array_length_nonneg (Arith.leq (T.t_nat_const 0) n_t)
@@ -446,14 +455,27 @@ module Wlp = struct
         T.t_and_simp (safe_e n) (T.t_and_simp nonneg q_sub)
     | ArrAssgn (a, i, e) ->
         (* a[i] := e: safe(i) /\ safe(e) /\ 0 <= i < len(a)
-           /\ q[ a <- set a i e ] *)
+           /\ q[ a <- set a i e ]. A boolean value is coerced to a [bool] term
+           (as for a boolean assignment) and stored with the boolean [set]. *)
         let i_t = expr_to_term ~g_vars ~l_vars i in
-        let e_t = expr_to_term ~g_vars ~l_vars e in
         let a_v = Vars.find_fallback a l_vars g_vars in
-        let q_sub = T.t_subst_single a_v (Arith.aset (T.t_var a_v) i_t e_t) q in
+        let updated, safe_v =
+          match e with
+          | IntE e ->
+              ( Arith.aset (T.t_var a_v) i_t (expr_to_term ~g_vars ~l_vars e),
+                safe_e e )
+          | BoolE e ->
+              let v =
+                T.t_if
+                  (expr_to_term ~g_vars ~l_vars e)
+                  T.t_bool_true T.t_bool_false
+              in
+              (Arith.aset_bool (T.t_var a_v) i_t v, safe_e e)
+        in
+        let q_sub = T.t_subst_single a_v updated q in
         let bounds = index_in_bounds ~g_vars ~l_vars ?loc a i_t in
         T.t_and_simp
-          (T.t_and_simp (safe_e i) (safe_e e))
+          (T.t_and_simp (safe_e i) safe_v)
           (T.t_and_simp bounds q_sub)
     | Proc (f, ps) ->
         (* safe(e_i) for each actual argument (evaluated in the caller's scope)

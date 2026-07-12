@@ -27,6 +27,8 @@ type defs = {
   const_symbol : Term.lsymbol;
   ty_int_map : Ty.ty;
   azero : Term.term;
+  ty_int_bool_map : Ty.ty;
+  bfalse : Term.term;
   min_int : Term.term;
   max_int : Term.term;
   base_task : Task.task;
@@ -59,6 +61,13 @@ let defs =
      let get_symbol = find_symbol map_theory "get" in
      let const_symbol = find_symbol const_theory "const" in
      let azero = T.t_app const_symbol [ T.t_nat_const 0 ] (Some ty_int_map) in
+     (* Boolean arrays are [map int bool]; an [array(n)] of booleans starts from
+        the all-[False] map. The [map.Map]/[map.Const] symbols are polymorphic,
+        so the same [get]/[set]/[const] serve both element types. *)
+     let ty_int_bool_map = Ty.ty_app map_ts [ Ty.ty_int; Ty.ty_bool ] in
+     let bfalse =
+       T.t_app const_symbol [ T.t_bool_false ] (Some ty_int_bool_map)
+     in
      let sub_symbol = find_symbol int_theory "infix -" in
      let sub a b = T.t_app sub_symbol [ a; b ] (Some Ty.ty_int) in
      (* Machine-integer range. OCaml native [int] is 63-bit ([Sys.int_size =
@@ -111,6 +120,8 @@ let defs =
        const_symbol;
        ty_int_map;
        azero;
+       ty_int_bool_map;
+       bfalse;
        min_int;
        max_int;
        base_task;
@@ -133,11 +144,20 @@ let geq a b = T.ps_app (d ()).geq_symbol [ a; b ]
 let aget a i = T.t_app (d ()).get_symbol [ a; i ] (Some Ty.ty_int)
 let aset a i v = T.t_app (d ()).set_symbol [ a; i; v ] (Some (d ()).ty_int_map)
 
+(* The boolean-array counterparts: [a[i]] as a [bool] term and [set a i v] over a
+   [map int bool]. *)
+let aget_bool a i = T.t_app (d ()).get_symbol [ a; i ] (Some Ty.ty_bool)
+
+let aset_bool a i v =
+  T.t_app (d ()).set_symbol [ a; i; v ] (Some (d ()).ty_int_bool_map)
+
 (* Exposed as [Lazy.t] rather than plain values: a consumer that bound one of
    these at its own top level would re-force the whole Why3 layer at startup,
    the very cost the laziness above avoids. Callers force at use. *)
 let ty_int_map = lazy (d ()).ty_int_map
 let azero = lazy (d ()).azero
+let ty_int_bool_map = lazy (d ()).ty_int_bool_map
+let bfalse = lazy (d ()).bfalse
 let min_int = lazy (d ()).min_int
 let max_int = lazy (d ()).max_int
 

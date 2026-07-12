@@ -437,7 +437,8 @@ let rec expr_to_cav : type a. a Program.expr -> string =
       Printf.sprintf "(%s = %s)" (expr_to_cav a) (expr_to_cav b)
   | Program.Bneq (a, b) ->
       Printf.sprintf "(%s != %s)" (expr_to_cav a) (expr_to_cav b)
-  | Program.Get (a, i) -> Printf.sprintf "%s[%s]" a (expr_to_cav i)
+  | Program.Get (a, i) | Program.BGet (a, i) ->
+      Printf.sprintf "%s[%s]" a (expr_to_cav i)
   | Program.Len a -> Printf.sprintf "len(%s)" a
 
 let rec arith_to_cav = function
@@ -464,6 +465,7 @@ let rec arith_to_cav = function
 let rec logic_to_cav = function
   | Logic.Bool b -> string_of_bool b
   | Logic.BoolVar x -> x
+  | Logic.BGet (a, i) -> Printf.sprintf "%s[%s]" a (arith_to_cav i)
   | Logic.Not e -> Printf.sprintf "!%s" (logic_to_cav e)
   | Logic.And (a, b) ->
       Printf.sprintf "%s && %s" (logic_to_cav a) (logic_to_cav b)
@@ -515,7 +517,7 @@ let rec cmd_to_cav c =
   | Program.Print e -> Printf.sprintf "print %s" (expr_to_cav e)
   | Program.ArrMake (a, n) -> Printf.sprintf "%s := array(%s)" a (expr_to_cav n)
   | Program.ArrAssgn (a, i, e) ->
-      Printf.sprintf "%s[%s] := %s" a (expr_to_cav i) (expr_to_cav e)
+      Printf.sprintf "%s[%s] := %s" a (expr_to_cav i) (any_to_cav e)
 
 let proc_to_cav (t : Triple.t) =
   Printf.sprintf

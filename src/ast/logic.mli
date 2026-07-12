@@ -31,6 +31,8 @@ type logic_expr =
   | Bool of bool
   | BoolVar of string
       (** a boolean program variable asserted as a proposition *)
+  | BGet of string * arith_expr
+      (** a boolean array element [a[i]] asserted as a proposition *)
   | Not of logic_expr
   | And of logic_expr * logic_expr
   | Or of logic_expr * logic_expr

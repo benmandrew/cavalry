@@ -1,0 +1,12 @@
+// A boolean array: fill it with true and prove, via a quantified invariant and
+// postcondition over boolean elements, that every element is true.
+{ n >= 0 }
+a := array(n);
+i := 0;
+while i < len(a) do
+  invariant { 0 <= i && i <= len(a) && forall j . 0 <= j && j < i -> a[j] }
+  variant { len(a) - i }
+  a[i] := true;
+  i := i + 1
+end
+{ forall j . 0 <= j && j < len(a) -> a[j] }

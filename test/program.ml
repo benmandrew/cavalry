@@ -61,7 +61,11 @@ let%test_unit "Ast.Program.type_expr" =
         UIf (UEq (UInt 1, UInt 2), UInt 5, UMul (UVar "x", UInt 5)) )
   in
   let result =
-    translate_cmd ~is_bool:(fun _ -> false) ~proc_bool_params:(fun _ -> []) ut
+    translate_cmd
+      ~is_bool:(fun _ -> false)
+      ~is_bool_array:(fun _ -> false)
+      ~proc_bool_params:(fun _ -> [])
+      ut
   in
   test_ast_eq ~expected result
 
@@ -234,6 +238,7 @@ let%test_unit "Ast.Runtime.exec - function" =
         (* [f] takes one integer parameter. *)
         Triple.translate
           ~is_bool:(fun _ -> false)
+          ~is_bool_array:(fun _ -> false)
           ~proc_bool_params:(fun name ->
             if String.equal name "f" then [ false ] else [])
           ut
