@@ -56,6 +56,12 @@ command_desc:
       { USeq (c0, c1) }
   | IF e = expr THEN c0 = command ELSE c1 = command END
       { UIf (e, c0, c1) }
+  (* One-armed [if]: an absent [else] is a no-op. Desugar it to an [else]
+     branch that evaluates the trivial expression [0] and discards it -- a bare
+     expression is already a valid (effect-free) command, so this needs no new
+     AST node and its WLP collapses to the identity. *)
+  | IF e = expr THEN c0 = command END
+      { UIf (e, c0, UInt 0) }
   | WHILE e = expr DO INVARIANT LBRACE inv = logic_expr RBRACE c = command END
       { UWhile (inv, None, e, c) }
   | WHILE e = expr DO INVARIANT LBRACE inv = logic_expr RBRACE VARIANT LBRACE m = arith_expr RBRACE c = command END

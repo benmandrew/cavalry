@@ -4,8 +4,10 @@
  (inline_tests
   (deps
    exec_if.cav
+   exec_if_noelse.cav
    exec_short_circuit.cav
    verify_true_search.cav
+   verify_true_if_noelse.cav
    exec_comment.cav
    exec_while.cav
    exec_proc.cav
