@@ -1,49 +1,63 @@
 <title>Cavalry — interpreter vs compiled benchmark</title>
 <style>
+  /* Fonts from the sibling odoc build, so a report hosted at
+     _html/cavalry/benchmark.html matches the API docs exactly. The URLs are
+     relative to that location; opened standalone they 404 and the stacks below
+     fall back to the system serif/sans/mono. */
+  @font-face { font-family: 'Fira Sans'; font-style: normal; font-weight: 400;
+    font-display: swap; src: url('../odoc.support/fonts/fira-sans-v17-latin-regular.woff2') format('woff2'); }
+  @font-face { font-family: 'Fira Sans'; font-style: italic; font-weight: 400;
+    font-display: swap; src: url('../odoc.support/fonts/fira-sans-v17-latin-italic.woff2') format('woff2'); }
+  @font-face { font-family: 'Fira Sans'; font-style: normal; font-weight: 500;
+    font-display: swap; src: url('../odoc.support/fonts/fira-sans-v17-latin-500.woff2') format('woff2'); }
+  @font-face { font-family: 'Fira Sans'; font-style: normal; font-weight: 700;
+    font-display: swap; src: url('../odoc.support/fonts/fira-sans-v17-latin-700.woff2') format('woff2'); }
+  @font-face { font-family: 'Fira Mono'; font-style: normal; font-weight: 400;
+    font-display: swap; src: url('../odoc.support/fonts/fira-mono-v14-latin-regular.woff2') format('woff2'); }
+  @font-face { font-family: 'Fira Mono'; font-style: normal; font-weight: 500;
+    font-display: swap; src: url('../odoc.support/fonts/fira-mono-v14-latin-500.woff2') format('woff2'); }
+  @font-face { font-family: 'Noticia Text'; font-style: normal; font-weight: 400;
+    font-display: swap; src: url('../odoc.support/fonts/noticia-text-v15-latin-regular.woff2') format('woff2'); }
+  @font-face { font-family: 'Noticia Text'; font-style: italic; font-weight: 400;
+    font-display: swap; src: url('../odoc.support/fonts/noticia-text-v15-latin-italic.woff2') format('woff2'); }
+  @font-face { font-family: 'Noticia Text'; font-style: normal; font-weight: 700;
+    font-display: swap; src: url('../odoc.support/fonts/noticia-text-v15-latin-700.woff2') format('woff2'); }
+
   :root {
-    /* cool-biased neutrals for a systems/compiler subject */
-    --bg:            #f4f5f7;
-    --surface:       #fcfcfd;
-    --surface-2:     #eef0f3;
-    --border:        #dde0e6;
-    --ink:           #0d0f12;
-    --ink-2:         #4a4f57;
-    --ink-3:         #7b818b;
-    --native:        #2a78d6;  /* categorical slot 1 — compiled, native int */
-    --zarith:        #1baf7a;  /* categorical slot 2 — compiled, Zarith      */
-    --interp:        #8a9099;  /* baseline — the interpreter                 */
-    --good:          #0ca30c;
-    --accent-soft:   #e8f0fb;
-    --grid:          #e6e8ec;
-    --mono: ui-monospace, "SF Mono", "SFMono-Regular", Menlo, Consolas, monospace;
-    --sans: -apple-system, BlinkMacSystemFont, "SF Pro Text", system-ui, "Segoe UI", sans-serif;
+    /* odoc's Gruvbox palette, so the report matches the hosted API docs.
+       Names on the right are odoc.support/odoc.css's own CSS variables. */
+    --bg:            #ffffff;  /* --odoc-bg  (reading pane)               */
+    --surface:       #f9f5d7;  /* --bg_h     (cards)                      */
+    --surface-2:     #ebdbb2;  /* --bg1      (chips, table head)          */
+    --border:        #d5c4a1;  /* --bg2                                   */
+    --ink:           #282828;  /* --fg                                    */
+    --ink-2:         #504945;  /* --fg2                                   */
+    --ink-3:         #7c6f64;  /* --fg4                                   */
+    --native:        #076678;  /* --blue   — compiled, native int         */
+    --zarith:        #427b58;  /* --aqua   — compiled, Zarith             */
+    --interp:        #928374;  /* --gray   — the interpreter (baseline)   */
+    --good:          #79740e;  /* --green  — startup callout              */
+    --accent-soft:   color-mix(in srgb, var(--native) 12%, var(--bg));
+    --grid:          #d5c4a1;  /* --bg2                                   */
+    --mono:  'Fira Mono', ui-monospace, "SF Mono", Menlo, Consolas, monospace;
+    --sans:  'Fira Sans', -apple-system, system-ui, "Segoe UI", sans-serif;
+    --serif: 'Noticia Text', Georgia, "Times New Roman", serif;
   }
   @media (prefers-color-scheme: dark) {
     :root {
-      --bg:          #131518;
-      --surface:     #1a1d21;
-      --surface-2:   #21252a;
-      --border:      #2c3138;
-      --ink:         #f3f4f6;
-      --ink-2:       #b7bcc4;
-      --ink-3:       #838a93;
-      --native:      #3987e5;
-      --zarith:      #22bd86;
-      --interp:      #757c86;
-      --good:        #35c035;
-      --accent-soft: #17263b;
-      --grid:        #262a30;
+      --bg:          #202020;  /* --odoc-bg */
+      --surface:     #1d2021;  /* --bg_h    */
+      --surface-2:   #32302f;  /* --bg_s    */
+      --border:      #3c3836;  /* --bg1     */
+      --ink:         #fbf1c7;  /* --fg      */
+      --ink-2:       #d5c4a1;  /* --fg2     */
+      --ink-3:       #a89984;  /* --fg4     */
+      --native:      #83a598;  /* --blue    */
+      --zarith:      #8ec07c;  /* --aqua    */
+      --interp:      #928374;  /* --gray    */
+      --good:        #b8bb26;  /* --green   */
+      --grid:        #3c3836;  /* --bg1     */
     }
-  }
-  :root[data-theme="light"] {
-    --bg:#f4f5f7; --surface:#fcfcfd; --surface-2:#eef0f3; --border:#dde0e6;
-    --ink:#0d0f12; --ink-2:#4a4f57; --ink-3:#7b818b; --native:#2a78d6;
-    --zarith:#1baf7a; --interp:#8a9099; --good:#0ca30c; --accent-soft:#e8f0fb; --grid:#e6e8ec;
-  }
-  :root[data-theme="dark"] {
-    --bg:#131518; --surface:#1a1d21; --surface-2:#21252a; --border:#2c3138;
-    --ink:#f3f4f6; --ink-2:#b7bcc4; --ink-3:#838a93; --native:#3987e5;
-    --zarith:#22bd86; --interp:#757c86; --good:#35c035; --accent-soft:#17263b; --grid:#262a30;
   }
 
   * { box-sizing: border-box; }
@@ -52,7 +66,7 @@
   html { height: auto; overflow-y: auto; overflow-x: hidden; }
   body {
     margin: 0; background: var(--bg); color: var(--ink);
-    font-family: var(--sans); line-height: 1.55;
+    font-family: var(--serif); line-height: 1.55;
     -webkit-font-smoothing: antialiased;
     display: block; height: auto; min-height: 0; max-width: 100%;
     overflow-x: hidden; overflow-y: visible; place-items: initial;
@@ -65,6 +79,7 @@
     text-transform: uppercase; color: var(--ink-3); margin: 0 0 14px;
   }
   h1 {
+    font-family: var(--sans);
     font-size: clamp(28px, 4.4vw, 42px); line-height: 1.08; margin: 0 0 16px;
     letter-spacing: -0.02em; text-wrap: balance; font-weight: 650;
   }
@@ -110,7 +125,7 @@
     align-items: center;
   }
   @media (max-width: 640px) { .callout { grid-template-columns: 1fr; } }
-  .callout h3 { margin: 0 0 6px; font-size: 17px; }
+  .callout h3 { font-family: var(--sans); margin: 0 0 6px; font-size: 17px; }
   .callout p { margin: 0; color: var(--ink-2); font-size: 14.5px; max-width: 54ch; }
   .ba { display: flex; align-items: center; gap: 14px; font-family: var(--mono); }
   .ba .before { color: var(--ink-3); text-decoration: line-through; font-size: 20px; }
