@@ -1,0 +1,29 @@
+(* Why driver for Why3 syntax *)
+
+printer "why3"
+filename "%f-%t-%g.why"
+
+(* Performed introductions depending on whether counterexamples are
+   requested, as said by the meta "get_counterexmp". When this meta
+   set, this transformation introduces the model variables that are
+   still embedded in the goal. When it is not set, it removes all
+   these unused-ce-related variables, even in the context.  *)
+transformation "counterexamples_dependent_intros"
+
+transformation "inline_trivial"
+
+transformation "eliminate_builtin"
+transformation "eliminate_definition"
+transformation "eliminate_inductive"
+transformation "eliminate_if"
+transformation "eliminate_epsilon"
+transformation "eliminate_algebraic"
+transformation "eliminate_literal"
+transformation "eliminate_let"
+
+transformation "discriminate"
+transformation "encoding_tptp"
+
+theory BuiltIn
+  syntax predicate (=)  "(%1 = %2)"
+end

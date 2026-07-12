@@ -1,0 +1,43 @@
+(* Why driver for SPASS with types (>= 3.8) *)
+
+printer "dfg"
+filename "%f-%t-%g.dfg"
+
+valid   "Proof found"
+invalid "Completion found"
+timeout "Ran out of time"
+timeout "CPU time limit exceeded"
+outofmemory "Out of Memory"
+unknown "No Proof Found" ""
+fail    "Failure.*" "\"\\0\""
+
+time "why3cpulimit time : %s s"
+
+(* to be improved *)
+
+(* Performed introductions depending on whether counterexamples are
+   requested, as said by the meta "get_counterexmp". When this meta
+   set, this transformation introduces the model variables that are
+   still embedded in the goal. When it is not set, it removes all
+   these unused-ce-related variables, even in the context.  *)
+transformation "counterexamples_dependent_intros"
+
+transformation "inline_trivial"
+
+transformation "eliminate_builtin"
+transformation "eliminate_definition"
+transformation "eliminate_inductive"
+transformation "eliminate_if"
+transformation "eliminate_epsilon"
+transformation "eliminate_algebraic"
+transformation "eliminate_literal"
+transformation "eliminate_let"
+
+transformation "discriminate"
+
+theory BuiltIn
+  syntax predicate (=)  "equal(%1, %2)"
+  meta "eliminate_algebraic" "no_index"
+end
+
+import "discrimination.gen"

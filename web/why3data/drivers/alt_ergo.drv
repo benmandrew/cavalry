@@ -1,0 +1,25 @@
+(* Driver for Alt-Ergo versions >= 2.4.0 *)
+
+prelude "(* this is the prelude for Alt-Ergo, version >= 2.4.0 *)"
+
+filename "%f-%t-%g.ae"
+
+(* Performed introductions depending on whether counterexamples are
+   requested, as said by the meta "get_counterexmp". When this meta
+   set, this transformation introduces the model variables that are
+   still embedded in the goal. When it is not set, it removes all
+   these unused-ce-related variables, even in the context.  *)
+transformation "counterexamples_dependent_intros"
+
+import "common-transformations.gen"
+transformation "eliminate_recursion"
+transformation "eliminate_inductive"
+transformation "eliminate_epsilon"
+transformation "eliminate_algebraic"
+transformation "eliminate_literal"
+transformation "split_premise_right"
+transformation "simplify_formula"
+
+
+import "alt_ergo_common.drv"
+import "no-bv.gen"

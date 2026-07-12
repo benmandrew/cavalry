@@ -1,0 +1,9 @@
+# why3data/ is committed (Why3 stdlib + drivers, embedded into the JS build).
+# Refresh it with `npm run refresh:why3data` when bumping the pinned Why3.
+node_modules/
+dist/
+z3-built.js
+z3-built.wasm
+verifier.bc.js
+embedded_why3.ml
+*.log

@@ -1,0 +1,359 @@
+
+valid 0
+unknown "Error: \\(.*\\)$" "\\1"
+fail "Syntax error: \\(.*\\)$" "\\1"
+time "why3cpulimit time : %s s"
+
+transformation "eliminate_non_struct_recursion"
+transformation "eliminate_if"
+transformation "eliminate_literal"
+transformation "eliminate_non_lambda_set_epsilon"
+
+transformation "eliminate_projections"
+
+transformation "simplify_formula"
+(*transformation "simplify_trivial_quantification_in_goal"*)
+
+
+theory BuiltIn
+
+  prelude "Require Import BuiltIn."
+
+  syntax type int "Numbers.BinNums.Z"
+  syntax type real "Reals.Rdefinitions.R"
+  syntax type string "Strings.String.string"
+  syntax predicate  (=)   "(%1 = %2)"
+end
+
+theory Ignore
+  syntax predicate ignore'term  "true"
+end
+
+theory Unit
+  syntax type unit "Init.Datatypes.unit"
+end
+
+theory Bool
+
+  syntax type bool "Init.Datatypes.bool"
+
+  syntax function True  "Init.Datatypes.true"
+  syntax function False "Init.Datatypes.false"
+end
+
+theory bool.Bool
+
+  syntax function andb  "Init.Datatypes.andb"
+  syntax function orb   "Init.Datatypes.orb"
+  syntax function xorb  "Init.Datatypes.xorb"
+  syntax function notb  "Init.Datatypes.negb"
+  syntax function implb "Init.Datatypes.implb"
+
+end
+
+
+theory int.Int
+
+  syntax function zero "0%Z"
+  syntax function one  "1%Z"
+
+  syntax function (+)  "(%1 + %2)%Z"
+  syntax function (-)  "(%1 - %2)%Z"
+  syntax function (*)  "(%1 * %2)%Z"
+  syntax function (-_) "(-%1)%Z"
+
+  syntax predicate (<=) "(%1 <= %2)%Z"
+  syntax predicate (<)  "(%1 < %2)%Z"
+  syntax predicate (>=) "(%1 >= %2)%Z"
+  syntax predicate (>)  "(%1 > %2)%Z"
+
+  remove prop MulComm.Comm
+  remove prop MulAssoc.Assoc
+  remove prop Unit_def_l
+  remove prop Unit_def_r
+  remove prop Inv_def_l
+  remove prop Inv_def_r
+  remove prop Assoc
+  remove prop Mul_distr_l
+  remove prop Mul_distr_r
+  remove prop Comm
+  remove prop Unitary
+  remove prop Refl
+  remove prop Trans
+  remove prop Antisymm
+  remove prop Total
+  remove prop NonTrivialRing
+  remove prop CompatOrderAdd
+  remove prop CompatOrderMult
+  remove prop ZeroLessOne
+
+end
+
+theory int.Abs
+
+  syntax function abs "ZArith.BinInt.Z.abs"
+
+  remove prop Abs_pos
+
+end
+
+theory int.MinMax
+
+  syntax function min "ZArith.BinInt.Z.min"
+  syntax function max "ZArith.BinInt.Z.max"
+
+end
+
+(* removed: Coq Zdiv is NOT true Euclidean division:
+   Zmod can be negative, in fact (Zmod x y) has the same sign as y,
+   which is not the usual convention of programming language either.
+
+theory int.EuclideanDivision
+
+  syntax function div "ZArith.BinInt.Z.div"
+  syntax function mod "ZArith.BinInt.Z.modulo"
+
+  remove prop Div_mod
+  remove prop Div_bound
+  remove prop Mod_bound
+  remove prop Mod_1
+  remove prop Div_1
+
+end
+*)
+
+theory int.ComputerDivision
+
+  (* Coq provides the division and modulo operators
+     with the same convention as mainstream programming language
+     such C, Java, OCaml *)
+
+  syntax function div "ZArith.BinInt.Z.quot"
+  syntax function mod "ZArith.BinInt.Z.rem"
+
+  remove prop Div_mod
+  remove prop Div_bound
+  remove prop Mod_bound
+  remove prop Div_sign_pos
+  remove prop Div_sign_neg
+  remove prop Mod_sign_pos
+  remove prop Mod_sign_neg
+  remove prop Rounds_toward_zero
+  remove prop Div_1
+  remove prop Mod_1
+  remove prop Div_inf
+  remove prop Mod_inf
+  remove prop Div_mult
+  remove prop Mod_mult
+
+end
+
+
+theory real.Real
+
+  syntax function zero "0%R"
+  syntax function one  "1%R"
+
+  syntax function (+)  "(%1 + %2)%R"
+  syntax function (-)  "(%1 - %2)%R"
+  syntax function (-_) "(-%1)%R"
+  syntax function (*)  "(%1 * %2)%R"
+  syntax function (/)  "(%1 / %2)%R"
+  syntax function inv  "(/ %1)%R"
+
+  syntax predicate (<=) "(%1 <= %2)%R"
+  syntax predicate (<)  "(%1 < %2)%R"
+  syntax predicate (>=) "(%1 >= %2)%R"
+  syntax predicate (>)  "(%1 > %2)%R"
+
+  remove prop MulComm.Comm
+  remove prop MulAssoc.Assoc
+  remove prop Unit_def_l
+  remove prop Unit_def_r
+  remove prop Inv_def_l
+  remove prop Inv_def_r
+  remove prop Assoc
+  remove prop Mul_distr_l
+  remove prop Mul_distr_r
+  remove prop Comm
+  remove prop Unitary
+  remove prop Inverse
+  remove prop NonTrivialRing
+  remove prop CompatOrderAdd
+  remove prop CompatOrderMult
+  remove prop ZeroLessOne
+  remove prop Refl
+  remove prop Trans
+  remove prop Antisymm
+  remove prop Total
+  remove prop assoc_mul_div
+  remove prop assoc_div_mul
+  remove prop assoc_div_div
+
+end
+
+theory real.RealInfix
+
+  syntax function (+.)  "(%1 + %2)%R"
+  syntax function (-.)  "(%1 - %2)%R"
+  syntax function (-._) "(-%1)%R"
+  syntax function ( *.) "(%1 * %2)%R"
+  syntax function (/.)  "(%1 / %2)%R"
+
+  syntax predicate (<=.) "(%1 <= %2)%R"
+  syntax predicate (<.)  "(%1 <  %2)%R"
+  syntax predicate (>=.) "(%1 >= %2)%R"
+  syntax predicate (>.)  "(%1 >  %2)%R"
+
+end
+
+theory real.Abs
+
+  prelude "Require Reals.Rbasic_fun."
+
+  syntax function abs "Reals.Rbasic_fun.Rabs"
+
+  remove prop Abs_le
+  remove prop Abs_pos
+
+end
+
+theory real.MinMax
+
+  syntax function min "Reals.Rbasic_fun.Rmin"
+  syntax function max "Reals.Rbasic_fun.Rmax"
+
+end
+
+theory real.FromInt
+
+  syntax function from_int "BuiltIn.IZR"
+
+  remove prop Zero
+  remove prop One
+  remove prop Add
+  remove prop Sub
+  remove prop Mul
+  remove prop Neg
+
+end
+
+theory real.Square
+
+  prelude "Require Reals.R_sqrt."
+
+  syntax function sqr  "Reals.RIneq.Rsqr"
+  syntax function sqrt "Reals.R_sqrt.sqrt"  (* and not Rsqrt *)
+
+  remove prop Sqrt_positive
+  remove prop Sqrt_square
+  remove prop Square_sqrt
+
+end
+
+theory real.ExpLog
+
+  prelude "Require Reals.Rtrigo_def."
+  prelude "Require Reals.Rpower."
+
+  syntax function exp "Reals.Rtrigo_def.exp"
+  syntax function log "Reals.Rpower.ln"
+
+  remove prop Exp_zero
+  remove prop Exp_sum
+  remove prop Log_one
+  remove prop Log_mul
+  remove prop Log_exp
+  remove prop Exp_log
+
+end
+
+theory real.PowerInt
+
+  prelude "Require Reals.Rfunctions."
+
+  syntax function power "Reals.Rfunctions.powerRZ"
+
+  remove prop Power_0 (* already as powerRZ_O *)
+  (* remove prop Power_s *)
+  remove prop Power_1 (* already as powerRZ_1 *)
+  (* remove prop Power_sum *) (* not the same as powerRZ_add *)
+  (* remove prop Power_mult *)
+
+end
+
+theory real.PowerReal
+
+  syntax function pow "Reals.Rpower.Rpower"
+
+end
+
+theory real.Trigonometry
+
+  prelude "Require Reals.Rtrigo_def."
+  prelude "Require Reals.Rtrigo1."
+  prelude "Require Reals.Ratan."
+
+  syntax function cos "Reals.Rtrigo_def.cos"
+  syntax function sin "Reals.Rtrigo_def.sin"
+
+  syntax function pi "Reals.Rtrigo1.PI"
+
+  syntax function tan "Reals.Rtrigo1.tan"
+
+  syntax function atan "Reals.Ratan.atan"
+
+  remove prop Pythagorean_identity
+  remove prop Cos_le_one
+  remove prop Sin_le_one
+  remove prop Cos_0
+  remove prop Sin_0
+  remove prop Cos_pi
+  remove prop Sin_pi
+  remove prop Cos_pi2
+  remove prop Sin_pi2
+
+end
+
+theory list.List
+
+  syntax type list "Init.Datatypes.list"
+  syntax function Nil "Init.Datatypes.nil"
+  syntax function Cons "Init.Datatypes.cons"
+
+end
+
+theory list.Append
+
+  syntax function (++) "Init.Datatypes.app"
+
+end
+
+theory list.Reverse
+
+  syntax function reverse "Lists.List.rev"
+
+end
+
+theory list.RevAppend
+
+  syntax function rev_append "Lists.List.rev_append"
+
+end
+
+theory list.Combine
+
+  syntax function combine "Lists.List.combine"
+
+end
+
+theory option.Option
+
+  syntax type option "Init.Datatypes.option"
+  syntax function None "Init.Datatypes.None"
+  syntax function Some "Init.Datatypes.Some"
+
+end
+
+(* this file has an extension .aux rather than .gen since it should not be distributed *)
+import "coq-realizations.aux"

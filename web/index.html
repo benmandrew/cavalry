@@ -1,0 +1,146 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Cavalry — client-side verifier</title>
+    <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16'%3E%3Ctext y='14' font-size='14'%3E%E2%99%9E%3C/text%3E%3C/svg%3E" />
+    <link rel="apple-touch-icon" href="data:," />
+    <style>
+      :root {
+        color-scheme: light dark;
+        --bg: #ffffff;
+        --panel: #f5f6f8;
+        --border: #d9dce1;
+        --fg: #1a1c20;
+        --muted: #6b7280;
+        --ok: #1f883d;
+        --bad: #cf222e;
+        --busy: #9a6700;
+        --accent: #0969da;
+        --mono: ui-monospace, SFMono-Regular, "SF Mono", Menlo, Consolas, monospace;
+      }
+      @media (prefers-color-scheme: dark) {
+        :root {
+          --bg: #0d1117;
+          --panel: #161b22;
+          --border: #30363d;
+          --fg: #e6edf3;
+          --muted: #8b949e;
+          --ok: #3fb950;
+          --bad: #f85149;
+          --busy: #d29922;
+          --accent: #58a6ff;
+        }
+      }
+      * { box-sizing: border-box; }
+      html, body { height: 100%; margin: 0; }
+      body {
+        background: var(--bg);
+        color: var(--fg);
+        font: 14px/1.5 system-ui, -apple-system, Segoe UI, Roboto, sans-serif;
+        display: flex;
+        flex-direction: column;
+      }
+      header {
+        display: flex;
+        align-items: center;
+        gap: 12px;
+        padding: 12px 18px;
+        border-bottom: 1px solid var(--border);
+      }
+      header h1 { font-size: 15px; font-weight: 600; margin: 0; }
+      header .sub { color: var(--muted); font-size: 12px; }
+      .pill {
+        margin-left: auto;
+        font-size: 12px;
+        font-weight: 600;
+        padding: 4px 10px;
+        border-radius: 999px;
+        border: 1px solid var(--border);
+        white-space: nowrap;
+      }
+      .pill.ok { color: var(--ok); border-color: var(--ok); }
+      .pill.bad { color: var(--bad); border-color: var(--bad); }
+      .pill.busy { color: var(--busy); border-color: var(--busy); }
+      main {
+        flex: 1;
+        display: grid;
+        grid-template-rows: 1fr auto;
+        min-height: 0;
+      }
+      .editor-wrap { position: relative; min-height: 0; display: flex; }
+      textarea {
+        flex: 1;
+        border: 0;
+        outline: 0;
+        resize: none;
+        padding: 16px 18px;
+        background: var(--bg);
+        color: var(--fg);
+        font-family: var(--mono);
+        font-size: 14px;
+        line-height: 1.6;
+        tab-size: 2;
+      }
+      #results {
+        border-top: 1px solid var(--border);
+        background: var(--panel);
+        max-height: 42vh;
+        overflow: auto;
+        padding: 12px 18px;
+        font-size: 13px;
+      }
+      #results.stale { opacity: 0.5; }
+      .verdict { font-weight: 600; margin-bottom: 6px; }
+      .verdict.ok { color: var(--ok); }
+      .verdict.bad { color: var(--bad); }
+      .verdict.busy { color: var(--busy); }
+      .note { color: var(--muted); font-size: 12px; }
+      ul.findings { list-style: none; margin: 8px 0 0; padding: 0; }
+      ul.findings li {
+        padding: 6px 8px;
+        border-left: 3px solid var(--bad);
+        background: color-mix(in srgb, var(--bad) 8%, transparent);
+        margin-bottom: 6px;
+        border-radius: 0 4px 4px 0;
+        font-family: var(--mono);
+        font-size: 12px;
+      }
+      ul.findings li.err { border-left-color: var(--busy); background: color-mix(in srgb, var(--busy) 10%, transparent); }
+      .loc { color: var(--accent); cursor: pointer; }
+      .progress {
+        height: 4px;
+        background: var(--border);
+        border-radius: 2px;
+        overflow: hidden;
+        margin-top: 8px;
+      }
+      .progress > div { height: 100%; background: var(--busy); width: 0; transition: width 0.1s linear; }
+    </style>
+  </head>
+  <body>
+    <header>
+      <h1>Cavalry</h1>
+      <span class="sub">client-side verifier — Why3 &amp; Z3, entirely in your browser</span>
+      <span id="status" class="pill busy">booting…</span>
+    </header>
+    <main>
+      <div class="editor-wrap">
+        <textarea id="editor" spellcheck="false" autocomplete="off" autocapitalize="off"></textarea>
+      </div>
+      <section id="results">
+        <div class="verdict busy">Loading Z3…</div>
+      </section>
+    </main>
+    <!-- Order matters: the OCaml pipeline and Z3's Emscripten module each set a
+         global (cavalryObligations / initZ3); the z3-solver API bundle and the
+         solve core read them; app.js drives it all. Everything runs on the main
+         thread -- Z3 itself solves in its own worker threads. -->
+    <script src="./verifier.bc.js"></script>
+    <script src="./z3-built.js"></script>
+    <script src="./dist/z3-api.js"></script>
+    <script src="./verify-core.js"></script>
+    <script src="./app.js"></script>
+  </body>
+</html>

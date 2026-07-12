@@ -1,0 +1,327 @@
+(* Why3 driver for SMT-LIB2, common part of bit-vector theories *)
+
+prelude ";;; SMT-LIB2 driver: bit-vectors, common part"
+
+theory bv.BV_Gen
+  remove prop size_pos
+  remove prop nth_out_of_bound
+  remove prop Nth_zeros
+  remove prop Nth_ones
+
+  (** this meta seems somehow placed too early since we cannot give a
+     syntax rule for the literals yet, it is only possible in the
+     clones. Yet, this will prevent users who clone this module to
+     forget to add such a syntax rule in their driver. See also issue
+     https://gitlab.inria.fr/why3/why3/-/issues/759 *)
+  meta "literal:keep" type t
+
+  (* Note: the syntax rules given in this module are somehow given too
+     early, since they are only valid in each clones. Yet, it is
+     convenient to share those declarations once and for all. See also issue
+     https://gitlab.inria.fr/why3/why3/-/issues/759 *)
+
+  syntax function bw_and "(bvand %1 %2)"
+  syntax function bw_or "(bvor %1 %2)"
+  syntax function bw_xor "(bvxor %1 %2)"
+  syntax function bw_not "(bvnot %1)"
+
+  (* Warning: we should NOT remove all the axioms using "allprops" *)
+
+  remove prop Nth_bw_and
+  remove prop Nth_bw_or
+  remove prop Nth_bw_xor
+  remove prop Nth_bw_not
+
+  (** Shift operators *)
+
+  remove prop Lsr_nth_low
+  remove prop Lsr_nth_high
+  remove prop lsr_zeros
+  remove prop Asr_nth_low
+  remove prop Asr_nth_high
+  remove prop asr_zeros
+  remove prop Lsl_nth_low
+  remove prop Lsl_nth_high
+  remove prop lsl_zeros
+  remove prop Nth_rotate_left
+  remove prop Nth_rotate_right
+
+  (* Conversions from/to integers *)
+
+  remove prop two_power_size_val
+  remove prop two_power_size_minus_one_val
+  remove prop max_int_val
+
+  (* function to_int  - solver specific *)
+  (* function to_uint - solver specific *)
+  (* function of_int  - solver specific *)
+
+  remove prop to_uint_extensionality
+  remove prop to_int_extensionality
+
+  remove prop to_uint_bounds
+  (*remove prop to_uint_of_int*)
+  remove prop to_uint_size_bv
+  remove prop to_uint_zeros
+  remove prop to_uint_ones
+  remove prop to_uint_one
+
+  (* comparison operators *)
+
+  syntax predicate ult "(bvult %1 %2)"
+  syntax predicate ule "(bvule %1 %2)"
+  syntax predicate ugt "(bvugt %1 %2)"
+  syntax predicate uge "(bvuge %1 %2)"
+  syntax predicate slt "(bvslt %1 %2)"
+  syntax predicate sle "(bvsle %1 %2)"
+  syntax predicate sgt "(bvsgt %1 %2)"
+  syntax predicate sge "(bvsge %1 %2)"
+
+  (** Arithmetic operators *)
+
+  syntax function add "(bvadd %1 %2)"
+  remove prop to_uint_add
+  remove prop to_uint_add_bounded
+  remove prop to_uint_add_overflow
+
+  syntax function sub "(bvsub %1 %2)"
+  remove prop to_uint_sub
+  remove prop to_uint_sub_bounded
+  remove prop to_uint_sub_overflow
+
+  syntax function neg "(bvneg %1)"
+  remove prop to_uint_neg
+  remove prop to_uint_neg_no_mod
+
+  syntax function mul "(bvmul %1 %2)"
+  remove prop to_uint_mul
+  remove prop to_uint_mul_bounded
+
+  syntax function udiv "(bvudiv %1 %2)"
+  remove prop to_uint_udiv
+
+  syntax function urem "(bvurem %1 %2)"
+  remove prop to_uint_urem
+
+  syntax function sdiv "(bvsdiv %1 %2)"
+  (*remove prop to_int_sdiv*)
+
+  syntax function srem "(bvsrem %1 %2)"
+  (*remove prop to_int_srem*)
+
+  (** Bitvector alternatives for shifts, rotations and nth *)
+
+  syntax function lsr_bv "(bvlshr %1 %2)"
+  (* remove prop lsr_bv_is_lsr *)
+  remove prop to_uint_lsr
+
+  syntax function asr_bv "(bvashr %1 %2)"
+  (* remove prop asr_bv_is_asr *)
+
+  syntax function lsl_bv "(bvshl %1 %2)"
+  (* remove prop lsl_bv_is_lsl *)
+
+  remove prop to_uint_lsl
+
+  (** rotations *)
+  (* remove prop rotate_left_bv_is_rotate_left *)
+  (* remove prop rotate_right_bv_is_rotate_right *)
+
+  (** nth_bv *)
+
+  (* remove prop nth_bv_def *)
+  (* remove prop Nth_bv_is_nth *)
+  (* remove prop Nth_bv_is_nth2 *)
+
+  remove prop Extensionality
+end
+
+theory bv.BV256
+
+  syntax literal t "#x%64x"
+  syntax type t "(_ BitVec 256)"
+
+  syntax function zeros "#x0000000000000000000000000000000000000000000000000000000000000000"
+  syntax function one   "#x0000000000000000000000000000000000000000000000000000000000000001"
+  syntax function ones  "#xFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFF"
+  syntax function size_bv "(_ bv256 256)"
+
+  syntax predicate is_signed_positive "(bvsge %1 (_ bv0 256))"
+
+  syntax function rotate_left_bv "(bvor (bvshl %1 (bvurem %2 (_ bv256 256))) (bvlshr %1 (bvsub (_ bv256 256) (bvurem %2 (_ bv256 256)))))"
+  syntax function rotate_right_bv "(bvor (bvlshr %1 (bvurem %2 (_ bv256 256))) (bvshl %1 (bvsub (_ bv256 256) (bvurem %2 (_ bv256 256)))))"
+end
+
+theory bv.BV128
+
+  syntax literal t "#x%32x"
+  syntax type t "(_ BitVec 128)"
+
+  syntax function zeros "#x00000000000000000000000000000000"
+  syntax function one   "#x00000000000000000000000000000001"
+  syntax function ones  "#xFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFF"
+  syntax function size_bv "(_ bv128 128)"
+
+  syntax predicate is_signed_positive "(bvsge %1 (_ bv0 128))"
+
+  syntax function rotate_left_bv "(bvor (bvshl %1 (bvurem %2 (_ bv128 128))) (bvlshr %1 (bvsub (_ bv128 128) (bvurem %2 (_ bv128 128)))))"
+  syntax function rotate_right_bv "(bvor (bvlshr %1 (bvurem %2 (_ bv128 128))) (bvshl %1 (bvsub (_ bv128 128) (bvurem %2 (_ bv128 128)))))"
+end
+
+theory bv.BV64
+
+  syntax literal t "#x%16x"
+  syntax type t "(_ BitVec 64)"
+
+  syntax function zeros "#x0000000000000000"
+  syntax function one   "#x0000000000000001"
+  syntax function ones  "#xFFFFFFFFFFFFFFFF"
+  syntax function size_bv "(_ bv64 64)"
+
+  syntax predicate is_signed_positive "(bvsge %1 (_ bv0 64))"
+
+  syntax function rotate_left_bv "(bvor (bvshl %1 (bvurem %2 (_ bv64 64))) (bvlshr %1 (bvsub (_ bv64 64) (bvurem %2 (_ bv64 64)))))"
+  syntax function rotate_right_bv "(bvor (bvlshr %1 (bvurem %2 (_ bv64 64))) (bvshl %1 (bvsub (_ bv64 64) (bvurem %2 (_ bv64 64)))))"
+end
+
+theory bv.BV32
+
+  syntax literal t "#x%8x"
+  syntax type t "(_ BitVec 32)"
+
+  syntax function zeros "#x00000000"
+  syntax function one   "#x00000001"
+  syntax function ones  "#xFFFFFFFF"
+  syntax function size_bv "(_ bv32 32)"
+
+  syntax predicate is_signed_positive "(bvsge %1 (_ bv0 32))"
+
+  syntax function rotate_left_bv "(bvor (bvshl %1 (bvurem %2 (_ bv32 32))) (bvlshr %1 (bvsub (_ bv32 32) (bvurem %2 (_ bv32 32)))))"
+  syntax function rotate_right_bv "(bvor (bvlshr %1 (bvurem %2 (_ bv32 32))) (bvshl %1 (bvsub (_ bv32 32) (bvurem %2 (_ bv32 32)))))"
+end
+
+theory bv.BV16
+
+  syntax literal t "#x%4x"
+  syntax type t "(_ BitVec 16)"
+
+  syntax function zeros "#x0000"
+  syntax function one   "#x0001"
+  syntax function ones  "#xFFFF"
+  syntax function size_bv "(_ bv16 16)"
+
+  syntax predicate is_signed_positive "(bvsge %1 (_ bv0 16))"
+
+  syntax function rotate_left_bv "(bvor (bvshl %1 (bvurem %2 (_ bv16 16))) (bvlshr %1 (bvsub (_ bv16 16) (bvurem %2 (_ bv16 16)))))"
+  syntax function rotate_right_bv "(bvor (bvlshr %1 (bvurem %2 (_ bv16 16))) (bvshl %1 (bvsub (_ bv16 16) (bvurem %2 (_ bv16 16)))))"
+end
+
+theory bv.BV8
+
+  syntax literal t (* "#b%8b"  *) "#x%2x"
+  syntax type t "(_ BitVec 8)"
+
+  syntax function zeros "#x00"
+  syntax function one   "#x01"
+  syntax function ones  "#xFF"
+  syntax function size_bv "(_ bv8 8)"
+
+  syntax predicate is_signed_positive "(bvsge %1 (_ bv0 8))"
+
+  syntax function rotate_left_bv "(bvor (bvshl %1 (bvurem %2 (_ bv8 8))) (bvlshr %1 (bvsub (_ bv8 8) (bvurem %2 (_ bv8 8)))))"
+  syntax function rotate_right_bv "(bvor (bvlshr %1 (bvurem %2 (_ bv8 8))) (bvshl %1 (bvsub (_ bv8 8) (bvurem %2 (_ bv8 8)))))"
+end
+
+theory bv.BVConverter_Gen
+  remove allprops
+end
+
+theory bv.BVConverter_128_256
+  syntax function toBig "((_ zero_extend 128) %1)"
+  syntax function stoBig "((_ sign_extend 128) %1)"
+  syntax function toSmall "((_ extract 127 0) %1)"
+end
+
+theory bv.BVConverter_64_256
+  syntax function toBig "((_ zero_extend 192) %1)"
+  syntax function stoBig "((_ sign_extend 192) %1)"
+  syntax function toSmall "((_ extract 63 0) %1)"
+end
+
+theory bv.BVConverter_32_256
+  syntax function toBig "((_ zero_extend 224) %1)"
+  syntax function stoBig "((_ sign_extend 224) %1)"
+  syntax function toSmall "((_ extract 31 0) %1)"
+end
+
+theory bv.BVConverter_16_256
+  syntax function toBig "((_ zero_extend 240) %1)"
+  syntax function stoBig "((_ sign_extend 240) %1)"
+  syntax function toSmall "((_ extract 15 0) %1)"
+end
+
+theory bv.BVConverter_8_256
+  syntax function toBig "((_ zero_extend 248) %1)"
+  syntax function stoBig "((_ sign_extend 248) %1)"
+  syntax function toSmall "((_ extract 7 0) %1)"
+end
+
+theory bv.BVConverter_64_128
+  syntax function toBig "((_ zero_extend 64) %1)"
+  syntax function stoBig "((_ sign_extend 64) %1)"
+  syntax function toSmall "((_ extract 63 0) %1)"
+end
+
+theory bv.BVConverter_32_128
+  syntax function toBig "((_ zero_extend 96) %1)"
+  syntax function stoBig "((_ sign_extend 96) %1)"
+  syntax function toSmall "((_ extract 31 0) %1)"
+end
+
+theory bv.BVConverter_16_128
+  syntax function toBig "((_ zero_extend 112) %1)"
+  syntax function stoBig "((_ sign_extend 112) %1)"
+  syntax function toSmall "((_ extract 15 0) %1)"
+end
+
+theory bv.BVConverter_8_128
+  syntax function toBig "((_ zero_extend 120) %1)"
+  syntax function stoBig "((_ sign_extend 120) %1)"
+  syntax function toSmall "((_ extract 7 0) %1)"
+end
+
+theory bv.BVConverter_32_64
+  syntax function toBig "((_ zero_extend 32) %1)"
+  syntax function stoBig "((_ sign_extend 32) %1)"
+  syntax function toSmall "((_ extract 31 0) %1)"
+end
+
+theory bv.BVConverter_16_64
+  syntax function toBig "((_ zero_extend 48) %1)"
+  syntax function stoBig "((_ sign_extend 48) %1)"
+  syntax function toSmall "((_ extract 15 0) %1)"
+end
+
+theory bv.BVConverter_8_64
+  syntax function toBig "((_ zero_extend 56) %1)"
+  syntax function stoBig "((_ sign_extend 56) %1)"
+  syntax function toSmall "((_ extract 7 0) %1)"
+end
+
+theory bv.BVConverter_16_32
+  syntax function toBig "((_ zero_extend 16) %1)"
+  syntax function stoBig "((_ sign_extend 16) %1)"
+  syntax function toSmall "((_ extract 15 0) %1)"
+end
+
+theory bv.BVConverter_8_32
+  syntax function toBig "((_ zero_extend 24) %1)"
+  syntax function stoBig "((_ sign_extend 24) %1)"
+  syntax function toSmall "((_ extract 7 0) %1)"
+end
+
+theory bv.BVConverter_8_16
+  syntax function toBig "((_ zero_extend 8) %1)"
+  syntax function stoBig "((_ sign_extend 8) %1)"
+  syntax function toSmall "((_ extract 7 0) %1)"
+end

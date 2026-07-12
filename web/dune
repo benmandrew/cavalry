@@ -1,0 +1,52 @@
+; The browser binding: [verifier.ml] exposes [cavalryObligations] and is
+; compiled to JavaScript. [zarith_stubs_js] supplies Why3's zarith in JS;
+; js_of_ocaml compiles the bytecode. No native Z3 is linked -- obligations are
+; printed here and solved by Z3-wasm on the page (see app.js / verify-core.js).
+;
+; Every stanza is gated to the [web] build profile, so a plain `dune build` (and
+; the core CI matrix, which installs no js_of_ocaml -- least of all on the OCaml
+; 4.14 leg it need not support) skips the whole browser build. `npm run build`
+; and the web CI job pass `--profile web`. A profile (not an env var) is used so
+; toggling profiles re-evaluates the gate cleanly rather than leaving a stale
+; disabled state in _build.
+
+; Embed the Why3 standard library + prover drivers (why3data/) into an OCaml
+; module; at startup the binding serves them into the js_of_ocaml pseudo-FS so
+; Why3 can read theories and the Z3 driver with no real filesystem.
+
+(rule
+ (target embedded_why3.ml)
+ (enabled_if
+  (= %{profile} web))
+ (deps
+  (source_tree why3data))
+ (action
+  (run ocaml-crunch -m plain why3data -o embedded_why3.ml)))
+
+(executable
+ (name verifier)
+ (modules verifier embedded_why3)
+ (enabled_if
+  (= %{profile} web))
+ (libraries
+  cavalry
+  cavalry.ast
+  cavalry.parse
+  cavalry.smt
+  yojson
+  js_of_ocaml
+  zarith_stubs_js)
+ (modes js)
+ (js_of_ocaml))
+
+; M0 debug harness: prints every obligation's SMT-LIB2 to stdout under node.
+; Kept as a CLI smoke test for the js_of_ocaml pipeline.
+
+(executable
+ (name m0)
+ (modules m0)
+ (enabled_if
+  (= %{profile} web))
+ (libraries cavalry zarith_stubs_js)
+ (modes byte js)
+ (js_of_ocaml))

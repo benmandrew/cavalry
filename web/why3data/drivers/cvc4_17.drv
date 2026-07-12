@@ -1,0 +1,15 @@
+(** Why3 driver for CVC4 1.7 *)
+
+prelude ";; produced by cvc4_17.drv ;;"
+
+prelude "(set-logic ALL_SUPPORTED)"
+
+unknown "^(error \"Can't get-info :reason-unknown when the last result wasn't unknown!\")$" "(not unknown!)"
+
+import "cvc4_16.gen"
+
+theory BuiltIn
+
+  meta "supports_smt_get_info_unknown_reason" ""
+
+end

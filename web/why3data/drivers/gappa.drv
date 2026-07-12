@@ -1,0 +1,235 @@
+(* Why driver for Gappa *)
+
+prelude "# this is a prelude for Gappa"
+
+printer "gappa"
+filename "%f-%t-%g.gappa"
+
+valid 0
+unknown "no contradiction was found\\|some enclosures were not satisfied\\|some properties were not satisfied" ""
+time "why3cpulimit time : %s s"
+fail "Error: \\(.*\\)" "\\1"
+
+(* Performed introductions depending on whether counterexamples are
+   requested, as said by the meta "get_counterexmp". When this meta
+   set, this transformation introduces the model variables that are
+   still embedded in the goal. When it is not set, it removes all
+   these unused-ce-related variables, even in the context.  *)
+transformation "counterexamples_dependent_intros"
+
+transformation "inline_trivial"
+transformation "eliminate_builtin"
+transformation "inline_all"
+transformation "eliminate_definition"
+transformation "eliminate_inductive"
+transformation "eliminate_if"
+transformation "eliminate_epsilon"
+transformation "eliminate_algebraic"
+transformation "eliminate_literal"
+transformation "eliminate_let"
+transformation "simplify_formula"
+transformation "simplify_unknown_lsymbols"
+transformation "simplify_trivial_quantification"
+transformation "simplify_computations"
+transformation "introduce_premises"
+transformation "instantiate_predicate"
+transformation "abstract_unknown_lsymbols"
+
+theory BuiltIn
+  syntax type int   "int"
+  syntax type real  "real"
+  syntax predicate (=)  "dummy"
+  meta "eliminate_algebraic" "keep_enums"
+end
+
+theory int.Int
+
+  prelude "# this is a prelude for Gappa integer arithmetic"
+
+  syntax function zero "0"
+  syntax function one  "1"
+
+  syntax function (+)  "(%1 + %2)"
+  syntax function (-)  "(%1 - %2)"
+  syntax function (*)  "(%1 * %2)"
+  syntax function (-_) "(-%1)"
+
+  syntax predicate (<=) "dummy"
+  syntax predicate (>=) "dummy"
+  syntax predicate (<)  "dummy"
+  syntax predicate (>)  "dummy"
+
+  meta "gappa arith" predicate (<=), "", "<=", ">="
+  meta "gappa arith" predicate (>=), "", ">=", "<="
+  meta "gappa arith" predicate (<), "not ", ">=", "<="
+  meta "gappa arith" predicate (>), "not ", "<=", ">="
+
+  meta "inline:no" function (-)
+  meta "inline:no" predicate (<=)
+  meta "inline:no" predicate (>=)
+  meta "inline:no" predicate (>)
+
+  remove prop NonTrivialRing
+  remove prop ZeroLessOne
+
+end
+
+theory int.Abs
+
+  syntax function abs  "| %1 |"
+
+end
+
+theory int.ComputerDivision
+
+  syntax function div "int<zr>(%1 / %2)"
+  syntax function mod "(%1 - int<zr>(%1 / %2) * %2)"
+
+end
+
+theory real.Real
+
+  prelude "# this is a prelude for Gappa real arithmetic"
+
+  syntax function zero "0.0"
+  syntax function one  "1.0"
+
+  syntax function (+)  "(%1 + %2)"
+  syntax function (-)  "(%1 - %2)"
+  syntax function (*)  "(%1 * %2)"
+  syntax function (/)  "(%1 / %2)"
+  syntax function (-_) "(-%1)"
+  syntax function inv  "(1.0 / %1)"
+
+  syntax predicate (<=) "dummy"
+  syntax predicate (>=) "dummy"
+  syntax predicate (<)  "dummy"
+  syntax predicate (>)  "dummy"
+
+  meta "gappa arith" predicate (<=), "", "<=", ">="
+  meta "gappa arith" predicate (>=), "", ">=", "<="
+  meta "gappa arith" predicate (<), "not ", ">=", "<="
+  meta "gappa arith" predicate (>), "not ", "<=", ">="
+
+  meta "inline:no" function (-)
+  meta "inline:no" predicate (<=)
+  meta "inline:no" predicate (>=)
+  meta "inline:no" predicate (>)
+
+  remove prop NonTrivialRing
+  remove prop ZeroLessOne
+
+end
+
+theory real.Abs
+
+  syntax function abs  "| %1 |"
+
+end
+
+theory real.Square
+
+  syntax function sqrt  "sqrt(%1)"
+
+end
+
+theory real.Truncate
+
+  syntax function truncate "int<zr>(%1)"
+  syntax function floor    "int<dn>(%1)"
+  syntax function ceil     "int<up>(%1)"
+
+end
+
+theory real.FromInt
+
+  syntax function from_int "%1"
+
+  remove prop Zero
+  remove prop One
+
+end
+
+theory floating_point.Rounding
+
+  syntax function NearestTiesToEven "ne"
+  syntax function ToZero "zr"
+  syntax function Up "up"
+  syntax function Down "dn"
+  syntax function NearestTiesToAway "na"
+
+end
+
+theory floating_point.Single
+
+  syntax function round "float<ieee_32,%1>(%2)"
+  meta "instantiate:auto" prop Bounded_value
+
+end
+
+theory floating_point.Double
+
+  syntax function round "float<ieee_64,%1>(%2)"
+  meta "instantiate:auto" prop Bounded_value
+
+end
+
+theory ieee_float.RoundingMode
+
+  syntax function RNE "ne"
+  syntax function RTZ "zr"
+  syntax function RTP "up"
+  syntax function RTN "dn"
+  syntax function RNA "na"
+
+end
+
+theory ieee_float.GenericFloat
+
+  meta "instantiate:auto" prop zero_to_real
+  meta "instantiate:auto" prop is_finite
+  meta "instantiate:auto" prop lt_finite
+  meta "instantiate:auto" prop le_finite
+  meta "instantiate:auto" prop neg_finite
+  meta "instantiate:auto" prop add_finite
+  meta "instantiate:auto" prop sub_finite
+  meta "instantiate:auto" prop mul_finite
+  meta "instantiate:auto" prop div_finite
+
+  remove prop max_int_spec
+  remove prop max_real_int
+end
+
+theory ieee_float.Float32
+
+  syntax function round "float<ieee_32,%1>(%2)"
+
+end
+
+theory ieee_float.Float64
+
+  syntax function round "float<ieee_64,%1>(%2)"
+
+end
+
+(*
+theory floating_point.SingleMultiRounding
+
+  syntax function round "float<ieee_32,%1>(%2)"
+  meta "instantiate:auto" prop Bounded_value
+
+end
+*)
+
+theory floating_point.DoubleMultiRounding
+
+  syntax function round "float<ieee_64,%1>(%2)"
+  meta "instantiate:auto" prop Bounded_value
+
+end
+
+theory mach.fxp.Fxp
+
+  syntax function trunc_at "fixed<%2,dn>(%1)"
+
+end

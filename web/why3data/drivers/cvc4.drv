@@ -1,0 +1,60 @@
+(** Why3 driver for CVC4 <= 1.3 *)
+
+prelude "(set-logic AUFNIRA)"
+(*
+    A  : Array
+    UF : Uninterpreted Function
+    NIRA : NonLinear Integer Reals Arithmetic
+*)
+
+import "smt-libv2.gen"
+filename "%f-%t-%g.smt2"
+printer "smtv2"
+import "no-bv.gen"
+import "discrimination.gen"
+
+(* Performed introductions depending on whether counterexamples are
+   requested, as said by the meta "get_counterexmp". When this meta
+   set, this transformation introduces the model variables that are
+   still embedded in the goal. When it is not set, it removes all
+   these unused-ce-related variables, even in the context.  *)
+transformation "counterexamples_dependent_intros"
+
+transformation "inline_trivial"
+transformation "eliminate_builtin"
+transformation "eliminate_definition"
+transformation "eliminate_inductive"
+transformation "eliminate_epsilon"
+transformation "eliminate_algebraic"
+transformation "eliminate_literal"
+
+transformation "simplify_formula"
+(*transformation "simplify_trivial_quantification"*)
+
+transformation "discriminate"
+transformation "encoding_smt"
+
+(** Error messages specific to CVC4 *)
+
+outofmemory "(error \".*out of memory\")"
+outofmemory "CVC4 suffered a segfault"
+outofmemory "CVC4::BVMinisat::OutOfMemoryException"
+outofmemory "std::bad_alloc"
+outofmemory "Cannot allocate memory"
+timeout "interrupted by timeout"
+
+
+(** Extra theories supported by CVC4 *)
+
+(* Disabled:
+   CVC4 seems less efficient with its built-in implementation than
+   with the axiomatic version
+theory int.EuclideanDivision
+  syntax function div "(div %1 %2)"
+  syntax function mod "(mod %1 %2)"
+  remove prop Mod_bound
+  remove prop Div_mod
+  remove prop Mod_1
+  remove prop Div_1
+end
+*)

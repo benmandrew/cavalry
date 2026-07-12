@@ -1,0 +1,105 @@
+(* Why driver for Psyche *)
+
+prelude "(set-logic FO)"
+
+printer "smtv2"
+filename "%f-%t-%g.smt2"
+
+valid "^PROVABLE"
+invalid "^NOT PROVABLE"
+timeout "interrupted by timeout"
+time "why3cpulimit time : %s s"
+
+(* Performed introductions depending on whether counterexamples are
+   requested, as said by the meta "get_counterexmp". When this meta
+   set, this transformation introduces the model variables that are
+   still embedded in the goal. When it is not set, it removes all
+   these unused-ce-related variables, even in the context.  *)
+transformation "counterexamples_dependent_intros"
+
+transformation "inline_trivial"
+transformation "eliminate_builtin"
+transformation "eliminate_definition"
+transformation "eliminate_inductive"
+transformation "eliminate_epsilon"
+transformation "eliminate_algebraic"
+transformation "eliminate_literal"
+
+transformation "simplify_formula"
+(*transformation "simplify_trivial_quantification"*)
+
+transformation "discriminate"
+transformation "encoding_smt"
+
+theory BuiltIn
+  syntax type real  "Real"
+  syntax predicate (=)  "(= %1 %2)"
+  meta "eliminate_algebraic" "no_index"
+end
+
+theory real.Real
+
+  prelude ";;; this is a prelude for smt-lib v2 real arithmetic"
+
+  syntax function zero "0"
+  syntax function one  "1"
+
+  syntax function (+)  "(+ %1 %2)"
+  syntax function (-)  "(- %1 %2)"
+  syntax function ( * )  "(* %1 %2)"
+  syntax function (/)  "(/ %1 %2)"
+  syntax function (-_) "(- %1)"
+  syntax function inv  "(/ 1 %1)"
+
+  syntax predicate (<=) "(<= %1 %2)"
+  syntax predicate (<)  "(< %1 %2)"
+  syntax predicate (>=) "(>= %1 %2)"
+  syntax predicate (>)  "(> %1 %2)"
+
+  remove prop MulComm.Comm
+  remove prop MulAssoc.Assoc
+  remove prop Unit_def_l
+  remove prop Unit_def_r
+  remove prop Inv_def_l
+  remove prop Inv_def_r
+  remove prop Assoc
+  remove prop Mul_distr_l
+  remove prop Mul_distr_r
+  remove prop Comm
+  remove prop Unitary
+  remove prop Inverse
+  remove prop Refl
+  remove prop Trans
+  remove prop Antisymm
+  remove prop Total
+  remove prop NonTrivialRing
+  remove prop CompatOrderAdd
+  remove prop ZeroLessOne
+
+  meta "encoding:kept" type real
+
+end
+
+(*
+theory Bool
+  syntax type     bool  "Bool"
+  syntax function True  "true"
+  syntax function False "false"
+  meta "encoding:kept" type bool
+end
+
+theory bool.Bool
+  syntax function andb  "(and %1 %2)"
+  syntax function orb   "(or %1 %2)"
+  syntax function xorb  "(xor %1 %2)"
+  syntax function notb  "(not %1)"
+  syntax function implb "(=> %1 %2)"
+end
+
+theory bool.Ite
+  syntax function ite "(ite %1 %2 %3)"
+  meta "encoding:lskept" function ite
+end
+*)
+
+import "discrimination.gen"
