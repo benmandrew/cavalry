@@ -49,15 +49,20 @@ type _ expr =
 type anyexpr = IntE of int expr | BoolE of bool expr [@@deriving sexp_of]
 
 (** Commands (statements). [Let] introduces a local binding, [Assgn] mutates an
-    existing variable, [Proc] is a call by name. [While] carries its loop
-    invariant and optional variant (decreasing measure) alongside guard and
-    body. [ArrMake] is [a := array(n)] and [ArrAssgn] is [a[i] := e]. *)
+    existing variable, [Proc] is a call by name. [ResAssgn] assigns the
+    enclosing procedure's result binder (a per-call local, distinct from a
+    global [Assgn]); [CallAssgn] is [x := f(args)], binding a call's result.
+    [While] carries its loop invariant and optional variant (decreasing measure)
+    alongside guard and body. [ArrMake] is [a := array(n)] and [ArrAssgn] is
+    [a[i] := e]. *)
 type cmd =
   | IntExpr of int expr
   | Seq of cmd * cmd
   | Assgn of string * anyexpr
   | Let of string * anyexpr
+  | ResAssgn of string * anyexpr
   | Proc of string * anyexpr list
+  | CallAssgn of string * string * anyexpr list
   | If of bool expr * cmd * cmd
   | While of Logic.expr * Logic.arith_expr option * bool expr * cmd
   | Print of int expr
@@ -111,6 +116,7 @@ val translate_cmd :
   is_bool:(string -> bool) ->
   is_bool_array:(string -> bool) ->
   proc_bool_params:(string -> bool list) ->
+  result:string option ->
   ut_expr ->
   cmd
 (** Translate the untyped parser output into the typed {!cmd} AST. [is_bool]
@@ -118,8 +124,9 @@ val translate_cmd :
     is a boolean array, so occurrences and assigned right-hand sides elaborate
     at [bool] rather than [int]; [proc_bool_params f] gives, per formal of
     procedure [f], whether it is boolean, so a call's actuals elaborate at their
-    formals' types. All come from {!Typecheck}, which has already validated
-    well-typedness.
+    formals' types. [result] names the enclosing procedure's result binder (if
+    any), so an assignment to it becomes a {!ResAssgn}. All come from
+    {!Typecheck}, which has already validated well-typedness.
 
     @raise TypeError on malformed input (a checked program never triggers this).
 *)

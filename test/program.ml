@@ -65,7 +65,7 @@ let%test_unit "Ast.Program.type_expr" =
       ~is_bool:(fun _ -> false)
       ~is_bool_array:(fun _ -> false)
       ~proc_bool_params:(fun _ -> [])
-      ut
+      ~result:None ut
   in
   test_ast_eq ~expected result
 
@@ -76,7 +76,7 @@ let%test_unit "Ast.Runtime.exec - assgn" =
       ( Assgn ("x", IntE (Plus (Value (Int 1), Value (Int 2)))),
         IntExpr (Mul (Value (VarInst "x"), Value (Int 5))) )
   in
-  let main = { f = ""; ps = []; c } in
+  let main = { f = ""; ps = []; c; result = None } in
   let result = exec [ main ] in
   [%test_result: int] result ~expect:15
 
@@ -88,7 +88,7 @@ let%test_unit "Ast.Runtime.exec - if" =
         IntExpr (Value (Int 5)),
         IntExpr (Value (Int 7)) )
   in
-  let main = { f = ""; ps = []; c } in
+  let main = { f = ""; ps = []; c; result = None } in
   let result = exec [ main ] in
   [%test_result: int] result ~expect:7
 
@@ -101,14 +101,14 @@ let%test_unit "Ast.Runtime.exec - var-var-assgn" =
           ( Assgn ("y", IntE (Plus (Value (VarInst "x"), Value (Int 2)))),
             IntExpr (Value (VarInst "y")) ) )
   in
-  let main = { f = ""; ps = []; c } in
+  let main = { f = ""; ps = []; c; result = None } in
   let result = exec [ main ] in
   [%test_result: int] result ~expect:3
 
 let%test_unit "Ast.Runtime.exec - unbound" =
   (* x + 2 *)
   let c = IntExpr (Plus (Value (VarInst "x"), Value (Int 2))) in
-  let main = { f = ""; ps = []; c } in
+  let main = { f = ""; ps = []; c; result = None } in
   let result = Exn.does_raise (fun () -> exec [ main ]) in
   [%test_result: bool] result ~expect:true
 
@@ -136,7 +136,7 @@ let%test_unit "Ast.Runtime.exec - while" =
                       ) ),
                 IntExpr (Value (VarInst "x")) ) ) )
   in
-  let main = { f = ""; ps = []; c } in
+  let main = { f = ""; ps = []; c; result = None } in
   let result = exec [ main ] in
   [%test_result: int] result ~expect:45
 
@@ -163,7 +163,7 @@ let%test_unit "Ast.Runtime.exec_env - terminating loop returns final env" =
                     Assgn ("i", IntE (Plus (Value (VarInst "i"), Value (Int 1))))
                   ) ) ) )
   in
-  match exec_env ~fuel:100 [ { f = ""; ps = []; c } ] with
+  match exec_env ~fuel:100 [ { f = ""; ps = []; c; result = None } ] with
   | Terminated env ->
       [%test_result: int option] (Env.find_opt "x" env) ~expect:(Some 3);
       [%test_result: int option] (Env.find_opt "i" env) ~expect:(Some 3)
@@ -182,7 +182,7 @@ let%test_unit "Ast.Runtime.exec_env - non-terminating loop runs out of fuel" =
             Assgn ("i", IntE (Plus (Value (VarInst "i"), Value (Int 1)))) ) )
   in
   let out_of_fuel =
-    match exec_env ~fuel:50 [ { f = ""; ps = []; c } ] with
+    match exec_env ~fuel:50 [ { f = ""; ps = []; c; result = None } ] with
     | OutOfFuel -> true
     | Terminated _ | Raised -> false
   in
@@ -193,7 +193,7 @@ let%test_unit "Ast.Runtime.exec_env - non-terminating loop runs out of fuel" =
 let%test_unit "Ast.Runtime.exec_env - unbound read is Raised" =
   let c = IntExpr (Plus (Value (VarInst "x"), Value (Int 2))) in
   let raised =
-    match exec_env [ { f = ""; ps = []; c } ] with
+    match exec_env [ { f = ""; ps = []; c; result = None } ] with
     | Raised -> true
     | Terminated _ | OutOfFuel -> false
   in
@@ -213,6 +213,7 @@ let%test_unit "Ast.Runtime.exec - function" =
       q = Logic.(Leq (Int 0, Int 0));
       variant = None;
       ws = [];
+      result = None;
     }
   in
   (* x := 2; y := 3; f(5); [ret] *)
@@ -229,6 +230,7 @@ let%test_unit "Ast.Runtime.exec - function" =
       q = Logic.(Leq (Int 0, Int 0));
       variant = None;
       ws = [];
+      result = None;
     }
   in
   let program ret =

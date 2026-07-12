@@ -3,6 +3,7 @@
 %type <Ast.Triple.ut_t> main
 %type <Ast.Triple.ut_t> procedure
 %type <Ast.Logic.arith_expr option> variant_opt
+%type <(string * Ast.Ty.t) option> returns_opt
 %type <string list> variable_list
 %type <(string * Ast.Ty.t option) list> param_list
 %type <string * Ast.Ty.t option> param
@@ -21,8 +22,14 @@ top:
       { [ m ] }
 ;
 procedure:
-  | PROCEDURE f = VAR LPAREN ps = param_list RPAREN EQ REQUIRES LBRACE p = logic_expr RBRACE ENSURES LBRACE q = logic_expr RBRACE variant = variant_opt WRITES LBRACE ws = variable_list RBRACE u = command END
-      { { Ast.Triple.p; q; variant; ws; f; ps; u } }
+  | PROCEDURE f = VAR LPAREN ps = param_list RPAREN result = returns_opt EQ REQUIRES LBRACE p = logic_expr RBRACE ENSURES LBRACE q = logic_expr RBRACE variant = variant_opt WRITES LBRACE ws = variable_list RBRACE u = command END
+      { { Ast.Triple.p; q; variant; ws; f; ps; result; u } }
+;
+returns_opt:
+  |
+      { None }
+  | RETURNS LBRACE v = VAR COLON t = ty RBRACE
+      { Some (v, t) }
 ;
 ty:
   | TINT
@@ -60,7 +67,7 @@ variable_list:
 ;
 main:
   | LBRACE p = logic_expr RBRACE u = command LBRACE q = logic_expr RBRACE
-      { { Ast.Triple.p; q; variant = None; ws = []; f="main"; ps=[]; u } }
+      { { Ast.Triple.p; q; variant = None; ws = []; f="main"; ps=[]; result = None; u } }
 ;
 command:
   | c = command_desc
@@ -71,6 +78,11 @@ command_desc:
       { UArrMake (v, n) }
   | a = VAR LBRACKET i = expr RBRACKET ASSGN e = expr
       { UArrAssgn (a, i, e) }
+  (* [x := f(args)]: bind the result of a call. Kept a distinct production
+     (rather than making a call an [expr]) so calls appear only as a statement
+     or an assignment right-hand side -- never nested inside arithmetic. *)
+  | v = VAR ASSGN f = VAR LPAREN ps = expression_list RPAREN
+      { UAssgn (v, UProc (f, ps)) }
   | v = VAR ASSGN e = expr
       { UAssgn (v, e) }
   | f = VAR LPAREN ps = expression_list RPAREN

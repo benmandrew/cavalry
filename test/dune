@@ -106,6 +106,13 @@
    verify_underflow_reject.cav
    verify_bounded_proc.cav
    overflow_concrete.cav
-   no_overflow_concrete.cav))
+   no_overflow_concrete.cav
+   verify_true_return_max.cav
+   verify_true_return_recursion.cav
+   verify_true_return_writes.cav
+   verify_true_return_bool.cav
+   verify_false_return_ensures.cav
+   type_error_return_void.cav
+   type_error_result_int_bool.cav))
  (preprocess
   (pps ppx_jane ppx_inline_test ppx_assert)))

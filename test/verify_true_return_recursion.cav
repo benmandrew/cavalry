@@ -1,0 +1,18 @@
+// Recursion through a value-returning procedure: the result binder is a
+// per-call local, so the recursive call's result does not clobber the caller's.
+procedure sum_to (n) returns { r : int } =
+  requires { n >= 0 }
+  ensures { r >= 0 }
+  variant { n }
+  writes { }
+  if n = 0 then
+    r := 0
+  else
+    t := sum_to(n - 1);
+    r := t + n
+  end
+end
+
+{ true }
+s := sum_to(5)
+{ s >= 0 }

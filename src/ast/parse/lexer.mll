@@ -97,6 +97,8 @@ rule main = parse
       { VARIANT }
   | "writes"
       { WRITES }
+  | "returns"
+      { RETURNS }
   | "forall"
       { FORALL }
   | "exists"

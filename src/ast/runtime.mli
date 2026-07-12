@@ -3,8 +3,14 @@
     [Hoare] consumes. Runs the same procedure list the verifier does, with the
     last one taken as [main]. *)
 
-type proc_t = { f : string; ps : string list; c : Program.cmd }
-(** A runnable procedure: name [f], formal parameters [ps], and body [c]. The
+type proc_t = {
+  f : string;
+  ps : string list;
+  c : Program.cmd;
+  result : string option;
+}
+(** A runnable procedure: name [f], formal parameters [ps], body [c], and the
+    name of its result binder [result] (if it returns a value). The
     interpreter's stripped-down view of a {!Triple.t} -- the logical annotations
     are dropped. *)
 

@@ -1,9 +1,15 @@
 (* open Core *)
 open Program
 
-type proc_t = { f : string; ps : string list; c : cmd }
+type proc_t = {
+  f : string;
+  ps : string list;
+  c : cmd;
+  result : string option; (* result binder name, if the procedure returns *)
+}
 
-let to_proc_t { Triple.f; ps; c; _ } = { f; ps; c }
+let to_proc_t { Triple.f; ps; c; result; _ } =
+  { f; ps; c; result = Option.map fst result }
 
 module Runtime = struct
   module BoundVars = Map.Make (String)
@@ -186,6 +192,14 @@ and exec_cmd ?(fuel = ref max_int) r c : int * Runtime.t =
   | Let (x, BoolE e) ->
       let v = if exec_expr r e then 1 else 0 in
       (0, Runtime.add_local_var r x v)
+  (* The result binder is a per-call local (like a [Let]-bound name), so its
+     value is stored in the local scope; recursion cannot clobber a caller's. *)
+  | ResAssgn (x, IntE e) ->
+      let v = exec_expr r e in
+      (v, Runtime.add_local_var r x v)
+  | ResAssgn (x, BoolE e) ->
+      let v = if exec_expr r e then 1 else 0 in
+      (0, Runtime.add_local_var r x v)
   | Proc (f, ps) ->
       (* Boolean arguments are passed 0/1, like boolean variables. *)
       let eval = function
@@ -207,6 +221,37 @@ and exec_cmd ?(fuel = ref max_int) r c : int * Runtime.t =
         {
           r with
           global_vars = r_proc.global_vars;
+          global_arrays = r_proc.global_arrays;
+        } )
+  | CallAssgn (x, f, ps) ->
+      let eval = function
+        | IntE e -> exec_expr r e
+        | BoolE e -> if exec_expr r e then 1 else 0
+      in
+      let ps = List.map eval ps in
+      let ret, r_proc =
+        match Runtime.find_proc r f with
+        | { ps = fps; c; result; _ } ->
+            let r_fun = List.fold_left2 Runtime.add_local_var r fps ps in
+            let _, r_proc = exec_cmd r_fun c in
+            (* The returned value is the callee's final result binder -- a
+               per-call local, so recursion is safe. *)
+            let ret =
+              match result with
+              | Some rname -> (
+                  match Runtime.BoundVars.find_opt rname r_proc.local_vars with
+                  | Some v -> v
+                  | None -> raise (Runtime.UnboundError rname))
+              | None -> 0
+            in
+            (ret, r_proc)
+      in
+      (* The result is bound to [x] in the caller's global store, as for [Assgn];
+         the callee's global writes are kept and its locals dropped. *)
+      ( ret,
+        {
+          r with
+          global_vars = Runtime.BoundVars.add x ret r_proc.global_vars;
           global_arrays = r_proc.global_arrays;
         } )
   | If (e, c, c') ->

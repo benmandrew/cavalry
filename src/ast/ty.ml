@@ -1,10 +1,9 @@
 (* The types a Cavalry expression or variable can have. Scalars are [Int] and
-   [Bool]; [Array] is a bounded integer array (its element type is always [Int]
-   for now, but the constructor is kept general so a later element-typed array
-   needs no change here). This is the vocabulary the {!Typecheck} pass reasons
-   in; the runtime representation is still integer-only (see [Program.value]),
-   so a well-typed program is additionally required not to store booleans -- a
-   restriction {!Typecheck} enforces until first-class boolean variables land. *)
+   [Bool]; [Array] is a bounded array over an element type ([Int] or [Bool]).
+   This is the vocabulary the {!Typecheck} pass reasons in. Booleans are
+   first-class (see [Program.value]'s [Bool]/[BoolVar]); the interpreter and
+   compiler encode them as 0/1 in the same integer store, while the WLP gives
+   them a distinct [bool] Why3 sort. *)
 type t = Int | Bool | Array of t [@@deriving sexp_of, show]
 
 let rec equal (a : t) (b : t) =

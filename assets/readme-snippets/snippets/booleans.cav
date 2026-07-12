@@ -1,0 +1,17 @@
+// Booleans are first-class. Guards combine comparisons with `&&`, `||`, and `!`
+// and short-circuit like most languages, so `a[i]` is only read while
+// `i < len(a)`. The flag `found` is a boolean variable, updated by a one-armed
+// `if` (no `else`) and asserted directly in the postcondition.
+{ len(a) >= 0 }
+i := 0;
+found := false;
+while i < len(a) && !found do
+  invariant {
+    0 <= i && i <= len(a) &&
+    (found -> exists j . 0 <= j && j < i && a[j] = 7)
+  }
+  variant { len(a) - i }
+  if a[i] = 7 then found := true end;
+  i := i + 1
+end
+{ found -> exists j . 0 <= j && j < len(a) && a[j] = 7 }

@@ -42,7 +42,13 @@ type cmd =
   | Seq of cmd * cmd
   | Assgn of string * anyexpr
   | Let of string * anyexpr
+  | ResAssgn of string * anyexpr
+    (* r := e, where r is the enclosing procedure's result binder. Distinct from
+       [Assgn] because r is a per-call local (see {!Runtime}/{!Compile}), not a
+       global -- so recursion cannot clobber a caller's result. *)
   | Proc of string * anyexpr list
+  | CallAssgn of string * string * anyexpr list
+    (* x := f(args): call [f] and bind its result to [x]. *)
   | If of bool expr * cmd * cmd
   | While of Logic.expr * Logic.arith_expr option * bool expr * cmd
     (* invariant, optional variant (decreasing measure), guard, body *)
@@ -150,19 +156,27 @@ let t_rhs ~is_bool ~is_bool_array x e =
   if is_bool x then BoolE (t_bool_expr ~is_bool ~is_bool_array e)
   else IntE (t_int_expr e)
 
-let rec t_cmd ~is_bool ~is_bool_array ~proc_bool_params c =
-  let recur = t_cmd ~is_bool ~is_bool_array ~proc_bool_params in
+let rec t_cmd ~is_bool ~is_bool_array ~proc_bool_params ~result c =
+  let recur = t_cmd ~is_bool ~is_bool_array ~proc_bool_params ~result in
   let bexpr = t_bool_expr ~is_bool ~is_bool_array in
+  (* Each actual is elaborated at its formal's type: a boolean parameter takes a
+     boolean argument. [Typecheck] has matched the arity. *)
+  let elaborate_args f ps =
+    let arg is_b e = if is_b then BoolE (bexpr e) else IntE (t_int_expr e) in
+    List.map2_exn (proc_bool_params f) ps ~f:arg
+  in
   match c with
   | ULoc (loc, e) -> Located (loc, recur e)
   | USeq (c, c') -> Seq (recur c, recur c')
+  (* [x := f(args)]: a call bound to a variable, elaborated to [CallAssgn]. *)
+  | UAssgn (x, UProc (f, ps)) -> CallAssgn (x, f, elaborate_args f ps)
+  (* An assignment to the enclosing procedure's result binder writes a per-call
+     local, so it becomes [ResAssgn] rather than a global [Assgn]. *)
+  | UAssgn (s, e) when Option.equal String.equal result (Some s) ->
+      ResAssgn (s, t_rhs ~is_bool ~is_bool_array s e)
   | UAssgn (s, e) -> Assgn (s, t_rhs ~is_bool ~is_bool_array s e)
   | ULet (s, e) -> Let (s, t_rhs ~is_bool ~is_bool_array s e)
-  | UProc (f, ps) ->
-      (* Each actual is elaborated at its formal's type: a boolean parameter
-         takes a boolean argument. [Typecheck] has matched the arity. *)
-      let arg is_b e = if is_b then BoolE (bexpr e) else IntE (t_int_expr e) in
-      Proc (f, List.map2_exn (proc_bool_params f) ps ~f:arg)
+  | UProc (f, ps) -> Proc (f, elaborate_args f ps)
   | UIf (e, c, c') -> If (bexpr e, recur c, recur c')
   | UWhile (inv, variant, e, c) -> While (inv, variant, bexpr e, recur c)
   | UPrint e -> Print (t_int_expr e)
@@ -175,5 +189,5 @@ let rec t_cmd ~is_bool ~is_bool_array ~proc_bool_params c =
       ArrAssgn (a, t_int_expr i, v)
   | v -> expr_to_cmd v
 
-let translate_cmd ~is_bool ~is_bool_array ~proc_bool_params =
-  t_cmd ~is_bool ~is_bool_array ~proc_bool_params
+let translate_cmd ~is_bool ~is_bool_array ~proc_bool_params ~result =
+  t_cmd ~is_bool ~is_bool_array ~proc_bool_params ~result

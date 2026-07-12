@@ -4,8 +4,18 @@ open Ast.Program
 
 (* Build a [(Triple.t * Vars.t) list] the way [Main.get_ast] would, from a
    hand-written [main] body, and emit OCaml for it. *)
-let triple ?(f = "main") ?(ps = []) ?(ws = []) (c : cmd) : Triple.t =
-  { p = Logic.Bool true; q = Logic.Bool true; variant = None; ws; f; ps; c }
+let triple ?(f = "main") ?(ps = []) ?(ws = []) ?(result = None) (c : cmd) :
+    Triple.t =
+  {
+    p = Logic.Bool true;
+    q = Logic.Bool true;
+    variant = None;
+    ws;
+    f;
+    ps;
+    result;
+    c;
+  }
 
 let emit_main (c : cmd) : string =
   Var_collection.collect [ triple c ] |> Cavalry.Compile.emit
@@ -154,6 +164,34 @@ let%test_unit "Compile.emit - procedure: formals are locals, Assgn hits global"
       "g_x :=";
       (* call passes the actual through the caller's global [y] *)
       "(p_f (!g_y))";
+    ] ~f:(fun substring ->
+      if not (contains ~substring out) then
+        raise_s
+          [%message "missing fragment" (substring : string) (out : string)])
+
+let%test_unit "Compile.emit - returning procedure uses a per-call result ref" =
+  (* procedure f (a) returns { r : int } = r := a + 1 end
+     { true } x := f(2); x { true } *)
+  let proc =
+    triple ~f:"f" ~ps:[ "a" ]
+      ~result:(Some ("r", Ty.Int))
+      (ResAssgn ("r", IntE (Plus (Value (VarInst "a"), Value (Int 1)))))
+  in
+  let main =
+    triple
+      (Seq
+         ( CallAssgn ("x", "f", [ IntE (Value (Int 2)) ]),
+           IntExpr (Value (VarInst "x")) ))
+  in
+  let out = Var_collection.collect [ proc; main ] |> Cavalry.Compile.emit in
+  List.iter
+    [
+      (* a fresh result ref is allocated on entry and returned *)
+      "let r_r = ref";
+      "r_r :=";
+      "!r_r";
+      (* the call-assignment binds the result to the caller's global [x] *)
+      "g_x := (p_f";
     ] ~f:(fun substring ->
       if not (contains ~substring out) then
         raise_s

@@ -45,6 +45,16 @@ let%test_unit "Main.exec variant is ignored at runtime" =
 let%test_unit "Main.exec recursion" =
   [%test_result: int] (Main.exec "verify_true_recursion.cav") ~expect:15
 
+(* A value-returning procedure binds its result at the call site: max(3, 7) = 7,
+   and main's value is that binding. *)
+let%test_unit "Main.exec return-carrying procedure" =
+  [%test_result: int] (Main.exec "verify_true_return_max.cav") ~expect:7
+
+(* The result binder is a per-call local, so recursion through a returning
+   procedure is sound: sum_to(5) = 15. *)
+let%test_unit "Main.exec return-carrying recursion" =
+  [%test_result: int] (Main.exec "verify_true_return_recursion.cav") ~expect:15
+
 (* Two nested loops each running 3 times -> 9 increments. *)
 let%test_unit "Main.exec nested while" =
   [%test_result: int] (Main.exec "exec_nested_while.cav") ~expect:9
@@ -105,6 +115,25 @@ let%test_unit "Main.verify true add procedure" =
 
 let%test_unit "Main.verify true fib procedure" =
   check_verify "verify_true_fib_proc.cav" Valid
+
+(* Value-returning procedures: the caller reasons from the callee's [ensures],
+   which constrains the result binder [r]. *)
+let%test_unit "Main.verify true return max" =
+  check_verify "verify_true_return_max.cav" Valid
+
+(* The result binder is havoc'd per call, so a recursive returning procedure is
+   verified from its own contract. *)
+let%test_unit "Main.verify true return recursion" =
+  check_verify "verify_true_return_recursion.cav" Valid
+
+(* A returning procedure that also writes a global: the WLP havocs the result
+   and the written global together, and [@old] on the global still resolves. *)
+let%test_unit "Main.verify true return with writes" =
+  check_verify "verify_true_return_writes.cav" Valid
+
+(* A boolean-returning procedure, with a bidirectional postcondition. *)
+let%test_unit "Main.verify true return bool" =
+  check_verify "verify_true_return_bool.cav" Valid
 
 let%test_unit "Main.verify true euclid" =
   check_verify "verify_true_euclid.cav" Valid
@@ -262,6 +291,11 @@ let%test_unit "Main.verify_report names an undeclared-writes procedure" =
 
 let%test_unit "Main.verify_report names main when main fails" =
   check_failing_proc "verify_false.cav" (Some "main")
+
+(* A returning procedure whose body contradicts its [ensures] fails in the
+   procedure, not at the call site. *)
+let%test_unit "Main.verify_report names a failing returning procedure" =
+  check_failing_proc "verify_false_return_ensures.cav" (Some "f")
 
 let%test_unit "Main.verify_report reports no procedure on success" =
   check_failing_proc "verify_true_if.cav" None
@@ -445,6 +479,11 @@ let%test_unit "Main.verify false invariant on entry" =
 let%test_unit "Main.verify false procedure ensures" =
   check_verify "verify_false_proc_ensures.cav" Invalid
 
+(* A returning procedure whose body sets the result to [n + 1] cannot establish
+   its [ensures { r = n }]. *)
+let%test_unit "Main.verify false return ensures" =
+  check_verify "verify_false_return_ensures.cav" Invalid
+
 (* Caller does not establish the callee's `requires` (needs x >= 10). *)
 let%test_unit "Main.verify false procedure requires" =
   check_verify "verify_false_proc_requires.cav" Invalid
@@ -533,6 +572,16 @@ let%test_unit "Main.get_ast type error boolean in assertion" =
 let%test_unit "Main.get_ast type error boolean array in arithmetic" =
   check_type_error ~substring:"expected int but got bool"
     "type_error_bool_array_arith.cav"
+
+(* Binding the result of a procedure that returns nothing. *)
+let%test_unit "Main.get_ast type error call has no result" =
+  check_type_error ~substring:"does not return a value"
+    "type_error_return_void.cav"
+
+(* A result binder annotated [int] but assigned a boolean expression. *)
+let%test_unit "Main.get_ast type error result binder annotation" =
+  check_type_error ~substring:"annotated int but used as a boolean"
+    "type_error_result_int_bool.cav"
 
 (* Optional int parameter annotations are accepted and the program verifies. *)
 let%test_unit "Main.verify true annotated procedure" =
