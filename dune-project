@@ -25,7 +25,11 @@
   menhir
   why3
   zarith
+  cmdliner
   ppx_deriving
+  ppx_jane
+  (ppx_inline_test :with-test)
+  (ppx_assert :with-test)
   (qcheck-core :with-test)
   (odoc :with-doc)
   (ocamlformat
