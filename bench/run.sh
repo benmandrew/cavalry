@@ -39,7 +39,11 @@ if [ -n "$missing" ]; then
 fi
 
 echo "Building..."
-dune build
+# Build only the compiler binary the benchmark needs. A bare `dune build`
+# compiles the whole project -- including test/fuzz, whose qcheck-core dep is
+# :with-test and thus absent from the docs (--with-doc) opam switch CI runs
+# this under, which would fail the build for a target the bench never uses.
+dune build bin/main.exe
 
 # (re)generate and compile every program in both backends.
 python3 "$ROOT/bench/gen.py"
