@@ -8,6 +8,10 @@ Programs are built from integers, booleans, bounded arrays, loops, and procedure
 
 Details about Cavalry and Hoare logic are in an article on my website [here](https://www.benmandrew.com/articles/cavalry).
 
+Cavalry also runs entirely in the browser — the whole pipeline, Why3 and Z3
+included, compiled to JavaScript and WebAssembly with no server round-trip.
+See [`web/`](web/README.md) for the client-side verifier and how it is built.
+
 ## Requirements
 
 The recommended way to get a working toolchain is [Nix](https://nixos.org/) with

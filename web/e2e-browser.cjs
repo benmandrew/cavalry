@@ -68,6 +68,27 @@ async function setEditor(page, text) {
     // 1. The sample (euclidean_div) should verify once Z3 loads.
     await waitPill(page, /^verified$/, "sample verifies");
 
+    // 1b. Editor chrome: the gutter numbers every line, the highlight layer is
+    // coloured by the TextMate grammar, and its text matches the textarea
+    // exactly (so the caret lines up over the coloured code).
+    const chrome = await page.evaluate(() => {
+      const ed = document.getElementById("editor");
+      const gut = document.getElementById("gutter");
+      const hl = document.getElementById("highlight-code");
+      const lines = ed.value.split("\n").length;
+      return {
+        lines,
+        gutterLines: gut.textContent.split("\n").length,
+        colouredSpans: hl.querySelectorAll('span[style*="color"]').length,
+        aligned: hl.textContent === ed.value,
+      };
+    });
+    if (chrome.gutterLines !== chrome.lines)
+      throw new Error(`gutter has ${chrome.gutterLines} lines, editor has ${chrome.lines}`);
+    if (chrome.colouredSpans < 1) throw new Error("highlight layer has no coloured tokens");
+    if (!chrome.aligned) throw new Error("highlight text does not match editor value");
+    console.log(`  ok: gutter + highlight (${chrome.lines} lines, ${chrome.colouredSpans} coloured tokens)`);
+
     // 2. Verify-while-typing: break the postcondition -> not verified.
     await setEditor(page, `{ x >= 0 }\ny := x + 1\n{ y > x + 5 }`);
     await waitPill(page, /not verified/, "broken postcondition -> not verified");

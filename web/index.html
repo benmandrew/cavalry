@@ -19,6 +19,12 @@
         --busy: #9a6700;
         --accent: #0969da;
         --mono: ui-monospace, SFMono-Regular, "SF Mono", Menlo, Consolas, monospace;
+        /* Shared editor metrics: the gutter, highlight layer and textarea must
+           agree exactly or the overlaid text drifts out of alignment. */
+        --fs: 14px;
+        --lh: 21px;
+        --pad-y: 16px;
+        --pad-x: 18px;
       }
       @media (prefers-color-scheme: dark) {
         :root {
@@ -69,20 +75,65 @@
         grid-template-rows: 1fr auto;
         min-height: 0;
       }
-      .editor-wrap { position: relative; min-height: 0; display: flex; }
-      textarea {
-        flex: 1;
-        border: 0;
-        outline: 0;
-        resize: none;
-        padding: 16px 18px;
+      /* The editor is a transparent textarea laid over a highlighted <pre>, with
+         a line-number gutter down the left. All three share the metrics above so
+         the caret sits exactly on the coloured text; JS keeps them scrolled in
+         lockstep. */
+      .editor-wrap {
+        position: relative;
+        min-height: 0;
+        display: flex;
+        overflow: hidden;
         background: var(--bg);
-        color: var(--fg);
-        font-family: var(--mono);
-        font-size: 14px;
-        line-height: 1.6;
-        tab-size: 2;
       }
+      .gutter {
+        flex: 0 0 auto;
+        padding: var(--pad-y) 8px var(--pad-y) 14px;
+        text-align: right;
+        color: var(--muted);
+        background: var(--panel);
+        border-right: 1px solid var(--border);
+        font-family: var(--mono);
+        font-size: var(--fs);
+        line-height: var(--lh);
+        white-space: pre;
+        overflow: hidden;
+        user-select: none;
+      }
+      .code-scroll { position: relative; flex: 1; min-width: 0; }
+      .highlight,
+      #editor {
+        margin: 0;
+        padding: var(--pad-y) var(--pad-x);
+        border: 0;
+        font-family: var(--mono);
+        font-size: var(--fs);
+        line-height: var(--lh);
+        tab-size: 2;
+        white-space: pre;
+        overflow-wrap: normal;
+      }
+      .highlight {
+        position: absolute;
+        inset: 0;
+        overflow: hidden;
+        pointer-events: none;
+        color: var(--fg); /* fallback colour for any untokenized text */
+      }
+      .highlight code { font: inherit; }
+      #editor {
+        position: absolute;
+        inset: 0;
+        width: 100%;
+        height: 100%;
+        resize: none;
+        outline: 0;
+        overflow: auto;
+        background: transparent;
+        color: transparent;
+        caret-color: var(--fg);
+      }
+      #editor::selection { background: color-mix(in srgb, var(--accent) 30%, transparent); }
       #results {
         border-top: 1px solid var(--border);
         background: var(--panel);
@@ -127,7 +178,11 @@
     </header>
     <main>
       <div class="editor-wrap">
-        <textarea id="editor" spellcheck="false" autocomplete="off" autocapitalize="off"></textarea>
+        <div id="gutter" class="gutter" aria-hidden="true"></div>
+        <div class="code-scroll">
+          <pre id="highlight" class="highlight" aria-hidden="true"><code id="highlight-code"></code></pre>
+          <textarea id="editor" spellcheck="false" autocomplete="off" autocapitalize="off" autocorrect="off" wrap="off"></textarea>
+        </div>
       </div>
       <section id="results">
         <div class="verdict busy">Loading Z3…</div>
@@ -140,6 +195,9 @@
     <script src="./verifier.bc.js"></script>
     <script src="./z3-built.js"></script>
     <script src="./dist/z3-api.js"></script>
+    <!-- Shiki highlighter (grammar + themes), self-contained; sets
+         cavalryHighlight synchronously so app.js can paint the first frame. -->
+    <script src="./dist/highlight.js"></script>
     <script src="./verify-core.js"></script>
     <script src="./app.js"></script>
   </body>

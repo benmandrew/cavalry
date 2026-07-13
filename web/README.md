@@ -43,6 +43,19 @@ into the js_of_ocaml pseudo-filesystem with `Sys_js.mount`. `Smt.Prover`'s
 browser hook then builds the environment and driver from those, bypassing
 Why3's prover-detection (which needs a native Z3 binary).
 
+## Editor
+
+The editor is a plain `<textarea>` with its text made transparent, laid over a
+highlighted `<pre>` and a line-number gutter that JS keeps scrolled in lockstep
+— so the caret sits over syntax-coloured code with no editor framework. The
+highlighting is driven by the same VS Code TextMate grammar
+(`editors/vscode/syntaxes/cavalry.tmLanguage.json`) and per-scope colour
+customizations (`.vscode/settings.json`) that render the README's snippet SVGs,
+so the browser editor and the docs match. `src/highlight-entry.js` bundles
+[Shiki](https://shiki.style) into `dist/highlight.js`; it uses Shiki's
+JavaScript regex engine (`oniguruma-to-es`) rather than the oniguruma wasm, so
+the bundle is self-contained JS with no extra wasm to fetch.
+
 ## Cross-origin isolation
 
 Z3-wasm uses threads, hence `SharedArrayBuffer`, hence the page must be
@@ -62,14 +75,15 @@ both `cavalry` and `cavalry-web`) and provide Node yourself. The core
 stays lean.
 
 ```bash
-npm install            # z3-solver, esbuild, puppeteer-core
-npm run build          # vendor Why3 data + Z3 assets, build verifier.bc.js, bundle z3-api.js
+npm install            # z3-solver, shiki, esbuild, puppeteer-core
+npm run build          # vendor Why3 data + Z3 assets, build verifier.bc.js, bundle z3-api.js + highlight.js
 npm run serve          # http://localhost:8099
 ```
 
-`npm run build` runs three steps you can invoke separately: `vendor` (copy the
+`npm run build` runs four steps you can invoke separately: `vendor` (copy the
 Why3 stdlib/drivers and Z3's `z3-built.{js,wasm}` into place), `build:ocaml`
-(dune → `verifier.bc.js`), and `build:z3api` (esbuild bundles z3-solver's API).
+(dune → `verifier.bc.js`), `build:z3api` (esbuild bundles z3-solver's API), and
+`build:highlight` (esbuild bundles the editor's Shiki highlighter).
 
 The web build is gated to dune's `web` profile (`dune build --profile web`),
 which `npm run build` passes. A plain `dune build` -- and the core CI matrix --

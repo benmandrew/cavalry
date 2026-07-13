@@ -5,6 +5,8 @@
 const editor = document.getElementById("editor");
 const statusPill = document.getElementById("status");
 const results = document.getElementById("results");
+const gutter = document.getElementById("gutter");
+const highlightCode = document.getElementById("highlight-code");
 
 const SAMPLE = `// Compute q = x / y and r = x % y by repeated subtraction.
 procedure euclidean_div () =
@@ -29,6 +31,52 @@ euclidean_div()
 { q = 2 && r = 8 }`;
 
 editor.value = SAMPLE;
+
+// --- Editor chrome: line-number gutter + live TextMate highlighting ---------
+// The visible text is a highlighted <pre> under a transparent textarea; the
+// gutter is a third parallel column. Highlighting is synchronous and cheap for
+// these small programs, so it runs on every keystroke (verification stays
+// debounced below).
+
+const darkQuery = matchMedia("(prefers-color-scheme: dark)");
+
+// Repaint the highlight layer from the current source. Falls back to plain
+// (escaped, via textContent) if the Shiki bundle failed to load.
+function paintHighlight() {
+  if (self.cavalryHighlight) {
+    highlightCode.innerHTML = self.cavalryHighlight.toHtml(editor.value, darkQuery.matches);
+  } else {
+    highlightCode.textContent = editor.value;
+  }
+}
+
+// Rebuild the gutter to one number per source line.
+function paintGutter() {
+  const n = editor.value.split("\n").length;
+  let s = "";
+  for (let i = 1; i <= n; i++) s += (i > 1 ? "\n" : "") + i;
+  gutter.textContent = s;
+}
+
+// Keep the highlight layer and gutter scrolled in step with the textarea. The
+// highlight <pre> and gutter are overflow:hidden but still scroll under program
+// control, so we drive them from the textarea's scroll offsets.
+function syncScroll() {
+  const hl = document.getElementById("highlight");
+  hl.scrollTop = editor.scrollTop;
+  hl.scrollLeft = editor.scrollLeft;
+  gutter.scrollTop = editor.scrollTop;
+}
+
+function refreshEditor() {
+  paintGutter();
+  paintHighlight();
+  syncScroll();
+}
+
+editor.addEventListener("scroll", syncScroll);
+darkQuery.addEventListener("change", paintHighlight);
+refreshEditor();
 
 // gen: monotonic id for the latest request. currentGen: the gen we still want
 // rendered -- results older than it are dropped. lastGood: the last successful
@@ -81,6 +129,7 @@ async function verifyNow() {
 
 let debounceTimer = null;
 editor.addEventListener("input", () => {
+  refreshEditor(); // highlight + gutter update immediately; verification waits
   clearTimeout(debounceTimer);
   debounceTimer = setTimeout(verifyNow, 300);
 });
@@ -92,6 +141,7 @@ function jumpTo(line, col) {
   pos += Math.max(0, col - 1);
   editor.focus();
   editor.setSelectionRange(pos, pos);
+  syncScroll(); // focusing may scroll the textarea to the caret; follow it
 }
 
 function locSpan(loc) {
