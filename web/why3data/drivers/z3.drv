@@ -1,0 +1,77 @@
+(** Why3 driver for Z3 <= 4.3.1 *)
+
+prelude ";; produced by z3.drv ;;"
+prelude "(set-logic AUFNIRA)"
+(* A  : Array
+   UF : Uninterpreted Function
+   NIRA : NonLinear Integer Reals Arithmetic
+*)
+
+import "smt-libv2.gen"
+filename "%f-%t-%g.smt2"
+printer "smtv2"
+import "discrimination.gen"
+
+(* Performed introductions depending on whether counterexamples are
+   requested, as said by the meta "get_counterexmp". When this meta
+   set, this transformation introduces the model variables that are
+   still embedded in the goal. When it is not set, it removes all
+   these unused-ce-related variables, even in the context.  *)
+transformation "counterexamples_dependent_intros"
+
+transformation "inline_trivial"
+transformation "eliminate_builtin"
+transformation "eliminate_definition"
+transformation "eliminate_inductive"
+transformation "eliminate_epsilon"
+transformation "eliminate_algebraic"
+transformation "eliminate_literal"
+
+transformation "simplify_formula"
+(* transformation "simplify_trivial_quantification" *)
+
+transformation "discriminate"
+transformation "encoding_smt"
+
+(** Error messages specific to Z3 *)
+
+outofmemory "(error \".*out of memory\")\\|Cannot allocate memory"
+steplimitexceeded "Maximal allocation counts .* have been exceeded\\|(error \".*number of configured allocations exceeded\")"
+timeout "interrupted by timeout"
+(* stop reporting Z3 2.19 warnings as errors *)
+fail "^(error \"\\(\\(W\\(A\\(R\\(N\\(I\\(N[^G]\\|[^N]\\)\\|[^I]\\)\\|[^N]\\)\\|[^R]\\)\\|[^A]\\)\\|[^W]\\).*\\)\")" "Error: \\1"
+
+
+(** Extra theories supported by Z3 *)
+
+(* div/mod of Z3 seems to be Euclidean Division *)
+theory int.EuclideanDivision
+  syntax function div "(div %1 %2)"
+  syntax function mod "(mod %1 %2)"
+  remove prop Mod_bound
+  remove prop Div_mod
+  remove prop Mod_1
+  remove prop Div_1
+end
+
+theory real.FromInt
+  syntax function from_int "(to_real %1)"
+  remove prop Zero
+  remove prop One
+  remove prop Add
+  remove prop Sub
+  remove prop Mul
+  remove prop Neg
+end
+
+(* does not work: Z3 segfaults
+theory real.Trigonometry
+
+  syntax function cos "(cos %1)"
+  syntax function sin "(sin %1)"
+  syntax function pi "pi"
+  syntax function tan "(tan %1)"
+  syntax function atan "(atan %1)"
+
+end
+*)

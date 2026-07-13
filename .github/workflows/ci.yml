@@ -41,8 +41,12 @@ jobs:
           path: _opam
           key: opam-switch-v1-${{ matrix.ocaml-compiler }}-${{ hashFiles('cavalry.opam') }}
 
+      # Only the core [cavalry] package's deps -- not [cavalry-web]'s
+      # js_of_ocaml/Z3-wasm toolchain, which the separate `web` job installs and
+      # which need not resolve on the 4.14 leg. The web/ stanzas are gated to the
+      # [web] profile, so the default-profile `dune build` below skips them.
       - name: Install dependencies
-        run: opam install . --deps-only --with-test --with-doc
+        run: opam install ./cavalry.opam --deps-only --with-test --with-doc
 
       # Z3 is the SMT backend and must be on PATH before `why3 config detect`
       # can register it. It is not an opam package (the dev shell gets it from
@@ -102,6 +106,68 @@ jobs:
           opam exec -- dune build @check
           opam exec -- zanuda -dir . -del-prefix "$(pwd)"
 
+  # The client-side browser build (web/). Pinned to OCaml 5.5.0: js_of_ocaml and
+  # friends live in the separate cavalry-web opam package and need not build on
+  # the 4.14 leg. No native Z3 or `why3 config detect` here -- the browser build
+  # prints obligations to SMT-LIB2 and solves them with Z3-wasm (npm z3-solver),
+  # and the embedded Why3 stdlib/drivers are committed under web/why3data, so the
+  # build needs neither a prover binary nor the why3 CLI.
+  web:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up OCaml 5.5.0
+        uses: ocaml/setup-ocaml@v3
+        with:
+          ocaml-compiler: "5.5.0"
+          dune-cache: true
+          opam-repositories: |
+            default: https://github.com/ocaml/opam-repository.git#d4a5573a48263007395b46a5dffbdcfbce894d0e
+
+      # Distinct from the build job's cache: this switch also has the cavalry-web
+      # toolchain (js_of_ocaml, crunch, ...), so the key hashes both opam files.
+      - name: Cache opam switch
+        uses: actions/cache@v4
+        with:
+          path: _opam
+          key: opam-switch-web-v1-5.5.0-${{ hashFiles('cavalry.opam', 'cavalry-web.opam') }}
+
+      # All local packages' deps: cavalry (the library the binding links) plus
+      # cavalry-web (js_of_ocaml, zarith_stubs_js, crunch, yojson).
+      - name: Install dependencies
+        run: opam install . --deps-only
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+
+      - name: Set up Chrome
+        id: setup-chrome
+        uses: browser-actions/setup-chrome@v1
+
+      - name: Install npm dependencies
+        working-directory: web
+        run: npm ci
+
+      # `opam exec` puts dune + ocaml-crunch on PATH; `npm run build` invokes
+      # dune with `--profile web`, which enables the gated web/ stanzas.
+      - name: Build the browser verifier
+        working-directory: web
+        run: opam exec -- npm run build
+
+      - name: Test — OCaml pipeline + Z3-wasm (node)
+        working-directory: web
+        run: opam exec -- npm run test:node
+
+      - name: Test — verify-while-typing (headless Chrome)
+        working-directory: web
+        env:
+          CHROME_PATH: ${{ steps.setup-chrome.outputs.chrome-path }}
+        run: npm run test:browser
+
   # Verifies the README's generated snippet SVGs are in sync with their .cav
   # sources and the TextMate grammar. `gen.mjs --check` re-renders in memory and
   # fails if anything committed is stale (see assets/readme-snippets/README.md).
@@ -153,7 +219,7 @@ jobs:
           key: opam-switch-v1-5.5.0-${{ hashFiles('cavalry.opam') }}
 
       - name: Install dependencies
-        run: opam install . --deps-only --with-test --with-doc
+        run: opam install ./cavalry.opam --deps-only --with-doc
 
       - name: Build docs
         run: opam exec -- dune build @doc

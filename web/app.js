@@ -1,0 +1,189 @@
+// Main thread: the editor, the debounce/generation logic, and rendering.
+// It owns no verification logic -- it ships source to the worker and paints
+// whatever verdict comes back, discarding anything stale.
+
+const editor = document.getElementById("editor");
+const statusPill = document.getElementById("status");
+const results = document.getElementById("results");
+
+const SAMPLE = `// Compute q = x / y and r = x % y by repeated subtraction.
+procedure euclidean_div () =
+  requires { x >= 0 }
+  ensures { x = q * y + r && 0 <= r && r < y }
+  writes { q, r }
+  q := 0;
+  r := x;
+  while r >= y do
+    invariant { x = q * y + r && 0 <= r }
+    r := r - y;
+    q := q + 1
+  end
+end
+
+{ true }
+x := 42;
+y := 17;
+q := 0;
+r := 0;
+euclidean_div()
+{ q = 2 && r = 8 }`;
+
+editor.value = SAMPLE;
+
+// gen: monotonic id for the latest request. currentGen: the gen we still want
+// rendered -- results older than it are dropped. lastGood: the last successful
+// verdict, kept on screen (dimmed) when the program becomes unparseable mid-edit
+// so the panel does not flash on every keystroke.
+let gen = 0;
+let currentGen = 0;
+let lastGood = null;
+let solve = null; // set once Z3 has loaded
+
+function setPill(cls, text) {
+  statusPill.className = "pill " + cls;
+  statusPill.textContent = text;
+}
+
+// Verify the current editor contents. Runs on the main thread: the OCaml
+// pipeline (cavalryObligations) is a fast synchronous call, and each Z3 solve is
+// awaited -- Z3 runs in its own worker threads, so awaiting yields the main
+// thread back to the event loop and typing stays responsive. A newer keystroke
+// bumps currentGen; in-flight runs see the mismatch (isStale) and bail.
+async function verifyNow() {
+  if (!solve) return;
+  gen += 1;
+  const myGen = gen;
+  currentGen = myGen;
+  setPill("busy", "verifying…");
+  let parsed;
+  try {
+    parsed = JSON.parse(self.cavalryObligations(editor.value));
+  } catch (e) {
+    if (myGen === currentGen) {
+      setPill("bad", "error");
+      results.replaceChildren();
+      const v = document.createElement("div");
+      v.className = "verdict bad";
+      v.textContent = "Internal error: " + (e && e.message || e);
+      results.appendChild(v);
+    }
+    return;
+  }
+  const result = await VerifyCore.solveObligations(parsed, solve, {
+    isStale: () => myGen !== currentGen,
+    onProgress: (done, total) => {
+      if (myGen === currentGen) setPill("busy", `verifying… ${done}/${total}`);
+    },
+  });
+  if (myGen !== currentGen || result.stale) return; // superseded
+  render(myGen, result);
+}
+
+let debounceTimer = null;
+editor.addEventListener("input", () => {
+  clearTimeout(debounceTimer);
+  debounceTimer = setTimeout(verifyNow, 300);
+});
+
+function jumpTo(line, col) {
+  const lines = editor.value.split("\n");
+  let pos = 0;
+  for (let i = 0; i < line - 1 && i < lines.length; i++) pos += lines[i].length + 1;
+  pos += Math.max(0, col - 1);
+  editor.focus();
+  editor.setSelectionRange(pos, pos);
+}
+
+function locSpan(loc) {
+  if (!loc) return "";
+  const s = document.createElement("span");
+  s.className = "loc";
+  s.textContent = `line ${loc.line}:${loc.col}`;
+  s.onclick = () => jumpTo(loc.line, loc.col);
+  return s;
+}
+
+function render(gen, result, { stale } = {}) {
+  results.className = stale ? "stale" : "";
+  results.replaceChildren();
+
+  const verdict = document.createElement("div");
+  results.appendChild(verdict);
+
+  if (!result.ok) {
+    // A parse/type error. Keep the last good verdict dimmed above the error.
+    if (lastGood) render.appendLastGood(results);
+    verdict.className = "verdict busy";
+    verdict.textContent = result.kind === "type" ? "Type error" : "Syntax error";
+    const ul = document.createElement("ul");
+    ul.className = "findings";
+    const li = document.createElement("li");
+    li.className = "err";
+    li.append(result.error + "  ");
+    const ls = locSpan(result.loc);
+    if (ls) li.append(ls);
+    ul.appendChild(li);
+    results.appendChild(ul);
+    setPill("busy", result.kind === "type" ? "type error" : "syntax error");
+    return;
+  }
+
+  lastGood = { gen, result };
+  if (result.verified) {
+    verdict.className = "verdict ok";
+    verdict.textContent = "✓ Verified";
+    const note = document.createElement("div");
+    note.className = "note";
+    note.textContent = `${result.total} proof obligation${result.total === 1 ? "" : "s"} discharged by Z3.`;
+    results.appendChild(note);
+    setPill("ok", "verified");
+  } else {
+    verdict.className = "verdict bad";
+    verdict.textContent = `✗ Not verified — ${result.failures.length} of ${result.total} obligation${result.total === 1 ? "" : "s"} failed`;
+    const ul = document.createElement("ul");
+    ul.className = "findings";
+    for (const f of result.failures) {
+      const li = document.createElement("li");
+      const where = f.proc ? `${f.proc}: ` : "";
+      li.append(`${where}${f.expl} `);
+      const ls = locSpan(f.loc);
+      if (ls) li.append(ls);
+      const v = document.createElement("span");
+      v.className = "note";
+      v.textContent = `  (${f.verdict})`;
+      li.append(v);
+      ul.appendChild(li);
+    }
+    results.appendChild(ul);
+    setPill("bad", "not verified");
+  }
+}
+
+// Re-render the retained good verdict, dimmed, above a fresh error.
+render.appendLastGood = (root) => {
+  const d = document.createElement("div");
+  d.className = "note";
+  d.style.marginBottom = "8px";
+  const r = lastGood.result;
+  d.textContent = r.verified
+    ? `(last verified: ${r.total} obligations)`
+    : `(last result: ${r.failures.length}/${r.total} failed)`;
+  root.appendChild(d);
+};
+
+// Load Z3 once (its wasm is ~32 MB, so this takes a moment), then do a first
+// verification of the sample.
+(async () => {
+  try {
+    const { Z3 } = await self.z3api.init();
+    solve = VerifyCore.makeSolver(Z3);
+    verifyNow();
+  } catch (e) {
+    setPill("bad", "Z3 failed");
+    results.replaceChildren();
+    const v = document.createElement("div");
+    v.className = "verdict bad";
+    v.textContent = "Failed to load Z3: " + (e && e.message || e);
+    results.appendChild(v);
+  }
+})();

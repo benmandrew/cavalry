@@ -1,0 +1,47 @@
+(* Why common driver for first-order tptp provers *)
+
+printer "tptp-fof"
+filename "%f-%t-%g.p"
+
+valid   "^% SZS status Theorem"
+valid   "^% SZS status Unsatisfiable"
+unknown "^% SZS status CounterSatisfiable" ""
+unknown "^% SZS status Satisfiable" ""
+timeout "^% SZS status Timeout"
+unknown "^% SZS status GaveUp" ""
+fail    "^% SZS status Error" ""
+
+time "why3cpulimit time : %s s"
+
+(* Performed introductions depending on whether counterexamples are
+   requested, as said by the meta "get_counterexmp". When this meta
+   set, this transformation introduces the model variables that are
+   still embedded in the goal. When it is not set, it removes all
+   these unused-ce-related variables, even in the context.  *)
+transformation "counterexamples_dependent_intros"
+
+transformation "inline_trivial"
+transformation "eliminate_builtin"
+(* transformation "remove_unused_keep_constants" looses too many proofs *)
+transformation "eliminate_definition"
+transformation "eliminate_inductive"
+transformation "eliminate_if"
+transformation "eliminate_epsilon"
+transformation "eliminate_algebraic"
+transformation "eliminate_literal"
+transformation "eliminate_negative_constants"
+transformation "eliminate_let"
+
+transformation "simplify_formula"
+
+transformation "discriminate"
+transformation "encoding_tptp"
+
+theory BuiltIn
+  syntax predicate (=)  "(%1 = %2)"
+  meta "eliminate_algebraic" "no_index"
+end
+
+theory Ignore
+  syntax predicate ignore'term  "true"
+end

@@ -1,0 +1,27 @@
+{
+  "name": "cavalry-web",
+  "version": "1.0.0",
+  "description": "Client-side Cavalry verifier: OCaml pipeline (js_of_ocaml) + Z3-wasm",
+  "type": "commonjs",
+  "scripts": {
+    "refresh:why3data": "rm -rf why3data && mkdir -p why3data && cp -r \"$(why3 --print-datadir)/stdlib\" why3data/stdlib && cp -r \"$(why3 --print-datadir)/drivers\" why3data/drivers",
+    "vendor:z3": "cp node_modules/z3-solver/build/z3-built.js ./z3-built.js && cp node_modules/z3-solver/build/z3-built.wasm ./z3-built.wasm",
+    "build:ocaml": "cd .. && dune build --root . --profile web ./web/verifier.bc.js",
+    "build:z3api": "esbuild src/z3-entry.js --bundle --format=iife --global-name=z3api --define:global=globalThis --platform=browser --outfile=dist/z3-api.js",
+    "build": "npm run vendor:z3 && npm run build:ocaml && npm run build:z3api",
+    "serve": "node serve.cjs 8099",
+    "test:node": "npm run build:ocaml && node e2e-node.cjs",
+    "test:browser": "node e2e-browser.cjs"
+  },
+  "license": "MIT",
+  "dependencies": {
+    "z3-solver": "^4.16.0"
+  },
+  "devDependencies": {
+    "esbuild": "^0.28.1",
+    "puppeteer-core": "^25.3.0"
+  },
+  "allowScripts": {
+    "esbuild@0.28.1": true
+  }
+}

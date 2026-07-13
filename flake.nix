@@ -22,10 +22,16 @@
         # [Smt.Prover] checks for); [why3 config detect] then finds it. It is
         # deliberately absent from cavalry.opam's depends -- opam installs no
         # prover.
+        #
+        # nodejs is for the browser build under web/ (npm: z3-solver, esbuild,
+        # puppeteer-core). Its OCaml-side toolchain (js_of_ocaml, crunch, ...) is
+        # opam-managed under the separate cavalry-web.opam package, which the
+        # `opam install --deps-only .` below installs alongside cavalry's deps.
         devShells.default = pkgs.mkShell {
           packages = with pkgs; [
             opam
             z3
+            nodejs
             m4
             pkg-config
             gmp
@@ -59,7 +65,7 @@
             # changing the install line below re-triggers the install for
             # existing clones instead of leaving them silently drifted.
             STAMP=.direnv/opam-deps.stamp
-            WANT=$(cat cavalry.opam flake.nix | cksum | cut -d' ' -f1)
+            WANT=$(cat cavalry.opam cavalry-web.opam flake.nix | cksum | cut -d' ' -f1)
             if [ "$(cat "$STAMP" 2>/dev/null)" != "$WANT" ]; then
               echo "cavalry dev shell: syncing opam deps (manifest changed)..."
               opam install --deps-only --with-test --with-doc -y . \

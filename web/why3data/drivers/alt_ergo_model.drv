@@ -1,0 +1,7 @@
+(* Driver for the current version of Alt-Ergo with models *)
+
+import "alt_ergo.drv"
+
+theory BuiltIn
+  meta "printer_option" "show_labels"
+end

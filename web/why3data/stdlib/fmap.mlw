@@ -1,0 +1,344 @@
+
+(** {1 Finite Domain Maps} *)
+
+(** {2 Polymorphic finite domain maps}
+
+To be used in specifications and ghost code only
+
+ *)
+
+module Fmap
+
+  use int.Int
+  use map.Map
+  use set.Fset as S
+
+  type fmap 'k 'v = abstract {
+    contents: 'k -> 'v;
+      domain: S.fset 'k;
+  }
+  meta coercion function contents
+
+  predicate (==) (m1 m2: fmap 'k 'v) =
+    S.(==) m1.domain m2.domain /\
+    forall k. S.mem k m1.domain -> m1[k] = m2[k]
+
+  axiom extensionality:
+    forall m1 m2: fmap 'k 'v. m1 == m2 -> m1 = m2
+
+  meta extensionality predicate (==)
+
+  predicate mem (k: 'k) (m: fmap 'k 'v) =
+    S.mem k m.domain
+
+  predicate mapsto (k: 'k) (v: 'v) (m: fmap 'k 'v) =
+    mem k m /\ m[k] = v
+
+  lemma mem_mapsto:
+    forall k: 'k, m: fmap 'k 'v. mem k m -> mapsto k m[k] m
+
+  predicate is_empty (m: fmap 'k 'v) =
+    S.is_empty m.domain
+
+  function mk (d: S.fset 'k) (m: 'k -> 'v) : fmap 'k 'v
+
+  axiom mk_domain:
+    forall d: S.fset 'k, m: 'k -> 'v. domain (mk d m) = d
+
+  axiom mk_contents:
+    forall d: S.fset 'k, m: 'k -> 'v, k: 'k.
+    S.mem k d -> (mk d m)[k] = m[k]
+
+  constant empty: fmap 'k 'v
+
+  axiom is_empty_empty: is_empty (empty: fmap 'k 'v)
+
+  function add (k: 'k) (v: 'v) (m: fmap 'k 'v) : fmap 'k 'v
+
+  function ([<-]) (m: fmap 'k 'v) (k: 'k) (v: 'v) : fmap 'k 'v =
+    add k v m
+
+  (*** FIXME? (add k v m).contents = m.contents[k <- v] *)
+
+  axiom add_contents_k:
+    forall k v, m: fmap 'k 'v. (add k v m)[k] = v
+
+  axiom add_contents_other:
+    forall k v, m: fmap 'k 'v, k1. mem k1 m -> k1 <> k -> (add k v m)[k1] = m[k1]
+
+  axiom add_domain:
+    forall k v, m: fmap 'k 'v. (add k v m).domain = S.add k m.domain
+
+  (*** FIXME? find_opt (k: 'k) (m: fmap 'k 'v) : option 'v *)
+
+  function find (k: 'k) (m: fmap 'k 'v) : 'v
+
+  axiom find_def:
+    forall k, m: fmap 'k 'v. mem k m -> find k m = m[k]
+
+  function remove (k: 'k) (m: fmap 'k 'v) : fmap 'k 'v
+
+  axiom remove_contents:
+    forall k, m: fmap 'k 'v, k1. mem k1 m -> k1 <> k -> (remove k m)[k1] = m[k1]
+
+  axiom remove_domain:
+    forall k, m: fmap 'k 'v. (remove k m).domain = S.remove k m.domain
+
+  function size (m: fmap 'k 'v) : int =
+    S.cardinal m.domain
+
+end
+
+
+(** {3 Some additional fmap operators and their properties}
+
+Mainly inspired from set theory a la B
+
+*)
+
+module Fmap_ext
+
+use map.Map
+use set.Fset as S
+use export Fmap
+
+function dom (m: fmap 'k 'v) : S.fset 'k = m.domain
+(** An abbreviation for the domain *)
+
+function apply (m: fmap 'k 'v) (x: 'k): 'v
+(** map application *)
+
+axiom apply_result:
+  forall m: fmap 'k 'v, x.  mem x m -> mapsto x (apply m x) m
+meta "remove_unused:dependency" axiom apply_result, function apply
+
+function remove_set (s: S.fset 'k) (m: fmap 'k 'v) : fmap 'k 'v
+(** domain anti-restriction, `<<|` in B *)
+
+axiom remove_set_contents:
+  forall m: fmap 'k 'v, s: S.fset 'k, x. mem x m -> not(S.mem x s) -> (remove_set s m)[x] = m[x]
+meta "remove_unused:dependency" axiom remove_set_contents, function remove_set
+
+axiom remove_set_domain:
+  forall m: fmap 'k 'v, s: S.fset 'k. (remove_set s m).domain = S.diff m.domain s
+meta "remove_unused:dependency" axiom remove_set_domain, function remove_set
+
+function domain_res (s: S.fset 'k) (m: fmap 'k 'v) : fmap 'k 'v
+(** domain restriction, `<|` in B *)
+
+axiom domain_res_contents:
+  forall m: fmap 'k 'v, s: S.fset 'k, x.
+    mem x m -> S.mem x s -> (domain_res s m)[x] = m[x]
+meta "remove_unused:dependency" axiom domain_res_contents, function domain_res
+
+axiom domain_res_domain:
+    forall m: fmap 'k 'v, s: S.fset 'k. (domain_res s m).domain = S.inter m.domain s
+meta "remove_unused:dependency" axiom domain_res_domain, function domain_res
+
+function override (m1 m2: fmap 'k 'v) : fmap 'k 'v
+(** map override, `<+` in B *)
+
+axiom override_contents_1:
+  forall m1, m2: fmap 'k 'v, x. S.mem x m2.domain -> (override m1 m2)[x] = m2[x]
+meta "remove_unused:dependency" axiom override_contents_1, function override
+
+axiom override_contents_2:
+  forall m1, m2: fmap 'k 'v, x.
+    S.mem x (S.diff m1.domain m2.domain) -> (override m1 m2)[x] = m1[x]
+meta "remove_unused:dependency" axiom override_contents_2, function override
+
+axiom override_domain:
+    forall m1, m2: fmap 'k 'v. (override m1 m2).domain = S.union m1.domain m2.domain
+meta "remove_unused:dependency" axiom override_domain, function override
+
+end
+
+(** {3 Some additional facts about operators above}
+
+They are automatically proven, see session `examples/stdlib/fmap`
+
+*)
+
+module Fmap_ext_facts
+
+use set.Fset as S
+use Fmap_ext
+
+lemma anti_res_1 :
+  forall u :  S.fset 'k , m :  fmap 'k 'v.
+    S.inter m.domain u = S.empty -> remove_set u m == m
+meta "remove_unused:dependency" lemma anti_res_1, function remove_set
+
+lemma anti_res_2 :
+  forall u :  S.fset 'k , m :  fmap 'k 'v.
+    S.subset m.domain u -> remove_set u m == empty
+meta "remove_unused:dependency" lemma anti_res_2, function remove_set
+
+lemma anti_res_3 :
+  forall m :  fmap 'k 'v. remove_set m.domain m == empty
+meta "remove_unused:dependency" lemma anti_res_3, function remove_set
+
+lemma anti_res_4 :
+  forall m :  fmap 'k 'v. remove_set S.empty m == m
+meta "remove_unused:dependency" lemma anti_res_4, function remove_set
+
+lemma anti_res_res :
+  forall u, v :  S.fset 'k , m :  fmap 'k 'v.
+    remove_set u (domain_res v m) == domain_res (S.diff v u) m
+meta "remove_unused:dependency" lemma anti_res_res, function remove_set
+
+lemma anti_res_anti_res :
+  forall u, v :  S.fset 'k , m :  fmap 'k 'v.
+    remove_set u (remove_set v m) == remove_set (S.union v u) m
+meta "remove_unused:dependency" lemma anti_res_anti_res, function remove_set
+
+lemma anti_res_override_res :
+  forall u, m1, m2 :  fmap 'k 'v.
+    remove_set u (override m1 m2) == override (remove_set u m1)  (remove_set u m2)
+meta "remove_unused:dependency" lemma anti_res_override_res, function remove_set
+meta "remove_unused:dependency" lemma anti_res_override_res, function override
+
+lemma remove_remove_set :
+  forall x :  'k , m :  fmap 'k 'v.
+    remove x m == remove_set (S.singleton x) m
+meta "remove_unused:dependency" lemma remove_remove_set, function remove_set
+
+lemma add_override :
+  forall x:  'k , y: 'v, m :  fmap 'k 'v.
+    add x y m == override m (mk (S.singleton x) (fun _ -> y))
+meta "remove_unused:dependency" lemma add_override, function override
+
+end
+
+(** {2 Finite monomorphic maps to be used in programs only}
+
+A program function `eq` deciding equality on the `key` type must be provided when cloned.
+*)
+
+(** {3 Applicative maps} *)
+
+module MapApp
+
+  use int.Int
+  use map.Map
+  use export Fmap
+
+  type key
+
+  (* we enforce type `key` to have a decidable equality
+     by requiring the following function *)
+  val eq (x y: key) : bool
+    ensures { result <-> x = y }
+
+  type t 'v = abstract {
+    to_fmap: fmap key 'v;
+  }
+  meta coercion function to_fmap
+
+  val create () : t 'v
+    ensures { result.to_fmap = empty }
+
+  val mem (k: key) (m: t 'v) : bool
+    ensures { result <-> mem k m }
+
+  val is_empty (m: t 'v) : bool
+    ensures { result <-> is_empty m }
+
+  val add (k: key) (v: 'v) (m: t 'v) : t 'v
+    ensures { result = add k v m }
+
+  val find (k: key) (m: t 'v) : 'v
+    requires { mem k m }
+    ensures  { result = m[k] }
+    ensures  { result = find k m }
+
+  use ocaml.Exceptions
+
+  val find_exn (k: key) (m: t 'v) : 'v
+    ensures { S.mem k m.domain }
+    ensures { result = m[k] }
+    raises  { Not_found ->  not (S.mem k m.domain) }
+
+  val remove (k: key) (m: t 'v) : t 'v
+    ensures { result = remove k m }
+
+  val size (m: t 'v) : int
+    ensures { result = size m }
+
+end
+
+(** {3 Applicative maps of integers} *)
+
+module MapAppInt
+
+  use int.Int
+
+  clone export MapApp with type key = int, val eq = Int.(=)
+
+end
+
+(** {3 Imperative maps} *)
+
+module MapImp
+
+  use int.Int
+  use map.Map
+  use export Fmap
+
+  type key
+
+  val eq (x y: key) : bool
+    ensures { result <-> x = y }
+
+  type t 'v = abstract {
+    mutable to_fmap: fmap key 'v;
+  }
+  meta coercion function to_fmap
+
+  val create () : t 'v
+    ensures { result.to_fmap = empty }
+
+  val mem (k: key) (m: t 'v) : bool
+    ensures { result <-> mem k m }
+
+  val is_empty (m: t 'v) : bool
+    ensures { result <-> is_empty m }
+
+  val add (k: key) (v: 'v) (m: t 'v) : unit
+    writes  { m }
+    ensures { m = add k v (old m) }
+
+  val find (k: key) (m: t 'v) : 'v
+    requires { mem k m }
+    ensures  { result = m[k] }
+    ensures  { result = find k m }
+
+  use ocaml.Exceptions
+
+  val find_exn (k: key) (m: t 'v) : 'v
+    ensures { S.mem k m.domain }
+    ensures { result = m[k] }
+    raises  { Not_found ->  not (S.mem k m.domain) }
+
+  val remove (k: key) (m: t 'v) : unit
+    writes  { m }
+    ensures { m = remove k (old m) }
+
+  val size (m: t 'v) : int
+    ensures { result = size m }
+
+  val clear (m: t 'v) : unit
+    writes  { m }
+    ensures { m = empty }
+
+end
+
+(** {3 Imperative maps of integers} *)
+
+module MapImpInt
+
+  use int.Int
+
+  clone export MapImp with type key = int, val eq = Int.(=)
+
+end

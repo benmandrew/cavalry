@@ -1,0 +1,14 @@
+
+prelude ";; produced by alt_ergo_counterexample.drv ;;"
+
+import "alt_ergo_smt.drv"
+
+(* Counterexamples: set model parser *)
+model_parser "smtv2"
+
+theory BuiltIn
+
+  meta "get_counterexmp" ""
+  meta "meta_incremental" ""
+
+end

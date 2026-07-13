@@ -3,17 +3,12 @@ module Parser = Parse.Parser
 module Lexer = Parse.Lexer
 open Ast
 
-let get_ast path =
-  let open Stdio in
-  let file = In_channel.create path in
-  let lexbuf = Lexing.from_channel file in
-  (* Record the filename so source locations attached to the AST (and, through
-     the WLP, to proof obligations) can be printed as [file:line:col]. *)
-  lexbuf.Lexing.lex_curr_p <- { lexbuf.Lexing.lex_curr_p with pos_fname = path };
-  let ut_ast = Parser.top Lexer.main lexbuf in
-  In_channel.close file;
-  (* Reject ill-typed programs up front with a located diagnostic, and learn
-     which variables are boolean so elaboration can type their occurrences. *)
+(* Elaborate a parsed (untyped) program into the annotated triples the verifier
+   consumes: reject ill-typed input with a located diagnostic, learn which
+   variables/arrays/parameters are boolean so [Triple.translate] can type their
+   occurrences, then run variable collection. Shared by the file and string
+   parse entry points. *)
+let elaborate ut_ast =
   let { Typecheck.bool_vars; bool_arrays; proc_bool_params } =
     Typecheck.check ut_ast
   in
@@ -25,8 +20,30 @@ let get_ast path =
   List.map (Triple.translate ~is_bool ~is_bool_array ~proc_bool_params) ut_ast
   |> Var_collection.collect
 
+let get_ast path =
+  let open Stdio in
+  let file = In_channel.create path in
+  let lexbuf = Lexing.from_channel file in
+  (* Record the filename so source locations attached to the AST (and, through
+     the WLP, to proof obligations) can be printed as [file:line:col]. *)
+  lexbuf.Lexing.lex_curr_p <- { lexbuf.Lexing.lex_curr_p with pos_fname = path };
+  let ut_ast = Parser.top Lexer.main lexbuf in
+  In_channel.close file;
+  elaborate ut_ast
+
+(* Parse straight from a source string rather than a file. The browser has no
+   filesystem to read a [.cav] from, so the web front-end feeds editor contents
+   through here; [fname] is only cosmetic, tagging locations in diagnostics. *)
+let get_ast_string ?(fname = "<input>") src =
+  let lexbuf = Lexing.from_string src in
+  lexbuf.Lexing.lex_curr_p <-
+    { lexbuf.Lexing.lex_curr_p with pos_fname = fname };
+  let ut_ast = Parser.top Lexer.main lexbuf in
+  elaborate ut_ast
+
 let verify = Hoare.verify
 let verify_report = Hoare.verify_report
+let obligations_smtlib = Hoare.obligations_smtlib
 
 let exec path =
   get_ast path |> List.map (fun p -> fst p |> Runtime.to_proc_t) |> Runtime.exec
