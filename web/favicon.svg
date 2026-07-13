@@ -1,0 +1,21 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!-- Cavalry's emblem: the NATO APP-6 unit symbol for a friendly mechanized
+     infantry (wheeled APC), matching the mark in assets/cavalry-banner.png.
+     Friendly = rectangle frame; Infantry = diagonal cross; Mechanized/armour =
+     the horizontal stadium; Wheeled = the three wheels. Geometry follows the
+     canonical 600x400 (1.5:1) symbol, but the strokes are thickened (frame/cross
+     30, interior 20) so the mark still reads as a browser-tab favicon at 16-32px,
+     where the original hairline strokes vanished. -->
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 600 400" fill="none" stroke="#000">
+  <!-- Friendly frame, filled. The outer half of the thick stroke is clipped by
+       the viewBox, seating the frame flush to the icon edge. -->
+  <rect x="5" y="5" width="590" height="390" fill="#7de1ff" stroke-width="30"/>
+  <!-- Infantry: corner-to-corner cross -->
+  <path d="M5 5 595 395 M595 5 5 395" stroke-width="30"/>
+  <!-- Mechanized / armour: horizontal stadium (rx = half-height => fully rounded ends) -->
+  <rect x="112.5" y="101.7" width="375" height="196.6" rx="98.3" stroke-width="20"/>
+  <!-- Wheeled: three wheels -->
+  <circle cx="193" cy="346.6" r="31.4" stroke-width="20"/>
+  <circle cx="300" cy="346.6" r="31.4" stroke-width="20"/>
+  <circle cx="407" cy="346.6" r="31.4" stroke-width="20"/>
+</svg>
