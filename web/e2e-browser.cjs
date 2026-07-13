@@ -89,6 +89,22 @@ async function setEditor(page, text) {
     if (!chrome.aligned) throw new Error("highlight text does not match editor value");
     console.log(`  ok: gutter + highlight (${chrome.lines} lines, ${chrome.colouredSpans} coloured tokens)`);
 
+    // 1c. Example picker: populated from the README snippets, and selecting one
+    // loads it into the editor and re-verifies. failing-spec is expected to
+    // fail, which also exercises the picker-driven verification path.
+    const picker = await page.evaluate(() => {
+      const sel = document.getElementById("example-picker");
+      return { count: sel.options.length, slugs: [...sel.options].map((o) => o.value) };
+    });
+    if (picker.count < 2) throw new Error(`example picker has ${picker.count} options`);
+    if (!picker.slugs.includes("failing-spec"))
+      throw new Error("example picker missing expected snippets: " + picker.slugs.join(", "));
+    console.log(`  ok: example picker (${picker.count} examples)`);
+    await page.select("#example-picker", "failing-spec");
+    await waitPill(page, /not verified/, "picked failing-spec -> not verified");
+    await page.select("#example-picker", "hoare-triple");
+    await waitPill(page, /^verified$/, "picked hoare-triple -> verified");
+
     // 2. Verify-while-typing: break the postcondition -> not verified.
     await setEditor(page, `{ x >= 0 }\ny := x + 1\n{ y > x + 5 }`);
     await waitPill(page, /not verified/, "broken postcondition -> not verified");

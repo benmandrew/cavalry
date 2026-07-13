@@ -56,6 +56,13 @@ so the browser editor and the docs match. `src/highlight-entry.js` bundles
 JavaScript regex engine (`oniguruma-to-es`) rather than the oniguruma wasm, so
 the bundle is self-contained JS with no extra wasm to fetch.
 
+A header picker offers a handful of example programs so a first-time visitor can
+tour the language's features. The list is generated, not hand-maintained:
+`gen-examples.cjs` reads the same snippets the top-level README embeds
+(`assets/readme-snippets/snippets/`), takes their order and section titles from
+the README itself, and writes `dist/examples.js` (loaded before `app.js`). Add a
+snippet to the README and it shows up in the picker on the next build.
+
 ## Cross-origin isolation
 
 Z3-wasm uses threads, hence `SharedArrayBuffer`, hence the page must be
@@ -80,10 +87,11 @@ npm run build          # vendor Why3 data + Z3 assets, build verifier.bc.js, bun
 npm run serve          # http://localhost:8099
 ```
 
-`npm run build` runs four steps you can invoke separately: `vendor` (copy the
+`npm run build` runs five steps you can invoke separately: `vendor` (copy the
 Why3 stdlib/drivers and Z3's `z3-built.{js,wasm}` into place), `build:ocaml`
-(dune → `verifier.bc.js`), `build:z3api` (esbuild bundles z3-solver's API), and
-`build:highlight` (esbuild bundles the editor's Shiki highlighter).
+(dune → `verifier.bc.js`), `build:z3api` (esbuild bundles z3-solver's API),
+`build:highlight` (esbuild bundles the editor's Shiki highlighter), and
+`build:examples` (`gen-examples.cjs` writes `dist/examples.js`).
 
 The web build is gated to dune's `web` profile (`dune build --profile web`),
 which `npm run build` passes. A plain `dune build` -- and the core CI matrix --

@@ -55,10 +55,27 @@
         padding: 12px 18px;
         border-bottom: 1px solid var(--border);
       }
-      header h1 { font-size: 15px; font-weight: 600; margin: 0; }
+      header h1 { font-size: 25px; font-weight: 600; margin: 0; }
       header .sub { color: var(--muted); font-size: 12px; }
-      .pill {
+      .example-picker {
         margin-left: auto;
+        display: flex;
+        align-items: center;
+        gap: 6px;
+        color: var(--muted);
+        font-size: 12px;
+      }
+      .example-picker select {
+        font: inherit;
+        color: var(--fg);
+        background: var(--panel);
+        border: 1px solid var(--border);
+        border-radius: 6px;
+        padding: 4px 8px;
+        cursor: pointer;
+      }
+      .pill {
+        margin-left: 12px;
         font-size: 12px;
         font-weight: 600;
         padding: 4px 10px;
@@ -172,8 +189,10 @@
   </head>
   <body>
     <header>
-      <h1>Cavalry</h1>
-      <span class="sub">client-side verifier — Why3 &amp; Z3, entirely in your browser</span>
+      <h1>Cavalry <span style="color: var(--ok);">Verifier</span></h1>
+      <label class="example-picker">Example
+        <select id="example-picker"></select>
+      </label>
       <span id="status" class="pill busy">booting…</span>
     </header>
     <main>
@@ -198,6 +217,9 @@
     <!-- Shiki highlighter (grammar + themes), self-contained; sets
          cavalryHighlight synchronously so app.js can paint the first frame. -->
     <script src="./dist/highlight.js"></script>
+    <!-- Example programs (generated from the README snippets); sets
+         cavalryExamples for the header picker. -->
+    <script src="./dist/examples.js"></script>
     <script src="./verify-core.js"></script>
     <script src="./app.js"></script>
   </body>

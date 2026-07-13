@@ -9,7 +9,8 @@
     "build:ocaml": "cd .. && dune build --root . --profile web ./web/verifier.bc.js",
     "build:z3api": "esbuild src/z3-entry.js --bundle --format=iife --global-name=z3api --define:global=globalThis --platform=browser --outfile=dist/z3-api.js",
     "build:highlight": "esbuild src/highlight-entry.js --bundle --format=iife --platform=browser --outfile=dist/highlight.js",
-    "build": "npm run vendor:z3 && npm run build:ocaml && npm run build:z3api && npm run build:highlight",
+    "build:examples": "node gen-examples.cjs",
+    "build": "npm run vendor:z3 && npm run build:ocaml && npm run build:z3api && npm run build:highlight && npm run build:examples",
     "serve": "node serve.cjs 8099",
     "test:node": "npm run build:ocaml && node e2e-node.cjs",
     "test:browser": "node e2e-browser.cjs"

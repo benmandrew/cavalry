@@ -7,8 +7,15 @@ const statusPill = document.getElementById("status");
 const results = document.getElementById("results");
 const gutter = document.getElementById("gutter");
 const highlightCode = document.getElementById("highlight-code");
+const examplePicker = document.getElementById("example-picker");
 
-const SAMPLE = `// Compute q = x / y and r = x % y by repeated subtraction.
+// The example programs come from dist/examples.js (generated from the README
+// snippets). Fall back to a single built-in program if that bundle is missing,
+// so the editor is never empty.
+const FALLBACK = {
+  slug: "euclidean-division",
+  title: "Euclidean division",
+  code: `// Compute q = x / y and r = x % y by repeated subtraction.
 procedure euclidean_div () =
   requires { x >= 0 }
   ensures { x = q * y + r && 0 <= r && r < y }
@@ -28,9 +35,38 @@ y := 17;
 q := 0;
 r := 0;
 euclidean_div()
-{ q = 2 && r = 8 }`;
+{ q = 2 && r = 8 }`,
+};
 
-editor.value = SAMPLE;
+const EXAMPLES =
+  Array.isArray(self.cavalryExamples) && self.cavalryExamples.length
+    ? self.cavalryExamples
+    : [FALLBACK];
+// Open on the Hoare-triple example if present (the simplest starting point),
+// else the first one.
+const DEFAULT_SLUG =
+  EXAMPLES.find((e) => e.slug === "hoare-triple")?.slug ?? EXAMPLES[0].slug;
+
+// Populate the header picker and load the chosen program (its highlight and
+// gutter repainted, and -- once Z3 is up -- a fresh verification kicked off).
+for (const ex of EXAMPLES) {
+  const opt = document.createElement("option");
+  opt.value = ex.slug;
+  opt.textContent = ex.title;
+  examplePicker.appendChild(opt);
+}
+examplePicker.value = DEFAULT_SLUG;
+editor.value = (EXAMPLES.find((e) => e.slug === DEFAULT_SLUG) ?? EXAMPLES[0]).code;
+
+examplePicker.addEventListener("change", () => {
+  const ex = EXAMPLES.find((e) => e.slug === examplePicker.value);
+  if (!ex) return;
+  editor.value = ex.code;
+  editor.scrollTop = 0;
+  editor.scrollLeft = 0;
+  refreshEditor();
+  verifyNow();
+});
 
 // --- Editor chrome: line-number gutter + live TextMate highlighting ---------
 // The visible text is a highlighted <pre> under a transparent textarea; the
