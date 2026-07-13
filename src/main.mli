@@ -26,9 +26,14 @@ val verify :
 val obligations_smtlib :
   ?machine_int:bool ->
   (Triple.t * Vars.t) list ->
-  (string * (string * Ast.Loc.t option * string) list) list
+  (string * (string * Ast.Loc.t option * string * (string * int) option) list)
+  list
 (** Print every proof obligation to SMT-LIB2 instead of proving it (the browser
     path). See {!Hoare.obligations_smtlib}. *)
+
+val render_browser_counterexample : ?candidate:bool -> int -> string -> string
+(** Parse and render a Z3-wasm counterexample model for the browser path. See
+    {!Hoare.render_browser_counterexample}. *)
 
 val verify_report :
   ?debug:bool ->

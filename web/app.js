@@ -158,6 +158,8 @@ async function verifyNow() {
     onProgress: (done, total) => {
       if (myGen === currentGen) setPill("busy", `verifying… ${done}/${total}`);
     },
+    renderCounterexample: (id, output, candidate) =>
+      self.cavalryRenderCounterexample(id, output, candidate),
   });
   if (myGen !== currentGen || result.stale) return; // superseded
   render(myGen, result);
@@ -238,6 +240,13 @@ function render(gen, result, { stale } = {}) {
       v.className = "note";
       v.textContent = `  (${f.verdict})`;
       li.append(v);
+      // A counterexample block (variable = value lines), when Z3 produced one.
+      if (f.counterexample) {
+        const pre = document.createElement("pre");
+        pre.className = "counterexample";
+        pre.textContent = f.counterexample.replace(/\n$/, "");
+        li.append(pre);
+      }
       ul.appendChild(li);
     }
     results.appendChild(ul);

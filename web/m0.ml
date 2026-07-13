@@ -51,7 +51,7 @@ let () =
         (fun (name, obligations) ->
           let name = if String.equal name "" then "<main>" else name in
           List.iteri
-            (fun i (expl, _loc, smtlib) ->
+            (fun i (expl, _loc, smtlib, _ce) ->
               Printf.printf "@@@ %s / %s / obligation %d: %s\n%s\n@@@END\n"
                 label name i expl smtlib)
             obligations)

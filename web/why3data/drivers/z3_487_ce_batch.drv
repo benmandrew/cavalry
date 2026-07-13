@@ -1,0 +1,16 @@
+(* Non-incremental counterexample driver for the browser's one-shot Z3-wasm
+   eval. The stock [z3_487_counterexample.drv] also sets [meta_incremental],
+   which makes the SMT-LIB2 printer emit a (push)(check-sat)(get-model) block per
+   incremental step -- correct when why3server drives Z3 command-by-command, but
+   here the whole script is handed to [eval_smtlib2_string] at once, so the
+   doubled check-sat yields two models and breaks parsing. This variant keeps
+   only [get_counterexmp] (which turns on :produce-models and a single trailing
+   (get-model)), inheriting everything else from the plain driver. *)
+
+import "z3_487.drv"
+
+theory BuiltIn
+
+  meta "get_counterexmp" ""
+
+end

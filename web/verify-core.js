@@ -26,14 +26,22 @@ function makeSolver(Z3) {
 // failure. [isStale] is polled between obligations so a superseded run (the user
 // typed again) bails without finishing -- cancellation without terminating the
 // worker. [onProgress] reports (done, total) for the UI.
+//
+// [renderCounterexample(ceId, output, candidate) -> string] is optional: when
+// given, a failing obligation's counterexample twin ([ceSmtlib]) is solved and
+// its model rendered to a display block attached as [failure.counterexample].
+// [candidate] is false only when Z3 answered [sat] (a confirmed refutation).
 async function solveObligations(parsed, solve, opts) {
   opts = opts || {};
-  const { onProgress, isStale } = opts;
+  const { onProgress, isStale, renderCounterexample } = opts;
   if (!parsed.ok) return parsed;
   const all = [];
   for (const p of parsed.procedures) {
     for (const o of p.obligations) {
-      all.push({ proc: p.name || "<main>", expl: o.expl, loc: o.loc, smtlib: o.smtlib });
+      all.push({
+        proc: p.name || "<main>", expl: o.expl, loc: o.loc,
+        smtlib: o.smtlib, ceSmtlib: o.ceSmtlib, ceId: o.ceId,
+      });
     }
   }
   const total = all.length;
@@ -43,7 +51,14 @@ async function solveObligations(parsed, solve, opts) {
     if (isStale && isStale()) return { ok: true, stale: true };
     const answer = await solve(ob.smtlib);
     if (answer !== "unsat") {
-      failures.push({ proc: ob.proc, expl: ob.expl, loc: ob.loc, verdict: answer });
+      let counterexample = "";
+      if (renderCounterexample && ob.ceSmtlib != null && ob.ceId != null) {
+        // The CE twin embeds (get-model), so its output is the answer token
+        // followed by the model; [candidate] unless Z3 confirmed with [sat].
+        const ceOut = await solve(ob.ceSmtlib);
+        counterexample = renderCounterexample(ob.ceId, ceOut, !ceOut.startsWith("sat"));
+      }
+      failures.push({ proc: ob.proc, expl: ob.expl, loc: ob.loc, verdict: answer, counterexample });
     }
     done += 1;
     if (onProgress) onProgress(done, total);

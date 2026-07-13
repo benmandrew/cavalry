@@ -9,13 +9,21 @@ open Why3
    theories from the embedded loadpath, and the driver is loaded from an embedded
    [.drv] via a hand-built [config_prover] with the datadir pinned to the
    embedded tree -- bypassing detection entirely. On native builds [browser] is
-   [None] and the original Whyconf path runs unchanged. *)
-type browser_env = { loadpath : string list; driver_file : string }
+   [None] and the original Whyconf path runs unchanged.
+
+   [ce_driver_file] is the embedded counterexamples driver (Z3's
+   [z3_487_counterexample.drv]); it drives the browser's best-effort
+   counterexample path the same way [z3_ce] does natively. *)
+type browser_env = {
+  loadpath : string list;
+  driver_file : string;
+  ce_driver_file : string;
+}
 
 let browser : browser_env option ref = ref None
 
-let configure_browser ~loadpath ~driver_file =
-  browser := Some { loadpath; driver_file }
+let configure_browser ~loadpath ~driver_file ~ce_driver_file =
+  browser := Some { loadpath; driver_file; ce_driver_file }
 
 (* Why3 configuration and the Z3 driver are loaded *lazily*: OCaml evaluates
    every linked module's top-level bindings at process startup, so binding these
@@ -136,6 +144,23 @@ let z3_ce =
              Driver.load_driver_for_prover (Lazy.force main) (Lazy.force env) cp
            )
      with _ -> None)
+
+(* The browser counterpart to [z3_ce]. Native config detection is unavailable in
+   the browser (see [config]), so the counterexamples driver is loaded from the
+   embedded [.drv] via a hand-built [config_prover], exactly as [z3_driver] loads
+   the plain one. [None] on native builds (the [z3_ce] path is used there) and,
+   best-effort, if the embedded driver fails to load -- the browser then simply
+   shows no counterexample. *)
+let browser_ce_driver =
+  lazy
+    (match !browser with
+    | None -> None
+    | Some b -> (
+        try
+          let cp = browser_config_prover b.ce_driver_file in
+          Some
+            (Driver.load_driver_for_prover (Lazy.force main) (Lazy.force env) cp)
+        with _ -> None))
 
 type result = Valid | Invalid | Failed of string [@@deriving sexp_of, ord]
 
@@ -265,6 +290,19 @@ let skolemise f =
       (consts, Term.t_subst map body)
   | _ -> ([], f)
 
+(* Extract the [(name, value)] assignments a Why3 [model] gives the *source*
+   variables named in [expose_names], dropping the WLP's internal havoc/variant
+   vars (introduced existentially in the negation) and anything not exposed.
+   Shared by the native and browser counterexample paths, which differ only in
+   how they obtain the [model]. *)
+let expose_model_elements expose_names model =
+  Model_parser.get_model_elements model
+  |> List.map ~f:(fun (e : Model_parser.model_element) ->
+      ( Model_parser.get_lsymbol_or_model_trace_name e,
+        e.Model_parser.me_concrete_value ))
+  |> List.filter ~f:(fun (n, _) -> Set.mem expose_names n)
+  |> List.dedup_and_sort ~compare:(fun (a, _) (b, _) -> String.compare a b)
+
 (* Best-effort counterexample for a failed obligation [f] (a split subgoal):
    skolemise its entry-state variables into model-reportable constants, ask Z3's
    counterexamples driver for a model, and return the [(name, value)] pairs it
@@ -300,11 +338,80 @@ let counterexample timeout base_task expose f =
       in
       match r.Call_provers.pr_models with
       | [] -> []
-      | (_, model) :: _ ->
-          Model_parser.get_model_elements model
-          |> List.map ~f:(fun (e : Model_parser.model_element) ->
-              ( Model_parser.get_lsymbol_or_model_trace_name e,
-                e.Model_parser.me_concrete_value ))
-          |> List.filter ~f:(fun (n, _) -> Set.mem expose_names n)
-          |> List.dedup_and_sort ~compare:(fun (a, _) (b, _) ->
-              String.compare a b))
+      | (_, model) :: _ -> expose_model_elements expose_names model)
+
+(* {2 Browser counterexample path}
+
+   Native [counterexample] both runs Z3 (via [wait_on_call]) and parses its
+   model, because Why3 spawns the prover as a subprocess. In the browser Z3-wasm
+   runs the solver in JavaScript, so the two halves are split: OCaml prints the
+   counterexample obligation to SMT-LIB2 here ([smtlib_ce_of_obligation]), JS
+   solves it, then hands the raw model text back for parsing ([browser_ce]). The
+   [printing_info] the model parser needs -- Why3's map from the printed SMT
+   names back to source symbols -- is retained across that async round-trip in
+   [ce_state], keyed by an integer handle returned to JS with the SMT-LIB2. *)
+
+let ce_state : (int, Printer.printing_info * String.Set.t) Hashtbl.t =
+  Hashtbl.create (module Int)
+
+let ce_counter = ref 0
+
+(* Clear the retained [printing_info]s and restart handles from 0. Called at the
+   start of each obligation-printing pass so a superseded run's state cannot
+   accumulate or be mistaken for the current one's. *)
+let reset_browser_ce () =
+  Hashtbl.clear ce_state;
+  ce_counter := 0
+
+(* Print the counterexample obligation for [f] to SMT-LIB2 and stash the
+   [printing_info] under a fresh handle, returned with the text. The
+   counterexamples driver makes the printer emit [(set-option :produce-models
+   true)] and a trailing [(get-model)], so Z3's output on [sat] carries the model
+   for [browser_ce] to parse. [None] if no CE driver is loaded (native, or a
+   failed embedded load). *)
+let smtlib_ce_of_obligation base_task expose f =
+  match Lazy.force browser_ce_driver with
+  | None -> None
+  | Some driver ->
+      let consts, body = skolemise f in
+      let task = List.fold_left ~f:Task.add_param_decl ~init:base_task consts in
+      let goal_id = Decl.create_prsymbol (Ident.id_fresh "goal") in
+      let task = Task.add_prop_decl task Decl.Pgoal goal_id body in
+      let task = Driver.prepare_task driver task in
+      let buf = Buffer.create 1024 in
+      let fmt = Format.formatter_of_buffer buf in
+      let info = Driver.print_task_prepared driver fmt task in
+      Format.pp_print_flush fmt ();
+      let expose_names =
+        List.map ~f:(fun v -> v.Term.vs_name.Ident.id_string) expose
+        |> String.Set.of_list
+      in
+      let id = !ce_counter in
+      Int.incr ce_counter;
+      Hashtbl.set ce_state ~key:id ~data:(info, expose_names);
+      Some (Buffer.contents buf, id)
+
+let smtv2_model_parser = lazy (Model_parser.lookup_model_parser "smtv2")
+
+(* Z3's raw output is the answer token ([sat]/[unknown]) followed by the model
+   s-expression; the smtv2 model parser wants that s-expression alone (native
+   [Call_provers] likewise feeds it only the post-answer text). Slice from the
+   first [(]. *)
+let model_sexp_of_output out =
+  match String.index out '(' with
+  | Some i -> String.subo out ~pos:i
+  | None -> ""
+
+(* Parse the model Z3-wasm produced for the obligation printed under [id],
+   returning the same [(name, value)] pairs as native [counterexample]: the
+   source variables named in the stashed expose set, dropping WLP-internal vars.
+   Empty if the handle is unknown (a superseded run) or no model was produced. *)
+let browser_ce id output =
+  match Hashtbl.find ce_state id with
+  | None -> []
+  | Some (info, expose_names) ->
+      let sexp = model_sexp_of_output output in
+      if String.is_empty (String.strip sexp) then []
+      else
+        let model = (Lazy.force smtv2_model_parser) info sexp in
+        expose_model_elements expose_names model

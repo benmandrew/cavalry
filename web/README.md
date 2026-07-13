@@ -18,15 +18,15 @@ and the JS half feeds those strings to Z3-wasm.
     │  source string
     ▼
  verifier.bc.js         OCaml pipeline compiled by js_of_ocaml
-    │  cavalryObligations(src) -> JSON { procedures:[ obligations:[ smtlib ] ] }
+    │  cavalryObligations(src) -> JSON { procedures:[ obligations:[ smtlib, ceSmtlib, ceId ] ] }
     ▼
  verify-core.js         async solve loop (one Z3 context per obligation)
-    │  smtlib
+    │  smtlib          (on failure: ceSmtlib -> raw model -> cavalryRenderCounterexample(ceId, …))
     ▼
  z3-built.js + .wasm    Z3 4.16, Emscripten; solves in its own worker threads
     │  unsat | sat | unknown
     ▼
- verdict + located diagnostics
+ verdict + located diagnostics + counterexample
 ```
 
 Everything runs on the main thread. `cavalryObligations` is a fast synchronous
@@ -42,6 +42,21 @@ filesystem in the browser, they are embedded (via `ocaml-crunch`) and served
 into the js_of_ocaml pseudo-filesystem with `Sys_js.mount`. `Smt.Prover`'s
 browser hook then builds the environment and driver from those, bypassing
 Why3's prover-detection (which needs a native Z3 binary).
+
+A failed obligation also carries a *counterexample* — the entry-state values
+that break the spec. Natively, Why3 runs Z3 and parses its model in one call;
+in the browser those halves are split across the same seam as the verdict. Each
+obligation is printed a second time with the *counterexamples* driver (which
+emits `(get-model)`), and the Why3 `printing_info` that maps the printed SMT
+names back to source variables is retained under the integer `ceId`. On a `sat`
+answer, `verify-core.js` hands the raw model text and `ceId` back to
+`cavalryRenderCounterexample`, which parses the model with Why3's `smtv2` parser
+and renders it through the *same* `render_counterexample`/`format_counterexample`
+the native CLI uses — arrays expanded, internal WLP variables hidden. The
+counterexample driver is a non-incremental variant (`z3_487_ce_batch.drv`),
+since the stock one emits a `(check-sat)` per incremental step and Z3-wasm
+evaluates the whole script at once. It is best-effort: a model that fails to
+parse leaves the verdict untouched and simply shows no witness.
 
 ## Editor
 
