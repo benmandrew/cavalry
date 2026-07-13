@@ -39,7 +39,7 @@ if [ -n "$missing" ]; then
 fi
 
 echo "Building..."
-dune build 2>/dev/null
+dune build
 
 # (re)generate and compile every program in both backends.
 python3 "$ROOT/bench/gen.py"
@@ -47,8 +47,8 @@ printf '{ true }\n0\n{ true }\n' > "$PROGDIR/trivial.cav"
 
 PROGRAMS=(trivial sum_loop collatz primes_trial sieve ackermann)
 for prog in "${PROGRAMS[@]}"; do
-  "$BIN" compile --no-verify              -o "$PROGDIR/${prog}_z" "$PROGDIR/$prog.cav" >/dev/null 2>&1
-  "$BIN" compile --no-verify --native-int -o "$PROGDIR/${prog}_n" "$PROGDIR/$prog.cav" >/dev/null 2>&1
+  "$BIN" compile --no-verify              -o "$PROGDIR/${prog}_z" "$PROGDIR/$prog.cav" >/dev/null
+  "$BIN" compile --no-verify --native-int -o "$PROGDIR/${prog}_n" "$PROGDIR/$prog.cav" >/dev/null
 done
 
 # Record machine metadata alongside the results (portable across macOS/Linux).
