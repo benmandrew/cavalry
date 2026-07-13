@@ -123,9 +123,43 @@ let currentGen = 0;
 let lastGood = null;
 let solve = null; // set once Z3 has loaded
 
+// Per-obligation solve budget. Matches the native CLI's default --timeout; a
+// solve that blows it is interrupted and reported as a "timeout" (see
+// makeSolver in verify-core.js).
+const SOLVE_TIMEOUT_MS = 10000;
+
 function setPill(cls, text) {
   statusPill.className = "pill " + cls;
   statusPill.textContent = text;
+}
+
+// A count-up clock shown in the status pill while a verification is in flight,
+// so a slow (or hung, up to the per-obligation timeout) solve is visibly making
+// time rather than looking frozen. [busyLabel] holds the latest progress text
+// (e.g. "verifying… 2/3"); the ticker appends elapsed seconds every 100ms.
+let busyTimer = null;
+let busyStart = 0;
+let busyLabel = "verifying…";
+
+function paintBusy() {
+  const secs = ((performance.now() - busyStart) / 1000).toFixed(1);
+  setPill("busy", `${busyLabel} ${secs}s`);
+}
+
+// Start (or restart -- a newer run supersedes the timer) the count-up.
+function startBusy() {
+  busyStart = performance.now();
+  busyLabel = "verifying…";
+  if (busyTimer) clearInterval(busyTimer);
+  paintBusy();
+  busyTimer = setInterval(paintBusy, 100);
+}
+
+function stopBusy() {
+  if (busyTimer) {
+    clearInterval(busyTimer);
+    busyTimer = null;
+  }
 }
 
 // Verify the current editor contents. Runs on the main thread: the OCaml
@@ -138,12 +172,13 @@ async function verifyNow() {
   gen += 1;
   const myGen = gen;
   currentGen = myGen;
-  setPill("busy", "verifying…");
+  startBusy();
   let parsed;
   try {
     parsed = JSON.parse(self.cavalryObligations(editor.value));
   } catch (e) {
     if (myGen === currentGen) {
+      stopBusy();
       setPill("bad", "error");
       results.replaceChildren();
       const v = document.createElement("div");
@@ -156,7 +191,10 @@ async function verifyNow() {
   const result = await VerifyCore.solveObligations(parsed, solve, {
     isStale: () => myGen !== currentGen,
     onProgress: (done, total) => {
-      if (myGen === currentGen) setPill("busy", `verifying… ${done}/${total}`);
+      if (myGen === currentGen) {
+        busyLabel = `verifying… ${done}/${total}`;
+        paintBusy();
+      }
     },
     renderCounterexample: (id, output, candidate) =>
       self.cavalryRenderCounterexample(id, output, candidate),
@@ -192,6 +230,7 @@ function locSpan(loc) {
 }
 
 function render(gen, result, { stale } = {}) {
+  stopBusy(); // a terminal verdict is about to own the pill
   results.className = stale ? "stale" : "";
   results.replaceChildren();
 
@@ -238,7 +277,10 @@ function render(gen, result, { stale } = {}) {
       if (ls) li.append(ls);
       const v = document.createElement("span");
       v.className = "note";
-      v.textContent = `  (${f.verdict})`;
+      v.textContent =
+        f.verdict === "timeout"
+          ? `  (timed out after ${SOLVE_TIMEOUT_MS / 1000}s)`
+          : `  (${f.verdict})`;
       li.append(v);
       // A counterexample block (variable = value lines), when Z3 produced one.
       if (f.counterexample) {
@@ -271,9 +313,10 @@ render.appendLastGood = (root) => {
 (async () => {
   try {
     const { Z3 } = await self.z3api.init();
-    solve = VerifyCore.makeSolver(Z3);
+    solve = VerifyCore.makeSolver(Z3, SOLVE_TIMEOUT_MS);
     verifyNow();
   } catch (e) {
+    stopBusy();
     setPill("bad", "Z3 failed");
     results.replaceChildren();
     const v = document.createElement("div");
