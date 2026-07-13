@@ -39,13 +39,16 @@ val verify :
 val obligations_smtlib :
   ?machine_int:bool ->
   (Triple.t * Vars.t) list ->
-  (string * (string * Loc.t option * string) list) list
+  (string * (string * Loc.t option * string * (string * int) option) list) list
 (** Browser path: print every proof obligation of every procedure to SMT-LIB2
     instead of proving it. Returns, per procedure, its name paired with its
-    obligations as [(explanation, location, smtlib)]; [location] is the source
-    position of the offending construct ([None] for whole-procedure obligations
-    like a plain postcondition). The strings are solved client-side in a Z3-wasm
-    worker; no prover is run here. *)
+    obligations as [(explanation, location, smtlib, counterexample)]; [location]
+    is the source position of the offending construct ([None] for
+    whole-procedure obligations like a plain postcondition), and
+    [counterexample] is the [(ce_smtlib, handle)] twin the worker solves on
+    failure to recover a model ([None] if no counterexamples driver is loaded).
+    The strings are solved client-side in a Z3-wasm worker; no prover is run
+    here. *)
 
 (** Why a verification obligation failed. Recovered from the failing subgoal's
     explanation attribute; see {!expl_of_reason} for the human wording. *)
@@ -91,6 +94,14 @@ val format_counterexample :
     string if nothing user-facing remains after hiding internal symbols).
     [status] qualifies the witness -- a [Candidate] one is flagged unconfirmed.
 *)
+
+val render_browser_counterexample : ?candidate:bool -> int -> string -> string
+(** Browser path: parse the Z3-wasm model [output] for the counterexample
+    obligation printed under [handle] (see {!obligations_smtlib}) and render it
+    to the same display block as {!format_counterexample}. [candidate] (default
+    [true]) flags the witness unconfirmed -- pass [false] only when Z3-wasm
+    answered [sat] rather than [unknown]. Empty string if nothing user-facing
+    remains. *)
 
 val verify_report :
   ?debug:bool ->

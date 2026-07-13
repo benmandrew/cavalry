@@ -11,16 +11,22 @@ const programs = {
   syntax:  `{ x >= 0 }\ny := x +\n{ y > x }`,
 };
 
+const renderCounterexample = (id, output, candidate) =>
+  globalThis.cavalryRenderCounterexample(id, output, candidate);
+
 (async () => {
   const { Z3 } = await init();
   const solve = makeSolver(Z3);
   for (const [name, src] of Object.entries(programs)) {
     const parsed = JSON.parse(globalThis.cavalryObligations(src));
-    const res = await solveObligations(parsed, solve);
+    const res = await solveObligations(parsed, solve, { renderCounterexample });
     if (!res.ok) { console.log(`${name.padEnd(8)} -> ${res.kind} error: ${res.error} @ ${JSON.stringify(res.loc)}`); continue; }
     const status = res.verified ? 'VERIFIED' : `FAILED (${res.failures.length}/${res.total})`;
     console.log(`${name.padEnd(8)} -> ${status} [${res.total} obligations]`);
-    for (const f of res.failures) console.log(`             x ${f.proc}: ${f.expl} (${f.verdict}) @ ${JSON.stringify(f.loc)}`);
+    for (const f of res.failures) {
+      console.log(`             x ${f.proc}: ${f.expl} (${f.verdict}) @ ${JSON.stringify(f.loc)}`);
+      if (f.counterexample) for (const line of f.counterexample.replace(/\n$/, '').split('\n')) console.log(`             ${line}`);
+    }
   }
   process.exit(0);
 })();

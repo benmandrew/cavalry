@@ -857,20 +857,30 @@ let verify ?debug ?timeout ?machine_int program =
    prover -- the strings are solved client-side in a Z3-wasm worker. Returns, per
    procedure, its name paired with its obligations as [(explanation, smtlib)]. *)
 let obligations_smtlib ?(machine_int = false) program =
+  (* Discard any counterexample state a previous (now superseded) pass retained
+     before minting fresh handles for this one. *)
+  Smt.Prover.reset_browser_ce ();
   let procs, (main, globals) = split_last program in
   let step ~is_main (proc_map, acc) proc =
     let (t : Triple.t) = fst proc in
     let proc_map' =
       if is_main then proc_map else Proc_map.add t.f proc proc_map
     in
-    let obligations, uses_map, _ =
+    let obligations, uses_map, merged_vars =
       build_obligations ~machine_int ~is_main globals proc_map' proc
     in
     let smt =
       List.map
         (fun (f, expl, loc) ->
           let task = Arith.task ~div:(Arith.uses_div f) ~map:uses_map in
-          (expl, Option.map Loc.of_why3 loc, Smt.Prover.smtlib_of_term task f))
+          (* Alongside the verdict obligation, print its counterexample twin: on
+             failure the worker solves [ce] to recover a model (see
+             [Smt.Prover.smtlib_ce_of_obligation]). *)
+          let ce = Smt.Prover.smtlib_ce_of_obligation task merged_vars f in
+          ( expl,
+            Option.map Loc.of_why3 loc,
+            Smt.Prover.smtlib_of_term task f,
+            ce ))
         obligations
     in
     (proc_map', (t.f, smt) :: acc)
@@ -903,3 +913,16 @@ let format_counterexample ?status ce =
       in
       let line (n, v) = Printf.sprintf "    %s = %s\n" n v in
       header ^ String.concat "" (List.map line visible)
+
+(* Browser end of the counterexample path: parse the model Z3-wasm produced for
+   the obligation printed under [handle] and render it exactly as the native CLI
+   does -- through the shared [render_counterexample]/[format_counterexample]. A
+   [candidate] witness (Z3-wasm answered [unknown], not [sat]) is flagged
+   unconfirmed. Empty string when there is nothing user-facing to show. *)
+let render_browser_counterexample ?(candidate = true) handle output =
+  let status =
+    if candidate then Smt.Prover.Candidate else Smt.Prover.Disproved
+  in
+  Smt.Prover.browser_ce handle output
+  |> render_counterexample
+  |> format_counterexample ~status

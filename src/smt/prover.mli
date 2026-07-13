@@ -6,13 +6,15 @@
 
 open Why3
 
-val configure_browser : loadpath:string list -> driver_file:string -> unit
-(** Switch the SMT layer to the browser path: build {!env} and the print driver
+val configure_browser :
+  loadpath:string list -> driver_file:string -> ce_driver_file:string -> unit
+(** Switch the SMT layer to the browser path: build {!env} and the print drivers
     from files embedded in the js_of_ocaml pseudo-filesystem instead of via Why3
     config detection (which needs a real filesystem and Z3 binary). Must be
-    called -- with the embedded stdlib loadpath and an embedded [.drv] path --
-    before anything forces {!env}. A no-op's inverse: on native builds this is
-    never called and Whyconf detection runs as before. *)
+    called -- with the embedded stdlib loadpath, an embedded plain [.drv], and
+    the embedded counterexamples [.drv] -- before anything forces {!env}. A
+    no-op's inverse: on native builds this is never called and Whyconf detection
+    runs as before. *)
 
 val env : Env.env Lazy.t
 (** The Why3 environment (theory load path), shared so callers can build tasks
@@ -87,3 +89,26 @@ val counterexample :
     display -- notably expanding an array's map literal into a concrete list.
     Best-effort and advisory: [[]] if no CE prover is configured or no model was
     produced, so it never affects the verdict. *)
+
+val reset_browser_ce : unit -> unit
+(** Clear the state {!smtlib_ce_of_obligation} retains between printing an
+    obligation and parsing its model. Call at the start of each obligation pass
+    so a superseded run cannot accumulate or leak state into the next. *)
+
+val smtlib_ce_of_obligation :
+  Task.task -> Term.vsymbol list -> Term.term -> (string * int) option
+(** The browser split of {!counterexample}'s printing half: serialise the
+    counterexample obligation for [f] (exposing the entry-state variables
+    [expose]) to SMT-LIB2 whose Z3 output carries a model, and stash the Why3
+    [printing_info] under a fresh integer handle. Returns [(smtlib, handle)];
+    the caller solves [smtlib] in Z3-wasm and passes the output back with
+    [handle] to {!browser_ce}. [None] if no counterexamples driver is loaded
+    (native builds, or a failed embedded load). *)
+
+val browser_ce :
+  int -> string -> (string * Model_parser.concrete_syntax_term) list
+(** [browser_ce handle output] parses the Z3-wasm [output] for the obligation
+    printed under [handle] by {!smtlib_ce_of_obligation}, returning the same
+    exposed [(variable, value)] pairs as native {!counterexample}. [[]] if the
+    handle is unknown (a superseded run cleared by {!reset_browser_ce}) or no
+    model was produced. *)

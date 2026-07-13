@@ -9,9 +9,14 @@
 
    JSON shape:
      ok:    { "ok": true, "procedures": [ { "name", "obligations":
-              [ { "expl", "loc": {"line","col"}|null, "smtlib" } ] } ] }
+              [ { "expl", "loc": {"line","col"}|null, "smtlib",
+                  "ceSmtlib": string|null, "ceId": int|null } ] } ] }
      error: { "ok": false, "kind": "lex"|"parse"|"type",
-              "error": string, "loc": {"line","col"}|null } *)
+              "error": string, "loc": {"line","col"}|null }
+
+   [ceSmtlib]/[ceId] are the counterexample twin of an obligation: on failure the
+   worker solves [ceSmtlib] and passes its output back through
+   [cavalryRenderCounterexample] with [ceId]. Both null if no CE driver loaded. *)
 
 open Js_of_ocaml
 module Loc = Ast.Loc
@@ -25,6 +30,7 @@ let () =
   Sys_js.mount ~path:"/why3/" (fun ~prefix:_ ~path -> Embedded_why3.read path);
   Smt.Prover.configure_browser ~loadpath:[ "/why3/stdlib" ]
     ~driver_file:"/why3/drivers/z3_487.drv"
+    ~ce_driver_file:"/why3/drivers/z3_487_ce_batch.drv"
 
 let json_of_loc : Loc.t option -> Yojson.Safe.t = function
   | None -> `Null
@@ -77,12 +83,19 @@ let verify_json (src : string) : string =
       |> Ast.Var_collection.collect |> Cavalry.Main.obligations_smtlib
     with
     | procs ->
-        let obligation (expl, loc, smtlib) : Yojson.Safe.t =
+        let obligation (expl, loc, smtlib, ce) : Yojson.Safe.t =
+          let ce_smtlib, ce_id =
+            match ce with
+            | Some (s, id) -> (`String s, `Int id)
+            | None -> (`Null, `Null)
+          in
           `Assoc
             [
               ("expl", `String expl);
               ("loc", json_of_loc loc);
               ("smtlib", `String smtlib);
+              ("ceSmtlib", ce_smtlib);
+              ("ceId", ce_id);
             ]
         in
         let procedure (name, obs) : Yojson.Safe.t =
@@ -107,3 +120,14 @@ let verify_json (src : string) : string =
 let () =
   Js.Unsafe.set Js.Unsafe.global "cavalryObligations"
     (Js.wrap_callback (fun src -> Js.string (verify_json (Js.to_string src))))
+
+(* [cavalryRenderCounterexample(ceId, output, candidate)]: parse the Z3-wasm
+   model [output] for the counterexample obligation [ceId] and return the
+   rendered display block (empty string if there is nothing to show). The worker
+   calls this only for a failing obligation whose [ceSmtlib] it has just solved. *)
+let () =
+  Js.Unsafe.set Js.Unsafe.global "cavalryRenderCounterexample"
+    (Js.wrap_callback (fun ce_id output candidate ->
+         Js.string
+           (Cavalry.Main.render_browser_counterexample
+              ~candidate:(Js.to_bool candidate) ce_id (Js.to_string output))))
