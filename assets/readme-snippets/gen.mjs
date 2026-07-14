@@ -27,7 +27,23 @@ const HERE = import.meta.dirname
 const ROOT = resolve(HERE, '../..')
 const DOCS = resolve(HERE, '..')
 const SNIPPETS = join(HERE, 'snippets')
-const README = join(ROOT, 'README.md')
+
+// Files whose <!-- snippet: … --> markers the generator owns. Each carries the
+// relative prefixes its links need, because the two files sit at different
+// depths: the top-level README is at the repo root, the examples gallery lives
+// here in assets/readme-snippets/. A snippet may appear in both.
+const TARGETS = [
+  {
+    path: join(ROOT, 'README.md'),
+    cav: slug => `assets/readme-snippets/snippets/${slug}.cav`,
+    svg: (slug, v) => `assets/snippet-${slug}-${v}.svg`,
+  },
+  {
+    path: join(HERE, 'EXAMPLES.md'),
+    cav: slug => `snippets/${slug}.cav`,
+    svg: (slug, v) => `../snippet-${slug}-${v}.svg`,
+  },
+]
 
 const fail = msg => { console.error(`gen.mjs: ${msg}`); process.exit(1) }
 
@@ -80,41 +96,52 @@ ${lines}
 `
 }
 
-// The README block for a snippet: a link to the source .cav wrapping a
-// theme-aware <picture>. Emitted verbatim so re-running is a no-op.
-const block = slug => `<!-- snippet: ${slug} -->
-<a href="assets/readme-snippets/snippets/${slug}.cav">
+// The marker block for a snippet: a link to the source .cav wrapping a
+// theme-aware <picture>. The link prefixes come from the target file so each
+// resolves relative to its own location. Emitted verbatim so re-running is a
+// no-op.
+const block = (slug, t) => `<!-- snippet: ${slug} -->
+<a href="${t.cav(slug)}">
   <picture>
-    <source media="(prefers-color-scheme: dark)" srcset="assets/snippet-${slug}-dark.svg">
-    <img alt="Cavalry code snippet" src="assets/snippet-${slug}-light.svg">
+    <source media="(prefers-color-scheme: dark)" srcset="${t.svg(slug, 'dark')}">
+    <img alt="Cavalry code snippet" src="${t.svg(slug, 'light')}">
   </picture>
 </a>
 <!-- /snippet -->`
 
 const MARKER = /<!-- snippet: (\S+) -->[\s\S]*?<!-- \/snippet -->/g
+const rel = p => p.replace(`${ROOT}/`, '')
 
-const readmeSrc = readFileSync(README, 'utf8')
-const readmeSlugs = [...readmeSrc.matchAll(MARKER)].map(m => m[1])
+// Read every target file and collect the slugs it references.
+const files = TARGETS.map(t => {
+  const src = readFileSync(t.path, 'utf8')
+  return { t, src, slugs: [...src.matchAll(MARKER)].map(m => m[1]) }
+})
+const allSlugs = [...new Set(files.flatMap(f => f.slugs))]
 const fileSlugs = readdirSync(SNIPPETS)
   .filter(f => f.endsWith('.cav')).map(f => f.replace(/\.cav$/, '')).sort()
 
-// Guard against the two ways the mapping can drift: a marker naming a snippet
-// that doesn't exist, and a snippet source with no marker to render it.
-const dupes = readmeSlugs.filter((s, i) => readmeSlugs.indexOf(s) !== i)
-const missing = readmeSlugs.filter(s => !fileSlugs.includes(s))
-const orphans = fileSlugs.filter(s => !readmeSlugs.includes(s))
-if (dupes.length) fail(`duplicate README markers: ${[...new Set(dupes)].join(', ')}`)
-if (missing.length) fail(`README references snippets with no source file: ${missing.join(', ')}`)
-if (orphans.length) fail(`snippet source files with no README marker: ${orphans.map(s => s + '.cav').join(', ')}`)
+// Guard against the ways the mapping can drift: a slug listed twice in one file,
+// a marker naming a snippet that doesn't exist, and a snippet source shown by no
+// marker at all. A slug appearing in more than one file is fine (a snippet may
+// be both a README highlight and a gallery entry), so dupes are checked per file.
+for (const f of files) {
+  const dupes = f.slugs.filter((s, i) => f.slugs.indexOf(s) !== i)
+  if (dupes.length) fail(`duplicate markers in ${rel(f.t.path)}: ${[...new Set(dupes)].join(', ')}`)
+}
+const missing = allSlugs.filter(s => !fileSlugs.includes(s))
+const orphans = fileSlugs.filter(s => !allSlugs.includes(s))
+if (missing.length) fail(`markers reference snippets with no source file: ${missing.join(', ')}`)
+if (orphans.length) fail(`snippet source files shown by no marker: ${orphans.map(s => s + '.cav').join(', ')}`)
 
-// Compute every output (README + SVGs) into a path -> content map.
+// Compute every output (each target file + the SVGs) into a path -> content map.
 const outputs = new Map()
-for (const slug of readmeSlugs) {
+for (const slug of allSlugs) {
   const code = readFileSync(join(SNIPPETS, `${slug}.cav`), 'utf8').replace(/\n+$/, '')
   outputs.set(join(DOCS, `snippet-${slug}-light.svg`), render(code, LIGHT.name))
   outputs.set(join(DOCS, `snippet-${slug}-dark.svg`), render(code, DARK.name))
 }
-outputs.set(README, readmeSrc.replace(MARKER, (_, slug) => block(slug)))
+for (const f of files) outputs.set(f.t.path, f.src.replace(MARKER, (_, slug) => block(slug, f.t)))
 
 if (CHECK) {
   const stale = [...outputs]
@@ -125,8 +152,8 @@ if (CHECK) {
     for (const p of stale) console.error(`  - ${p}`)
     process.exit(1)
   }
-  console.log(`gen.mjs: up to date (${readmeSlugs.length} snippets).`)
+  console.log(`gen.mjs: up to date (${allSlugs.length} snippets).`)
 } else {
   for (const [p, content] of outputs) writeFileSync(p, content)
-  console.log(`Rendered ${readmeSlugs.length} snippets (light + dark) and updated the README.`)
+  console.log(`Rendered ${allSlugs.length} snippets (light + dark) and updated ${files.length} file(s).`)
 }

@@ -18,9 +18,15 @@ monospace advance. Because the colours come from the grammar and the editor
 settings, the images stay in step with what the extension shows — change the
 grammar, re-run, and every image updates.
 
+The generator owns marker blocks in two files: the top-level `README.md` (a few
+highlighted snippets) and [`EXAMPLES.md`](EXAMPLES.md) here (the full gallery). A
+snippet may appear in both; the two files sit at different depths, so `gen.mjs`
+gives each its own relative link prefixes (see `TARGETS`).
+
 Each snippet has a *slug* (`euclidean-division`) shared by three things: its
 source `snippets/<slug>.cav`, its two `assets/snippet-<slug>-{light,dark}.svg`
-images, and a marker block in the README that the generator owns:
+images, and a marker block the generator owns (as it appears in the top-level
+README):
 
 ```html
 <!-- snippet: euclidean-division -->
@@ -49,10 +55,11 @@ npm run build     # render the SVGs and fill in the README blocks
 npm run check     # verify everything on disk is up to date (exit 1 if not)
 ```
 
-`build` walks the README markers, renders each referenced snippet, and writes
-its two SVGs. It errors if a marker names a missing `.cav`, or a `.cav` has no
-marker — so a half-added snippet is caught. `check` does the same work in memory
-and compares against the committed files without writing anything.
+`build` walks the markers in both files, renders each referenced snippet, and
+writes its two SVGs. It errors if a marker names a missing `.cav`, or a `.cav`
+has no marker in either file — so a half-added snippet is caught. `check` does
+the same work in memory and compares against the committed files without writing
+anything.
 
 ## Adding or editing a snippet
 
@@ -60,7 +67,9 @@ Editing is a one-liner: change a `.cav` file and re-run `npm run build`. To add 
 snippet, do both halves, then rebuild:
 
 1. Create `snippets/<slug>.cav`.
-2. Add a marker block for `<slug>` to the README (copy the shape above).
+2. Add a marker block for `<slug>` to at least one target file — `EXAMPLES.md`
+   for the gallery, and/or the top-level README to highlight it (copy the shape
+   above; each file's own link prefixes are filled in on build).
 
 ## Staying in sync automatically
 

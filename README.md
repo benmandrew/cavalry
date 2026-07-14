@@ -1,69 +1,45 @@
 # Cavalry
 
-![](assets/cavalry-banner.png)
-
-Cavalry is a mini programming language of my own design where written programs can be "verified", i.e. the implementation of the program can be rigorously checked against its logical specification for correctness, without ever running the code.
+Cavalry is an imperative programming language whose programs can be *verified*, i.e. the implementation of the program can be rigorously checked against its logical specification for correctness, without ever running the code.
 
 Programs are built from integers, booleans, bounded arrays, loops, and procedures that can return values, and their specifications quantify over program state with `forall` and `exists`. Verification covers not just partial correctness but termination too: loops and recursive procedures carry `variant` measures that prove they finish, giving total correctness. A verified program can then be compiled to a native executable.
 
-Details about Cavalry and Hoare logic are in an article on my website [here](https://www.benmandrew.com/articles/cavalry).
+For the theory behind Cavalry and Hoare logic, see the [article on my website](https://www.benmandrew.com/articles/cavalry). Cavalry also runs entirely in the browser — the whole pipeline, Why3 and Z3 included, compiled to JavaScript and WebAssembly with no server round-trip; see [`web/`](web/README.md).
 
-Cavalry also runs entirely in the browser — the whole pipeline, Why3 and Z3
-included, compiled to JavaScript and WebAssembly with no server round-trip.
-See [`web/`](web/README.md) for the client-side verifier and how it is built.
+## Setup
 
-## Requirements
+You need OCaml >= 4.14 with opam, and [Why3](https://www.why3.org/) driving the
+[Z3](https://github.com/Z3Prover/z3) 4.16.0 satisfiability-modulo-theories (SMT)
+solver, which discharges the verification proof obligations. From a checkout of the repository:
 
-The recommended way to get a working toolchain is [Nix](https://nixos.org/) with
-[flakes enabled](https://nixos.wiki/wiki/Flakes): the bundled flake provisions
-opam and the native libraries the project builds against. Setting the toolchain
-up by hand instead needs:
-
-- OCaml >= 4.14 and opam
-- [Why3](https://www.why3.org/) with the [Z3](https://github.com/Z3Prover/z3) 4.16.0 SMT solver, used to discharge verification proof obligations (the Nix dev shell supplies Z3; without Nix, install it yourself, e.g. `brew install z3`)
-
-## Getting started
-
-```bash
-git clone git@github.com:benmandrew/cavalry.git
-cd cavalry
-```
-
-### With Nix (recommended)
+**With Nix (recommended).** The bundled flake ([flakes enabled](https://nixos.wiki/wiki/Flakes))
+provisions opam, the native libraries, and Z3:
 
 ```bash
 nix develop
 ```
 
-Entering the dev shell for the first time bootstraps a local opam switch,
-installs the project dependencies, and runs `why3 config detect` so Why3 can
-find Z3 (which the shell provides). A stamp file guards this so it only happens
-once per clone. If
-you use [direnv](https://direnv.net/), `direnv allow` enters the shell (and runs
-the bootstrap) automatically.
+The first entry bootstraps a local opam switch, installs the dependencies, and
+runs `why3 config detect` so Why3 can find Z3; a stamp file guards this so it
+happens only once per checkout. With [direnv](https://direnv.net/), `direnv allow`
+enters the shell and bootstraps automatically.
 
-### Without Nix
-
-Provision the opam switch and prover yourself (install Z3 4.16.0 first, e.g.
-`brew install z3`):
+**Without Nix.** Install Z3 4.16.0 yourself (e.g. `brew install z3`), then
+provision the switch and prover:
 
 ```bash
 opam install --deps-only --with-test .
 why3 config detect  # let Why3 find the Z3 prover
 ```
 
-## Running
-
-Once the environment is ready, build the project and exercise a program:
+## Usage
 
 ```bash
 dune build
-# Verify [example.cav]
-dune exec -- cav verify example.cav
-# Run [example.cav]
-dune exec -- cav run example.cav
-# Compile [example.cav] to a native executable (gated on verification)
-dune exec -- cav compile example.cav
+dune exec -- cav verify example.cav    # check the pre/postconditions hold
+dune exec -- cav run example.cav       # interpret the program
+dune exec -- cav compile example.cav   # compile to a native executable (gated on verification)
+dune runtest                           # run the test suite
 ```
 
 By default the prover reasons over unbounded (mathematical) integers. Pass
@@ -71,17 +47,13 @@ By default the prover reasons over unbounded (mathematical) integers. Pass
 OCaml's 63-bit machine integers instead, in which case every arithmetic
 operation must additionally be proven not to overflow.
 
-## Testing
+## Examples
 
-```bash
-dune runtest
-```
-
-## Example programs
-
-Each example below is a standalone program in
-[`assets/readme-snippets/snippets/`](assets/readme-snippets/snippets); verify any of
-them yourself with `dune exec -- cav verify <file>`.
+The three examples below cover the core constructs; the rest — returning
+values, arrays with `forall`/`exists`, booleans, recursion, and how a failed
+proof is reported — are in [Cavalry by example](assets/readme-snippets/EXAMPLES.md).
+Each is a standalone program in [`assets/readme-snippets/snippets/`](assets/readme-snippets/snippets);
+verify any of them with `dune exec -- cav verify <file>`.
 
 ### A Hoare triple
 
@@ -126,95 +98,6 @@ directly.
   <picture>
     <source media="(prefers-color-scheme: dark)" srcset="assets/snippet-euclidean-division-dark.svg">
     <img alt="Cavalry code snippet" src="assets/snippet-euclidean-division-light.svg">
-  </picture>
-</a>
-<!-- /snippet -->
-
-### Returning a value
-
-A procedure can also return a value. A `returns { r : ty }` clause names the
-result binder its `ensures` constrains; the body assigns it, and a call binds the
-result at an assignment. The caller still reasons from the contract alone.
-
-<!-- snippet: returning-value -->
-<a href="assets/readme-snippets/snippets/returning-value.cav">
-  <picture>
-    <source media="(prefers-color-scheme: dark)" srcset="assets/snippet-returning-value-dark.svg">
-    <img alt="Cavalry code snippet" src="assets/snippet-returning-value-light.svg">
-  </picture>
-</a>
-<!-- /snippet -->
-
-### Filling an array
-
-Bounded arrays are created with `array(n)` (zero-initialised), indexed with
-`a[i]`, and sized with `len(a)`. A `forall` in the invariant states what holds
-of every element filled so far.
-
-<!-- snippet: array-fill -->
-<a href="assets/readme-snippets/snippets/array-fill.cav">
-  <picture>
-    <source media="(prefers-color-scheme: dark)" srcset="assets/snippet-array-fill-dark.svg">
-    <img alt="Cavalry code snippet" src="assets/snippet-array-fill-light.svg">
-  </picture>
-</a>
-<!-- /snippet -->
-
-### Existential specifications
-
-Where `forall` constrains every element, `exists` asserts that some element has
-a property — here, that a value written into the array is still present.
-
-<!-- snippet: array-exists -->
-<a href="assets/readme-snippets/snippets/array-exists.cav">
-  <picture>
-    <source media="(prefers-color-scheme: dark)" srcset="assets/snippet-array-exists-dark.svg">
-    <img alt="Cavalry code snippet" src="assets/snippet-array-exists-light.svg">
-  </picture>
-</a>
-<!-- /snippet -->
-
-### Booleans and compound guards
-
-Booleans are first-class values. A guard may combine comparisons with `&&`, `||`,
-and `!`, and short-circuits like most languages — so an array read stays inside
-its bounds. A boolean variable holds a flag, appears as a bare proposition in a
-specification, and an `if` may drop its `else` when the missing branch is a no-op.
-
-<!-- snippet: booleans -->
-<a href="assets/readme-snippets/snippets/booleans.cav">
-  <picture>
-    <source media="(prefers-color-scheme: dark)" srcset="assets/snippet-booleans-dark.svg">
-    <img alt="Cavalry code snippet" src="assets/snippet-booleans-light.svg">
-  </picture>
-</a>
-<!-- /snippet -->
-
-### Recursion
-
-Procedures may call themselves. A `variant` on the procedure — decreasing across
-each recursive call — proves the recursion terminates, just as it does for a loop.
-
-<!-- snippet: recursive-procedure -->
-<a href="assets/readme-snippets/snippets/recursive-procedure.cav">
-  <picture>
-    <source media="(prefers-color-scheme: dark)" srcset="assets/snippet-recursive-procedure-dark.svg">
-    <img alt="Cavalry code snippet" src="assets/snippet-recursive-procedure-light.svg">
-  </picture>
-</a>
-<!-- /snippet -->
-
-### Catching a bad specification
-
-When a program does not meet its specification, verification fails and reports
-the obligation it could not prove instead of accepting the program. The same
-check catches arithmetic overflow under `--machine-int` (see [Running](#running)).
-
-<!-- snippet: failing-spec -->
-<a href="assets/readme-snippets/snippets/failing-spec.cav">
-  <picture>
-    <source media="(prefers-color-scheme: dark)" srcset="assets/snippet-failing-spec-dark.svg">
-    <img alt="Cavalry code snippet" src="assets/snippet-failing-spec-light.svg">
   </picture>
 </a>
 <!-- /snippet -->
