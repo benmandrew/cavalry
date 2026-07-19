@@ -90,6 +90,20 @@ examplePicker.addEventListener("change", () => {
 
 const darkQuery = matchMedia("(prefers-color-scheme: dark)");
 
+// The editor source split into lines, cached so a single render pass (which asks
+// for many lines across the gutter, outline, and detail) splits the buffer once
+// rather than per lookup. Invalidated whenever the source text changes.
+let _srcLinesText = null;
+let _srcLines = [];
+function sourceLines() {
+  const v = editor.value;
+  if (_srcLinesText !== v) {
+    _srcLinesText = v;
+    _srcLines = v.split("\n");
+  }
+  return _srcLines;
+}
+
 // Repaint the highlight layer from the current source. Falls back to plain
 // (escaped, via textContent) if the Shiki bundle failed to load.
 function paintHighlight() {
@@ -102,7 +116,7 @@ function paintHighlight() {
 
 // Rebuild the gutter to one number per source line.
 function paintGutter() {
-  const n = editor.value.split("\n").length;
+  const n = sourceLines().length;
   let s = "";
   for (let i = 1; i <= n; i++) s += (i > 1 ? "\n" : "") + i;
   gutter.textContent = s;
@@ -316,7 +330,7 @@ function verdictText(verdict) {
 // The trimmed source text of a 1-based line, for interleaving in the outline.
 function sourceLine(line) {
   if (!line) return "";
-  const lines = editor.value.split("\n");
+  const lines = sourceLines();
   return (lines[line - 1] ?? "").trim();
 }
 
@@ -335,7 +349,7 @@ function inferKind(text) {
 
 // --- Jumping ----------------------------------------------------------------
 function jumpTo(line, col) {
-  const lines = editor.value.split("\n");
+  const lines = sourceLines();
   let pos = 0;
   for (let i = 0; i < line - 1 && i < lines.length; i++) pos += lines[i].length + 1;
   pos += Math.max(0, col - 1);
@@ -351,6 +365,12 @@ function jumpTo(line, col) {
 // whose line matches no statement is gathered into a trailing "postcondition"
 // step, so nothing Z3 checked is hidden.
 function stepsFor(proc) {
+  // Memoised per proc: the partition depends only on the parse (outline lines and
+  // obligation locations), never on verdicts -- which mutate the shared obligation
+  // objects in place, inside the arrays returned here. Each parse yields fresh proc
+  // objects, so the cache invalidates itself. This matters because stepsFor is hot:
+  // it is called for every render of every pane, once per streamed verdict.
+  if (proc._steps) return proc._steps;
   const outline = proc.outline || [];
   const obs = proc.obligations || [];
   const lineOf = (o) => (o.loc ? o.loc.line : null);
@@ -367,7 +387,7 @@ function stepsFor(proc) {
   if (trailing.length) {
     steps.push({ kind: "post", loc: null, assertion: null, obligations: trailing });
   }
-  return steps;
+  return (proc._steps = steps);
 }
 
 // --- Rendering: procedure tabs ---------------------------------------------
@@ -826,6 +846,42 @@ function firstFailingStep(procIdx) {
   return -1;
 }
 
+// Reflect a single obligation's freshly-landed verdict without rebuilding the
+// panes. A streamed verdict changes only status colouring (and, on the visible
+// step, the obligation card), so touch just those nodes: the owning proc's tab
+// dot, the outline row's brace tint, and -- when that step is on screen -- its
+// detail card. Locates the obligation by reference against the memoised steps.
+function updateObligationView(o) {
+  if (!o || !parsedNow || !parsedNow.ok) return;
+  for (let pi = 0; pi < parsedNow.procedures.length; pi++) {
+    const proc = parsedNow.procedures[pi];
+    const steps = stepsFor(proc);
+    const si = steps.findIndex((s) => s.obligations.includes(o));
+    if (si < 0) continue;
+
+    // Proc tab dot: recompute the worst status across the whole procedure.
+    const tab = procTabs.children[pi];
+    const dot = tab && tab.querySelector(".dot");
+    if (dot) {
+      const st = worst((proc.obligations || []).map((x) => statusOf(x.verdict)));
+      dot.className = "dot" + (st === "none" ? "" : " " + st);
+    }
+
+    // Outline row + detail pane only when this proc is the one on screen (the
+    // outline renders a single active procedure; children are 1:1 with steps).
+    if (pi === activeProcIdx) {
+      const row = outlineEl.children[si];
+      const assert = row && row.querySelector(".ol-assert");
+      if (assert) {
+        const ls = worst(steps[si].obligations.map((x) => statusOf(x.verdict)));
+        assert.className = "ol-assert" + (ls === "none" ? "" : " " + ls);
+      }
+      if (si === activeStepIdx) renderDetail();
+    }
+    return;
+  }
+}
+
 // A parse/type error: keep the last good outline visible but dimmed, and put the
 // message (with a clickable location) at the top of the detail pane.
 function renderError(parsed) {
@@ -930,9 +986,7 @@ async function verifyNow() {
             focused = true;
             focusFirstFailure();
           } else {
-            renderTabs();
-            renderOutline();
-            renderDetail();
+            updateObligationView(o);
           }
         } catch (e) {
           console.error("verdict render failed", e);
