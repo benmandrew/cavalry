@@ -49,26 +49,12 @@ operation must additionally be proven not to overflow.
 
 ## Examples
 
-The three examples below cover the core constructs; the rest — returning
-values, arrays with `forall`/`exists`, booleans, recursion, and how a failed
-proof is reported — are in [Cavalry by example](assets/readme-snippets/EXAMPLES.md).
-Each is a standalone program in [`assets/readme-snippets/snippets/`](assets/readme-snippets/snippets);
+The two examples below cover loops and recursive procedures; the rest —
+straight-line Hoare triples, returning values, arrays with `forall`/`exists`,
+booleans, division and modulo, and how a failed proof is reported — are in
+[Cavalry by example](assets/readme-snippets/EXAMPLES.md). Each is a standalone
+program in [`assets/readme-snippets/snippets/`](assets/readme-snippets/snippets);
 verify any of them with `dune exec -- cav verify <file>`.
-
-### A Hoare triple
-
-Verification rests on the Hoare triple `{P} c {Q}`: if precondition `P` holds
-before command `c` runs, postcondition `Q` holds afterwards. The simplest
-programs are straight-line assignments, with no loops or procedures.
-
-<!-- snippet: hoare-triple -->
-<a href="assets/readme-snippets/snippets/hoare-triple.cav">
-  <picture>
-    <source media="(prefers-color-scheme: dark)" srcset="assets/snippet-hoare-triple-dark.svg">
-    <img alt="Cavalry code snippet" src="assets/snippet-hoare-triple-light.svg">
-  </picture>
-</a>
-<!-- /snippet -->
 
 ### Computing triangle numbers
 
@@ -85,19 +71,19 @@ iteration — proves termination, giving total correctness.
 </a>
 <!-- /snippet -->
 
-### Procedures and contracts
+### Procedures, contracts, and recursion
 
 A procedure is verified once against its contract: `requires` and `ensures` are
 its pre- and postcondition, and `writes` frames the globals it may modify.
-Callers reason from the contract alone, not from the body. Division `/` and
-modulo `%` are part of the logic, so the postcondition can name the result
-directly.
+Callers — including the procedure itself, when it recurses — reason from the
+contract alone, not from the body. A `variant` that strictly decreases at each
+recursive call proves the recursion terminates, giving total correctness.
 
-<!-- snippet: euclidean-division -->
-<a href="assets/readme-snippets/snippets/euclidean-division.cav">
+<!-- snippet: recursive-procedure -->
+<a href="assets/readme-snippets/snippets/recursive-procedure.cav">
   <picture>
-    <source media="(prefers-color-scheme: dark)" srcset="assets/snippet-euclidean-division-dark.svg">
-    <img alt="Cavalry code snippet" src="assets/snippet-euclidean-division-light.svg">
+    <source media="(prefers-color-scheme: dark)" srcset="assets/snippet-recursive-procedure-dark.svg">
+    <img alt="Cavalry code snippet" src="assets/snippet-recursive-procedure-light.svg">
   </picture>
 </a>
 <!-- /snippet -->
