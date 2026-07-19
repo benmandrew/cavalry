@@ -67,6 +67,7 @@ async function setEditor(page, text) {
     args: ["--no-sandbox", "--disable-setuid-sandbox"],
   });
   const page = await browser.newPage();
+  await page.setViewport({ width: 1440, height: 900 }); // wide enough for the three-pane layout
   page.on("console", (m) => { if (m.type() === "error") console.log("  [console.error]", m.text()); });
   page.on("pageerror", (e) => console.log("  [pageerror]", e.message));
 
@@ -110,6 +111,22 @@ async function setEditor(page, text) {
     if (proof.tabs < 1) throw new Error(`proof pane has ${proof.tabs} procedure tabs`);
     if (proof.rows < 1) throw new Error("proof outline has no rows");
     console.log(`  ok: proof pane (${proof.tabs} procedure(s), ${proof.rows} outline rows)`);
+
+    // 1b*. Resizable panes: dragging the first divider left narrows the editor.
+    const edWidth = () => page.$eval(".editor-wrap", (el) => el.getBoundingClientRect().width);
+    const beforeW = await edWidth();
+    const grip = await page.$eval('[data-resizer="0"]', (el) => {
+      const r = el.getBoundingClientRect();
+      return { x: r.x + r.width / 2, y: r.y + r.height / 2 };
+    });
+    await page.mouse.move(grip.x, grip.y);
+    await page.mouse.down();
+    await page.mouse.move(grip.x - 140, grip.y, { steps: 10 });
+    await page.mouse.up();
+    const afterW = await edWidth();
+    if (!(afterW < beforeW - 40))
+      throw new Error(`resizer did not narrow the editor: ${Math.round(beforeW)} -> ${Math.round(afterW)}`);
+    console.log(`  ok: resizer narrows editor (${Math.round(beforeW)} -> ${Math.round(afterW)} px)`);
 
     // 1b''. A two-procedure program: a tab each for the callee and main, a
     // multi-step outline, and a stepper that moves the active row.

@@ -128,6 +128,72 @@ editor.addEventListener("scroll", syncScroll);
 darkQuery.addEventListener("change", paintHighlight);
 refreshEditor();
 
+// --- Resizable panes --------------------------------------------------------
+// The three columns are grid tracks separated by two draggable .resizer bars;
+// dragging shifts width between the two panes on either side. Sizes are fr units
+// (so the layout stays proportional on window resize) and persist in
+// localStorage. Below the stacking breakpoint the media query takes over and the
+// inline template is cleared.
+const mainEl = document.querySelector("main");
+const narrowQuery = matchMedia("(max-width: 1024px)");
+let cols = [4, 3, 3]; // fr units: editor | proof | detail (default 40/30/30)
+
+function applyCols() {
+  if (narrowQuery.matches) {
+    mainEl.style.gridTemplateColumns = "";
+    return;
+  }
+  mainEl.style.gridTemplateColumns = `minmax(200px, ${cols[0]}fr) 6px minmax(280px, ${cols[1]}fr) 6px minmax(220px, ${cols[2]}fr)`;
+}
+
+try {
+  const saved = JSON.parse(localStorage.getItem("cavalry.cols"));
+  if (Array.isArray(saved) && saved.length === 3 && saved.every((n) => typeof n === "number" && n > 0))
+    cols = saved;
+} catch (_) {
+  /* first visit or storage blocked */
+}
+applyCols();
+narrowQuery.addEventListener("change", applyCols);
+
+for (const rz of document.querySelectorAll(".resizer")) {
+  rz.addEventListener("pointerdown", (e) => {
+    if (narrowQuery.matches) return;
+    e.preventDefault();
+    const i = Number(rz.dataset.resizer); // 0: editor|proof, 1: proof|detail
+    const startX = e.clientX;
+    const pxPerFr =
+      mainEl.getBoundingClientRect().width / (cols[0] + cols[1] + cols[2]);
+    const a0 = cols[i];
+    const b0 = cols[i + 1];
+    const MIN = 0.25;
+    rz.classList.add("dragging");
+    rz.setPointerCapture(e.pointerId);
+    const move = (ev) => {
+      const d = (ev.clientX - startX) / pxPerFr;
+      let a = a0 + d;
+      let b = b0 - d;
+      if (a < MIN) { b -= MIN - a; a = MIN; }
+      if (b < MIN) { a -= MIN - b; b = MIN; }
+      cols[i] = a;
+      cols[i + 1] = b;
+      applyCols();
+    };
+    const up = () => {
+      rz.classList.remove("dragging");
+      rz.removeEventListener("pointermove", move);
+      rz.removeEventListener("pointerup", up);
+      try {
+        localStorage.setItem("cavalry.cols", JSON.stringify(cols));
+      } catch (_) {
+        /* storage blocked */
+      }
+    };
+    rz.addEventListener("pointermove", move);
+    rz.addEventListener("pointerup", up);
+  });
+}
+
 // Editor metrics, mirrored from the CSS custom properties, so the outline can
 // scroll the source to a given line without stealing focus (jumpTo, which
 // focuses and selects, is reserved for an explicit click on a location).
@@ -562,9 +628,6 @@ function renderAssertion(assertion) {
     lbl.className = "assert-tag";
     lbl.textContent = "Assume";
     wrap.append(lbl, bulletList(assumptions));
-    const imp = document.createElement("div");
-    imp.className = "assert-implies";
-    imp.textContent = "⟹";
     wrap.appendChild(imp);
   }
   const lbl = document.createElement("div");

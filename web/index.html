@@ -92,16 +92,24 @@
       main {
         flex: 1;
         display: grid;
-        grid-template-columns: minmax(260px, 1fr) minmax(340px, 1.25fr) minmax(280px, 1fr);
+        grid-template-columns: minmax(200px, 4fr) 6px minmax(280px, 3fr) 6px minmax(220px, 3fr);
         min-height: 0;
       }
       main > * { min-width: 0; min-height: 0; }
+      /* Draggable dividers between the columns (JS adjusts the grid tracks). */
+      .resizer {
+        cursor: col-resize;
+        background: var(--border);
+        transition: background 0.1s;
+      }
+      .resizer:hover, .resizer.dragging { background: var(--accent); }
       @media (max-width: 1024px) {
         main {
           grid-template-columns: 1fr;
           grid-auto-rows: minmax(240px, auto);
           overflow: auto;
         }
+        .resizer { display: none; }
       }
       /* The editor is a transparent textarea laid over a highlighted <pre>, with
          a line-number gutter down the left. All three share the metrics above so
@@ -298,7 +306,6 @@
       .assertion-structured { font-family: var(--mono); font-size: 12.5px; }
       .assert-quant { color: var(--muted); font-style: italic; margin-bottom: 4px; overflow-wrap: anywhere; }
       .assert-tag { font-size: 10.5px; text-transform: uppercase; letter-spacing: 0.04em; color: var(--muted); margin: 2px 0; }
-      .assert-implies { color: var(--accent); font-weight: 600; margin: 4px 0 4px 2px; }
       ul.assert-list { list-style: none; margin: 0 0 2px; padding: 0; }
       ul.assert-list li {
         position: relative;
@@ -349,6 +356,7 @@
           <textarea id="editor" spellcheck="false" autocomplete="off" autocapitalize="off" autocorrect="off" wrap="off"></textarea>
         </div>
       </div>
+      <div class="resizer" data-resizer="0" title="Drag to resize"></div>
       <section class="proof">
         <div class="proof-head">
           <div id="proc-tabs" class="proc-tabs"></div>
@@ -362,6 +370,7 @@
           <span id="step-label" class="step-label"></span>
         </div>
       </section>
+      <div class="resizer" data-resizer="1" title="Drag to resize"></div>
       <aside id="detail" class="detail"></aside>
     </main>
     <!-- Order matters: the OCaml pipeline and Z3's Emscripten module each set a
