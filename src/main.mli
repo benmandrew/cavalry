@@ -31,6 +31,14 @@ val obligations_smtlib :
 (** Print every proof obligation to SMT-LIB2 instead of proving it (the browser
     path). See {!Hoare.obligations_smtlib}. *)
 
+val proof_outline :
+  ?machine_int:bool ->
+  (Triple.t * Vars.t) list ->
+  (string * (Ast.Loc.t option * string) list) list
+(** Per procedure, the WLP assertion threaded before each statement, rendered in
+    Cavalry surface syntax for display alongside the source. See
+    {!Hoare.proof_outline}. *)
+
 val render_browser_counterexample : ?candidate:bool -> int -> string -> string
 (** Parse and render a Z3-wasm counterexample model for the browser path. See
     {!Hoare.render_browser_counterexample}. *)

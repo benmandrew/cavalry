@@ -44,6 +44,7 @@ let get_ast_string ?(fname = "<input>") src =
 let verify = Hoare.verify
 let verify_report = Hoare.verify_report
 let obligations_smtlib = Hoare.obligations_smtlib
+let proof_outline = Hoare.proof_outline
 let render_browser_counterexample = Hoare.render_browser_counterexample
 
 let exec path =

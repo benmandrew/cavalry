@@ -8,11 +8,17 @@
    the async Z3 solve loop live entirely in JavaScript.
 
    JSON shape:
-     ok:    { "ok": true, "procedures": [ { "name", "obligations":
-              [ { "expl", "loc": {"line","col"}|null, "smtlib",
-                  "ceSmtlib": string|null, "ceId": int|null } ] } ] }
+     ok:    { "ok": true, "procedures": [ { "name",
+              "obligations": [ { "expl", "loc": {"line","col"}|null, "smtlib",
+                  "ceSmtlib": string|null, "ceId": int|null } ],
+              "outline": [ { "loc": {"line","col"}|null, "assertion": string } ]
+              } ] }
      error: { "ok": false, "kind": "lex"|"parse"|"type",
               "error": string, "loc": {"line","col"}|null }
+
+   [outline] is the WLP proof outline: the assertion the calculus threads
+   immediately before each statement (in Cavalry surface syntax), ordered
+   top-of-body to bottom, for display interleaved with the source.
 
    [ceSmtlib]/[ceId] are the counterexample twin of an obligation: on failure the
    worker solves [ceSmtlib] and passes its output back through
@@ -77,12 +83,19 @@ let verify_json (src : string) : string =
         | Some bs -> bs
         | None -> []
       in
-      List.map
-        (Ast.Triple.translate ~is_bool ~is_bool_array ~proc_bool_params)
-        ut
-      |> Ast.Var_collection.collect |> Cavalry.Main.obligations_smtlib
+      let ast =
+        List.map
+          (Ast.Triple.translate ~is_bool ~is_bool_array ~proc_bool_params)
+          ut
+        |> Ast.Var_collection.collect
+      in
+      (* Two views of the same elaborated program: the obligations to solve, and
+         the proof outline (the WLP assertion threaded before each statement) to
+         display. Both key procedures by name, so the outline joins onto its
+         procedure below. *)
+      (Cavalry.Main.obligations_smtlib ast, Cavalry.Main.proof_outline ast)
     with
-    | procs ->
+    | procs, outlines ->
         let obligation (expl, loc, smtlib, ce) : Yojson.Safe.t =
           let ce_smtlib, ce_id =
             match ce with
@@ -98,11 +111,18 @@ let verify_json (src : string) : string =
               ("ceId", ce_id);
             ]
         in
+        let outline_step (loc, assertion) : Yojson.Safe.t =
+          `Assoc [ ("loc", json_of_loc loc); ("assertion", `String assertion) ]
+        in
         let procedure (name, obs) : Yojson.Safe.t =
+          let outline =
+            match List.assoc_opt name outlines with Some o -> o | None -> []
+          in
           `Assoc
             [
               ("name", `String name);
               ("obligations", `List (List.map obligation obs));
+              ("outline", `List (List.map outline_step outline));
             ]
         in
         `Assoc

@@ -65,13 +65,18 @@ async function solveObligations(parsed, solve, opts) {
     }
   }
   const total = all.length;
+  // Every obligation's outcome, in order: [verdict] is "unsat" (proved) or the
+  // failing token ("sat"/"unknown"/"timeout"); [counterexample] is set only on a
+  // renderable failure. The UI keys these to the proof outline by [loc] to mark
+  // each line proved/refuted; [failures] is the subset that did not prove.
+  const obligations = [];
   const failures = [];
   let done = 0;
   for (const ob of all) {
     if (isStale && isStale()) return { ok: true, stale: true };
     const answer = await solve(ob.smtlib);
+    let counterexample = "";
     if (answer !== "unsat") {
-      let counterexample = "";
       // A [timeout] means Z3 gave up: no model to render, and the CE twin would
       // only time out again -- skip it.
       if (renderCounterexample && answer !== "timeout" && ob.ceSmtlib != null && ob.ceId != null) {
@@ -80,12 +85,14 @@ async function solveObligations(parsed, solve, opts) {
         const ceOut = await solve(ob.ceSmtlib);
         counterexample = renderCounterexample(ob.ceId, ceOut, !ceOut.startsWith("sat"));
       }
-      failures.push({ proc: ob.proc, expl: ob.expl, loc: ob.loc, verdict: answer, counterexample });
     }
+    const record = { proc: ob.proc, expl: ob.expl, loc: ob.loc, verdict: answer, counterexample };
+    obligations.push(record);
+    if (answer !== "unsat") failures.push(record);
     done += 1;
     if (onProgress) onProgress(done, total);
   }
-  return { ok: true, verified: failures.length === 0, failures, total };
+  return { ok: true, verified: failures.length === 0, failures, total, obligations };
 }
 
 const VerifyCore = { makeSolver, solveObligations };
