@@ -1,0 +1,3 @@
+(executable
+ (name print_outline)
+ (libraries cavalry ast why3))

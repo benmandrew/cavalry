@@ -45,3 +45,6 @@ PLAN.md
 # reports, machine metadata). Regenerate with `bash bench/run.sh`.
 bench/programs/
 bench/results/
+
+# Proof-pane working plan (working state, like PLAN.md)
+PLAN.proof-pane.md

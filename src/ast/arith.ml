@@ -151,6 +151,24 @@ let aget_bool a i = T.t_app (d ()).get_symbol [ a; i ] (Some Ty.ty_bool)
 let aset_bool a i v =
   T.t_app (d ()).set_symbol [ a; i; v ] (Some (d ()).ty_int_bool_map)
 
+(* Identify a Why3 [lsymbol] against the arithmetic/array vocabulary these
+   combinators build, so a pretty-printer can recover the surface operator. The
+   symbols live inside the lazy [defs] record; exposing these predicates keeps
+   consumers ([Term_pp]) from reaching into it. *)
+let is_plus ls = T.ls_equal ls (d ()).plus_symbol
+let is_sub ls = T.ls_equal ls (d ()).sub_symbol
+let is_mul ls = T.ls_equal ls (d ()).mul_symbol
+let is_div ls = T.ls_equal ls (d ()).div_symbol
+let is_mod ls = T.ls_equal ls (d ()).mod_symbol
+let is_eq ls = T.ls_equal ls (d ()).eq_symbol
+let is_lt ls = T.ls_equal ls (d ()).lt_symbol
+let is_leq ls = T.ls_equal ls (d ()).leq_symbol
+let is_gt ls = T.ls_equal ls (d ()).gt_symbol
+let is_geq ls = T.ls_equal ls (d ()).geq_symbol
+let is_get ls = T.ls_equal ls (d ()).get_symbol
+let is_set ls = T.ls_equal ls (d ()).set_symbol
+let is_const ls = T.ls_equal ls (d ()).const_symbol
+
 (* Exposed as [Lazy.t] rather than plain values: a consumer that bound one of
    these at its own top level would re-force the whole Why3 layer at startup,
    the very cost the laziness above avoids. Callers force at use. *)

@@ -51,9 +51,18 @@ function makeSolver(Z3, timeoutMs) {
 // given, a failing obligation's counterexample twin ([ceSmtlib]) is solved and
 // its model rendered to a display block attached as [failure.counterexample].
 // [candidate] is false only when Z3 answered [sat] (a confirmed refutation).
+//
+// [onVerdict(record, index, total)] is optional: called the moment each
+// obligation resolves, so the UI can stream verdicts in rather than wait for the
+// whole run. [record] is the same shape pushed into the returned [obligations]
+// -- {proc, expl, loc, verdict, counterexample, ms} -- where [ms] is the Z3 solve
+// time for that obligation (the verdict solve only, not its counterexample twin).
+const nowMs = () =>
+  typeof performance !== "undefined" && performance.now ? performance.now() : Date.now();
+
 async function solveObligations(parsed, solve, opts) {
   opts = opts || {};
-  const { onProgress, isStale, renderCounterexample } = opts;
+  const { onProgress, isStale, renderCounterexample, onVerdict } = opts;
   if (!parsed.ok) return parsed;
   const all = [];
   for (const p of parsed.procedures) {
@@ -65,13 +74,21 @@ async function solveObligations(parsed, solve, opts) {
     }
   }
   const total = all.length;
+  // Every obligation's outcome, in order: [verdict] is "unsat" (proved) or the
+  // failing token ("sat"/"unknown"/"timeout"); [counterexample] is set only on a
+  // renderable failure. The UI keys these to the proof outline by [loc] to mark
+  // each line proved/refuted; [failures] is the subset that did not prove.
+  const obligations = [];
   const failures = [];
   let done = 0;
-  for (const ob of all) {
+  for (let i = 0; i < all.length; i++) {
+    const ob = all[i];
     if (isStale && isStale()) return { ok: true, stale: true };
+    const t0 = nowMs();
     const answer = await solve(ob.smtlib);
+    const ms = Math.round(nowMs() - t0);
+    let counterexample = "";
     if (answer !== "unsat") {
-      let counterexample = "";
       // A [timeout] means Z3 gave up: no model to render, and the CE twin would
       // only time out again -- skip it.
       if (renderCounterexample && answer !== "timeout" && ob.ceSmtlib != null && ob.ceId != null) {
@@ -80,12 +97,15 @@ async function solveObligations(parsed, solve, opts) {
         const ceOut = await solve(ob.ceSmtlib);
         counterexample = renderCounterexample(ob.ceId, ceOut, !ceOut.startsWith("sat"));
       }
-      failures.push({ proc: ob.proc, expl: ob.expl, loc: ob.loc, verdict: answer, counterexample });
     }
+    const record = { proc: ob.proc, expl: ob.expl, loc: ob.loc, verdict: answer, counterexample, ms };
+    obligations.push(record);
+    if (answer !== "unsat") failures.push(record);
+    if (onVerdict) onVerdict(record, i, total);
     done += 1;
     if (onProgress) onProgress(done, total);
   }
-  return { ok: true, verified: failures.length === 0, failures, total };
+  return { ok: true, verified: failures.length === 0, failures, total, obligations };
 }
 
 const VerifyCore = { makeSolver, solveObligations };

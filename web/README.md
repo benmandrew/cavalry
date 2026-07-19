@@ -18,16 +18,26 @@ and the JS half feeds those strings to Z3-wasm.
     │  source string
     ▼
  verifier.bc.js         OCaml pipeline compiled by js_of_ocaml
-    │  cavalryObligations(src) -> JSON { procedures:[ obligations:[ smtlib, ceSmtlib, ceId ] ] }
+    │  cavalryObligations(src) -> JSON { procedures:[ obligations:[ smtlib, ceSmtlib, ceId ],
+    │                                                  outline:[ loc, assertion ] ] }
     ▼
  verify-core.js         async solve loop (one Z3 context per obligation)
     │  smtlib          (on failure: ceSmtlib -> raw model -> cavalryRenderCounterexample(ceId, …))
     ▼
  z3-built.js + .wasm    Z3 4.16, Emscripten; solves in its own worker threads
-    │  unsat | sat | unknown
+    │  unsat | sat | unknown  (one verdict per obligation)
     ▼
- verdict + located diagnostics + counterexample
+ proof outline + per-line verdicts + counterexample (three panes: app.js)
 ```
+
+Alongside the obligations to solve, the pipeline emits a *proof outline*: the
+weakest-liberal-precondition assertion the calculus threads immediately before
+each statement (see `Hoare.proof_outline` / `Ast.Term_pp`, which renders the
+Why3 term back to Cavalry surface syntax). The centre pane interleaves those
+assertions with the source and a stepper walks them; the right pane shows, per
+step, the obligations Z3 checked there. Because the outline is pure OCaml with
+no prover call, it paints the moment `cavalryObligations` returns — before Z3's
+wasm has even finished loading — and verdicts colour it in as solving completes.
 
 Everything runs on the main thread. `cavalryObligations` is a fast synchronous
 call; each Z3 solve is awaited, and because Z3 works in its own threads the

@@ -89,6 +89,25 @@ val uses_div : Term.term -> bool
 val uses_map : Term.term -> bool
 (** Whether a term applies the array [get]/[set]/[const] symbols. *)
 
+val is_plus : Term.lsymbol -> bool
+val is_sub : Term.lsymbol -> bool
+val is_mul : Term.lsymbol -> bool
+val is_div : Term.lsymbol -> bool
+val is_mod : Term.lsymbol -> bool
+val is_eq : Term.lsymbol -> bool
+val is_lt : Term.lsymbol -> bool
+val is_leq : Term.lsymbol -> bool
+val is_gt : Term.lsymbol -> bool
+val is_geq : Term.lsymbol -> bool
+val is_get : Term.lsymbol -> bool
+val is_set : Term.lsymbol -> bool
+
+val is_const : Term.lsymbol -> bool
+(** Recognise the [lsymbol] each term combinator applies -- the arithmetic
+    operators ([+ - * / %]), comparison predicates ([= < <= > >=]), and array
+    [get]/[set]/[const] -- so a pretty-printer can invert the encoding back to
+    surface syntax. Boolean and integer arrays share the same [get]/[set]. *)
+
 val task : div:bool -> map:bool -> Task.task
 (** [task ~div ~map] builds the proof task including the [ComputerDivision]
     and/or map theories as requested. Use over {!task_for} when map support is

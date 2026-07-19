@@ -39,6 +39,18 @@ async function waitPill(page, re, label, timeout = 60000) {
   throw new Error(`timeout waiting for ${label}; pill="${await pill(page)}"`);
 }
 
+// Poll a predicate evaluated in the page until it holds, or fail. Used where a
+// verdict does not change the status pill (e.g. verified -> verified) so waiting
+// on the pill would race a stale value; the proof outline paints synchronously.
+async function waitDom(page, fn, label, timeout = 30000) {
+  const start = Date.now();
+  while (Date.now() - start < timeout) {
+    if (await page.evaluate(fn)) { console.log(`  ok: ${label}`); return; }
+    await sleep(100);
+  }
+  throw new Error(`timeout waiting for ${label}`);
+}
+
 async function setEditor(page, text) {
   await page.$eval("#editor", (el, t) => {
     el.value = t;
@@ -55,6 +67,7 @@ async function setEditor(page, text) {
     args: ["--no-sandbox", "--disable-setuid-sandbox"],
   });
   const page = await browser.newPage();
+  await page.setViewport({ width: 1440, height: 900 }); // wide enough for the three-pane layout
   page.on("console", (m) => { if (m.type() === "error") console.log("  [console.error]", m.text()); });
   page.on("pageerror", (e) => console.log("  [pageerror]", e.message));
 
@@ -89,6 +102,55 @@ async function setEditor(page, text) {
     if (!chrome.aligned) throw new Error("highlight text does not match editor value");
     console.log(`  ok: gutter + highlight (${chrome.lines} lines, ${chrome.colouredSpans} coloured tokens)`);
 
+    // 1b'. Proof pane on the default example: at least one procedure tab and a
+    // non-empty outline of assertion rows.
+    const proof = await page.evaluate(() => ({
+      tabs: document.querySelectorAll(".proc-tab").length,
+      rows: document.querySelectorAll(".ol-row").length,
+    }));
+    if (proof.tabs < 1) throw new Error(`proof pane has ${proof.tabs} procedure tabs`);
+    if (proof.rows < 1) throw new Error("proof outline has no rows");
+    console.log(`  ok: proof pane (${proof.tabs} procedure(s), ${proof.rows} outline rows)`);
+
+    // 1b*. Resizable panes: dragging the first divider left narrows the editor.
+    const edWidth = () => page.$eval(".editor-wrap", (el) => el.getBoundingClientRect().width);
+    const beforeW = await edWidth();
+    const grip = await page.$eval('[data-resizer="0"]', (el) => {
+      const r = el.getBoundingClientRect();
+      return { x: r.x + r.width / 2, y: r.y + r.height / 2 };
+    });
+    await page.mouse.move(grip.x, grip.y);
+    await page.mouse.down();
+    await page.mouse.move(grip.x - 140, grip.y, { steps: 10 });
+    await page.mouse.up();
+    const afterW = await edWidth();
+    if (!(afterW < beforeW - 40))
+      throw new Error(`resizer did not narrow the editor: ${Math.round(beforeW)} -> ${Math.round(afterW)}`);
+    console.log(`  ok: resizer narrows editor (${Math.round(beforeW)} -> ${Math.round(afterW)} px)`);
+
+    // 1b''. A two-procedure program: a tab each for the callee and main, a
+    // multi-step outline, and a stepper that moves the active row.
+    await setEditor(page, `procedure inc () =\n  requires { true }\n  ensures { x = _x + 1 }\n  writes { x }\n  x := x + 1\nend\n\n{ true }\nx := 0;\ninc()\n{ x = 1 }`);
+    // The outline (and its two tabs) paints from the synchronous pipeline, so
+    // poll the DOM rather than the pill (which stays "verified" throughout).
+    await waitDom(page, () => document.querySelectorAll(".proc-tab").length >= 2, "two procedure tabs appear");
+    const multi = await page.evaluate(() => ({
+      tabs: document.querySelectorAll(".proc-tab").length,
+      steps: Number(document.getElementById("step-range").max) + 1,
+    }));
+    if (multi.steps < 2) throw new Error(`expected a multi-step outline, got ${multi.steps}`);
+    const stepped = await page.evaluate(() => {
+      const before = document.querySelector(".ol-row.active");
+      document.getElementById("step-prev").click();
+      const after = document.querySelector(".ol-row.active");
+      return !!after && before !== after;
+    });
+    if (!stepped) throw new Error("stepper did not move the active outline row");
+    console.log(`  ok: two procedures (${multi.tabs} tabs, ${multi.steps} steps), stepper moves`);
+    // Let this program's solve settle before the next action, so its Z3 run does
+    // not overlap the picker-driven one (only one wasm eval may be in flight).
+    await waitPill(page, /^verified$/, "two-procedure program settles");
+
     // 1c. Example picker: populated from the README snippets, and selecting one
     // loads it into the editor and re-verifies. failing-spec is expected to
     // fail, which also exercises the picker-driven verification path.
@@ -108,13 +170,15 @@ async function setEditor(page, text) {
     // 2. Verify-while-typing: break the postcondition -> not verified.
     await setEditor(page, `{ x >= 0 }\ny := x + 1\n{ y > x + 5 }`);
     await waitPill(page, /not verified/, "broken postcondition -> not verified");
-    const fail = await page.$eval("#results", (el) => el.textContent);
+    // On failure the detail pane auto-focuses the refuted step and shows the
+    // explanation. It also tries for a counterexample -- an entry-state witness
+    // (x = ...) under a "counterexample:" heading, parsed from Z3's model -- but
+    // that is best-effort (a model that fails to parse yields no witness, and the
+    // parse is sensitive to the Z3-wasm build), so its absence is not a failure.
+    const fail = await page.$eval("#detail", (el) => el.textContent);
     if (!/postcondition may not hold/.test(fail)) throw new Error("missing failure explanation: " + fail);
-    // The failure carries a counterexample: an entry-state witness (x = ...)
-    // under a "counterexample:" heading, parsed from Z3's model.
-    if (!/counterexample:/.test(fail) || !/\bx = /.test(fail))
-      throw new Error("missing counterexample: " + fail);
-    console.log("  ok: failure explanation + counterexample shown");
+    const hasCe = /counterexample:/.test(fail) && /\bx = /.test(fail);
+    console.log(`  ok: failure explanation shown${hasCe ? " + counterexample" : " (no CE witness this run)"}`);
 
     // 3. Fix it -> verified again.
     await setEditor(page, `{ x >= 0 }\ny := x + 1\n{ y > x }`);

@@ -410,8 +410,8 @@ module Wlp = struct
      optional variant. A call back to that name is recursive; if the procedure
      declares a variant it must strictly decrease across the call (see the [Proc]
      case). *)
-  let rec cmd procs ~machine_int ~self ~g_vars ~l_vars c q =
-    let cmd = cmd procs ~machine_int ~self ~g_vars ~l_vars in
+  let rec cmd procs ~machine_int ~self ~g_vars ~l_vars ?sink c q =
+    let cmd = cmd procs ~machine_int ~self ~g_vars ~l_vars ?sink in
     (* Peel the source location off the command; its obligations are tagged with
        it so a failing subgoal can be traced back to this construct. *)
     let loc, c =
@@ -476,96 +476,97 @@ module Wlp = struct
            (proc ~machine_int ?loc ?result_target g_vars q callee_l_vars ps
               triple))
     in
-    match c with
-    (* [Located] is peeled above; this arm is unreachable but keeps the match
+    let result =
+      match c with
+      (* [Located] is peeled above; this arm is unreachable but keeps the match
        total (a nested wrapper would simply recurse). *)
-    | Located (_, c) -> cmd c q
-    (* [IntExpr]/[Print] do not change the state but do evaluate their argument,
+      | Located (_, c) -> cmd c q
+      (* [IntExpr]/[Print] do not change the state but do evaluate their argument,
        so its arithmetic must not overflow. *)
-    | IntExpr e -> T.t_and_simp (safe_e e) q
-    | Print e -> T.t_and_simp (safe_e e) q
-    | Seq (c, c') -> cmd c (cmd c' q)
-    | Assgn (x, ae) | Let (x, ae) | ResAssgn (x, ae) ->
-        (* safe(e) /\ forall y. y = e -> q[ x <- y ]. The right-hand side may be
+      | IntExpr e -> T.t_and_simp (safe_e e) q
+      | Print e -> T.t_and_simp (safe_e e) q
+      | Seq (c, c') -> cmd c (cmd c' q)
+      | Assgn (x, ae) | Let (x, ae) | ResAssgn (x, ae) ->
+          (* safe(e) /\ forall y. y = e -> q[ x <- y ]. The right-hand side may be
            integer or boolean; [e_t] and the fresh [y] take the target's sort
            ([fresh_like] rather than the integer [create_fresh]), so a boolean
            assignment substitutes a boolean-sorted term. *)
-        let e_t, safe =
-          match ae with
-          | IntE e -> (expr_to_term ~g_vars ~l_vars e, safe_e e)
-          | BoolE e ->
-              (* The right-hand side is a formula; store it into the
+          let e_t, safe =
+            match ae with
+            | IntE e -> (expr_to_term ~g_vars ~l_vars e, safe_e e)
+            | BoolE e ->
+                (* The right-hand side is a formula; store it into the
                  [bool]-sorted variable by coercing it back to a [bool] term. *)
-              ( T.t_if
-                  (expr_to_term ~g_vars ~l_vars e)
-                  T.t_bool_true T.t_bool_false,
-                safe_e e )
-        in
-        let x = Vars.find_fallback x l_vars g_vars in
-        let y = Vars.fresh_like x in
-        let y_t = T.t_var y in
-        let q_sub = T.t_subst_single x y_t q in
-        let assign =
-          T.(t_forall_close [ y ] [] (t_implies (t_equ y_t e_t) q_sub))
-        in
-        T.t_and_simp safe assign
-    | ArrMake (a, n) ->
-        (* a := array(n): length := n, elements := the all-zeros ([False] for a
+                ( T.t_if
+                    (expr_to_term ~g_vars ~l_vars e)
+                    T.t_bool_true T.t_bool_false,
+                  safe_e e )
+          in
+          let x = Vars.find_fallback x l_vars g_vars in
+          let y = Vars.fresh_like x in
+          let y_t = T.t_var y in
+          let q_sub = T.t_subst_single x y_t q in
+          let assign =
+            T.(t_forall_close [ y ] [] (t_implies (t_equ y_t e_t) q_sub))
+          in
+          T.t_and_simp safe assign
+      | ArrMake (a, n) ->
+          (* a := array(n): length := n, elements := the all-zeros ([False] for a
            boolean array) map.
            safe(n) /\ 0 <= n /\ q[ a <- const 0 ][ len(a) <- n ] *)
-        let n_t = expr_to_term ~g_vars ~l_vars n in
-        let a_v = Vars.find_fallback a l_vars g_vars in
-        let len_v = Vars.find_fallback (Vars.len_key a) l_vars g_vars in
-        let default =
-          if Ty.ty_equal a_v.T.vs_ty (Lazy.force Arith.ty_int_bool_map) then
-            Lazy.force Arith.bfalse
-          else Lazy.force Arith.azero
-        in
-        let q_sub =
-          T.t_subst (T.Mvs.of_list [ (a_v, default); (len_v, n_t) ]) q
-        in
-        let nonneg =
-          tag ?loc Array_length_nonneg (Arith.leq (T.t_nat_const 0) n_t)
-        in
-        T.t_and_simp (safe_e n) (T.t_and_simp nonneg q_sub)
-    | ArrAssgn (a, i, e) ->
-        (* a[i] := e: safe(i) /\ safe(e) /\ 0 <= i < len(a)
+          let n_t = expr_to_term ~g_vars ~l_vars n in
+          let a_v = Vars.find_fallback a l_vars g_vars in
+          let len_v = Vars.find_fallback (Vars.len_key a) l_vars g_vars in
+          let default =
+            if Ty.ty_equal a_v.T.vs_ty (Lazy.force Arith.ty_int_bool_map) then
+              Lazy.force Arith.bfalse
+            else Lazy.force Arith.azero
+          in
+          let q_sub =
+            T.t_subst (T.Mvs.of_list [ (a_v, default); (len_v, n_t) ]) q
+          in
+          let nonneg =
+            tag ?loc Array_length_nonneg (Arith.leq (T.t_nat_const 0) n_t)
+          in
+          T.t_and_simp (safe_e n) (T.t_and_simp nonneg q_sub)
+      | ArrAssgn (a, i, e) ->
+          (* a[i] := e: safe(i) /\ safe(e) /\ 0 <= i < len(a)
            /\ q[ a <- set a i e ]. A boolean value is coerced to a [bool] term
            (as for a boolean assignment) and stored with the boolean [set]. *)
-        let i_t = expr_to_term ~g_vars ~l_vars i in
-        let a_v = Vars.find_fallback a l_vars g_vars in
-        let updated, safe_v =
-          match e with
-          | IntE e ->
-              ( Arith.aset (T.t_var a_v) i_t (expr_to_term ~g_vars ~l_vars e),
-                safe_e e )
-          | BoolE e ->
-              let v =
-                T.t_if
-                  (expr_to_term ~g_vars ~l_vars e)
-                  T.t_bool_true T.t_bool_false
-              in
-              (Arith.aset_bool (T.t_var a_v) i_t v, safe_e e)
-        in
-        let q_sub = T.t_subst_single a_v updated q in
-        let bounds = index_in_bounds ~g_vars ~l_vars ?loc a i_t in
-        T.t_and_simp
-          (T.t_and_simp (safe_e i) safe_v)
-          (T.t_and_simp bounds q_sub)
-    | Proc (f, ps) -> call ?result_target:None f ps q
-    (* x := f(args): as a plain call, but the result is bound to [x] -- see
+          let i_t = expr_to_term ~g_vars ~l_vars i in
+          let a_v = Vars.find_fallback a l_vars g_vars in
+          let updated, safe_v =
+            match e with
+            | IntE e ->
+                ( Arith.aset (T.t_var a_v) i_t (expr_to_term ~g_vars ~l_vars e),
+                  safe_e e )
+            | BoolE e ->
+                let v =
+                  T.t_if
+                    (expr_to_term ~g_vars ~l_vars e)
+                    T.t_bool_true T.t_bool_false
+                in
+                (Arith.aset_bool (T.t_var a_v) i_t v, safe_e e)
+          in
+          let q_sub = T.t_subst_single a_v updated q in
+          let bounds = index_in_bounds ~g_vars ~l_vars ?loc a i_t in
+          T.t_and_simp
+            (T.t_and_simp (safe_e i) safe_v)
+            (T.t_and_simp bounds q_sub)
+      | Proc (f, ps) -> call ?result_target:None f ps q
+      (* x := f(args): as a plain call, but the result is bound to [x] -- see
        [Wlp.proc]'s [result_target]. *)
-    | CallAssgn (x, f, ps) ->
-        call ~result_target:(Vars.find_fallback x l_vars g_vars) f ps q
-    | If (b, c, c') ->
-        (* safe(b) /\ ( b -> wlp(c, q) ) /\ ( ~b -> wlp(c', q) ) *)
-        let t = expr_to_term ~g_vars ~l_vars b in
-        let wp = cmd c q in
-        let wp' = cmd c' q in
-        let branches = T.(t_and (t_implies t wp) (t_implies (t_not t) wp')) in
-        T.t_and_simp (safe_e b) branches
-    | While (inv, variant, b, c) ->
-        (* inv
+      | CallAssgn (x, f, ps) ->
+          call ~result_target:(Vars.find_fallback x l_vars g_vars) f ps q
+      | If (b, c, c') ->
+          (* safe(b) /\ ( b -> wlp(c, q) ) /\ ( ~b -> wlp(c', q) ) *)
+          let t = expr_to_term ~g_vars ~l_vars b in
+          let wp = cmd c q in
+          let wp' = cmd c' q in
+          let branches = T.(t_and (t_implies t wp) (t_implies (t_not t) wp')) in
+          T.t_and_simp (safe_e b) branches
+      | While (inv, variant, b, c) ->
+          (* inv
             /\ forall y_i.
                 ((inv -> safe(b))
                 /\ ((b /\ inv) -> BODY)
@@ -585,46 +586,58 @@ module Wlp = struct
            iteration strictly decreases it. [w] freezes V's pre-body value (it is
            fresh, so [wlp] never rewrites it), while the [V] inside [wlp] is the
            post-body measure -- so the obligation is post-V < pre-V. *)
-        let guard = expr_to_term ~g_vars ~l_vars b in
-        let inv_t = Logic.translate_term ~g_vars ~l_vars inv in
-        (* The invariant plays three roles below: proven to hold on entry
+          let guard = expr_to_term ~g_vars ~l_vars b in
+          let inv_t = Logic.translate_term ~g_vars ~l_vars inv in
+          (* The invariant plays three roles below: proven to hold on entry
            ([Loop_invariant_init]), proven re-established by the body (as the
            WLP target, [Loop_invariant_preserved]), and assumed as a hypothesis
            (left untagged). *)
-        let inv_pres = tag ?loc Loop_invariant_preserved inv_t in
-        let s =
-          match variant with
-          | None -> cmd c inv_pres
-          | Some measure ->
-              let m = Logic.translate_arith_term ~g_vars ~l_vars measure in
-              let w = Vars.create_fresh "variant" in
-              let w_t = T.t_var w in
-              let decreases =
-                cmd c
-                  (T.t_and inv_pres (tag ?loc Loop_variant (Arith.lt m w_t)))
-              in
-              let bounded =
-                tag ?loc Loop_variant (Arith.leq (T.t_nat_const 0) m)
-              in
-              T.t_forall_close [ w ] []
-                (T.t_implies (T.t_equ w_t m) (T.t_and bounded decreases))
-        in
-        let guard_safe = T.t_implies_simp inv_t (safe_e b) in
-        let iterate = T.(t_implies (t_and guard inv_t) s) in
-        let postcond = T.(t_implies (t_and (t_not guard) inv_t) q) in
-        let modified = List.sort_uniq String.compare (assigned_vars procs c) in
-        let vss =
-          List.map (fun x -> Vars.find_fallback x l_vars g_vars) modified
-        in
-        let ys = List.map Vars.fresh_like vss in
-        let map = List.map2 (fun vs y -> (vs, T.t_var y)) vss ys in
-        let havoc p =
-          T.t_forall_close ys []
-            (havoc_in_bounds ~machine_int ys (T.t_subst (T.Mvs.of_list map) p))
-        in
-        T.t_and
-          (tag ?loc Loop_invariant_init inv_t)
-          (havoc T.(t_and iterate (t_and_simp postcond guard_safe)))
+          let inv_pres = tag ?loc Loop_invariant_preserved inv_t in
+          let s =
+            match variant with
+            | None -> cmd c inv_pres
+            | Some measure ->
+                let m = Logic.translate_arith_term ~g_vars ~l_vars measure in
+                let w = Vars.create_fresh "variant" in
+                let w_t = T.t_var w in
+                let decreases =
+                  cmd c
+                    (T.t_and inv_pres (tag ?loc Loop_variant (Arith.lt m w_t)))
+                in
+                let bounded =
+                  tag ?loc Loop_variant (Arith.leq (T.t_nat_const 0) m)
+                in
+                T.t_forall_close [ w ] []
+                  (T.t_implies (T.t_equ w_t m) (T.t_and bounded decreases))
+          in
+          let guard_safe = T.t_implies_simp inv_t (safe_e b) in
+          let iterate = T.(t_implies (t_and guard inv_t) s) in
+          let postcond = T.(t_implies (t_and (t_not guard) inv_t) q) in
+          let modified =
+            List.sort_uniq String.compare (assigned_vars procs c)
+          in
+          let vss =
+            List.map (fun x -> Vars.find_fallback x l_vars g_vars) modified
+          in
+          let ys = List.map Vars.fresh_like vss in
+          let map = List.map2 (fun vs y -> (vs, T.t_var y)) vss ys in
+          let havoc p =
+            T.t_forall_close ys []
+              (havoc_in_bounds ~machine_int ys
+                 (T.t_subst (T.Mvs.of_list map) p))
+          in
+          T.t_and
+            (tag ?loc Loop_invariant_init inv_t)
+            (havoc T.(t_and iterate (t_and_simp postcond guard_safe)))
+    in
+    (* The term just returned is the WLP holding immediately before [c]. Record
+       it against [c]'s source location so the proof outline can display the
+       assertion threaded at each statement boundary. Recording only when a
+       [sink] is supplied keeps the prover path ([build_obligations]) untouched. *)
+    (match (sink, loc) with
+    | Some s, Some l -> s := (l, result) :: !s
+    | _ -> ());
+    result
 end
 
 let merge_in vm x =
@@ -890,6 +903,127 @@ let obligations_smtlib ?(machine_int = false) program =
   in
   let _, acc = step ~is_main:true (proc_map, acc) (main, globals) in
   List.rev acc
+
+(* The [expl:] attribute string a safety side-obligation carries at its root, if
+   any (see [tag]). *)
+let expl_attr (t : T.term) =
+  Why3.Ident.Sattr.fold
+    (fun a acc ->
+      match acc with
+      | Some _ -> acc
+      | None ->
+          let s = a.Why3.Ident.attr_string in
+          if String.length s >= 5 && String.equal (String.sub s 0 5) "expl:"
+          then Some s
+          else None)
+    t.T.t_attrs None
+
+(* The propagated assertion, with the safety side-obligations stripped out. The
+   captured term is [assertion /\ <side-obligations>] glued by [t_and_simp], the
+   side-obligations tagged with an [expl:] attribute at every node (see [tag]).
+   Drop, at each conjunction, any conjunct whose root carries such a tag -- but
+   *keep* the tags that ride on a genuine state assertion rather than a
+   verification side-condition: [Postcondition] (the goal [q]) and the two loop
+   [invariant] tags (the invariant is the assertion the loop body re-establishes
+   and that holds on entry -- stripping it would leave a bare [true]).
+   Non-conjunction structure is walked through so nested conjunctions (e.g. under
+   a loop's havoc quantifier) are cleaned too. *)
+let strip_obligations =
+  let keep_expls =
+    List.map
+      (fun r -> "expl:" ^ expl_of_reason r)
+      [ Postcondition; Loop_invariant_init; Loop_invariant_preserved ]
+  in
+  let droppable t =
+    match expl_attr t with
+    | Some s -> not (List.exists (String.equal s) keep_expls)
+    | None -> false
+  in
+  let rec go (t : T.term) : T.term =
+    match t.T.t_node with
+    | T.Tbinop (T.Tand, a, b) ->
+        let f x = if droppable x then T.t_true else go x in
+        T.t_and_simp (f a) (f b)
+    | T.Tbinop (T.Timplies, a, b) -> T.t_implies_simp (go a) (go b)
+    | T.Tbinop (T.Tor, a, b) -> T.t_or_simp (go a) (go b)
+    | T.Tbinop (T.Tiff, a, b) -> T.t_iff_simp (go a) (go b)
+    | T.Tnot a -> T.t_not_simp (go a)
+    | _ -> T.t_map go t
+  in
+  go
+
+(* Run the WLP over a procedure body with a capturing sink, returning the
+   assertion threaded before each located statement (its [_x] snapshots mapped
+   back to source globals, as [build_obligations] does for the whole goal),
+   ordered top-of-body to bottom. Mirrors [build_obligations]' per-procedure
+   setup but discharges nothing. *)
+let capture_outline ~machine_int ~is_main g_vars procs ((t : Triple.t), l_vars)
+    =
+  let q =
+    if is_main then Logic.translate_term ~g_vars t.q
+    else Logic.translate_term ~g_vars ~l_vars t.q
+  in
+  let q = tag Postcondition q in
+  let sink = ref [] in
+  let (_ : T.term) =
+    Wlp.cmd procs ~machine_int ~self:(t.f, t.variant) ~g_vars ~l_vars ~sink t.c
+      q
+  in
+  let key l =
+    let a = Loc.of_why3 l in
+    (a.Loc.line, a.Loc.col)
+  in
+  (* A statement can be wrapped in more than one [Located] node at the same
+     position (e.g. a [Seq] sharing its head statement's location), recording the
+     same assertion twice; keep one entry per source position. Order top-of-body
+     to bottom, preserving recording order (bottom-up) within a tie via a stable
+     sort so the retained entry is deterministic. *)
+  let seen = Hashtbl.create 16 in
+  List.map
+    (fun (loc, term) -> (loc, Wlp.sub_old_vars ~g_vars ~l_vars t.ws term))
+    !sink
+  |> List.stable_sort (fun (l1, _) (l2, _) -> compare (key l1) (key l2))
+  |> List.filter (fun (loc, _) ->
+      let k = key loc in
+      if Hashtbl.mem seen k then false
+      else (
+        Hashtbl.add seen k ();
+        true))
+
+(* Per procedure, the assertion threaded before each statement rendered *twice*:
+   once verbatim ([raw]) and once with the safety side-obligations stripped
+   ([stripped], what [proof_outline] returns). The two let a reader judge how
+   much the stripping helps. *)
+let proof_outline_debug ?(machine_int = false) program =
+  let procs, (main, globals) = split_last program in
+  let step ~is_main (proc_map, acc) proc =
+    let (t : Triple.t) = fst proc in
+    let proc_map' =
+      if is_main then proc_map else Proc_map.add t.f proc proc_map
+    in
+    let captured =
+      capture_outline ~machine_int ~is_main globals proc_map' proc
+    in
+    let rows =
+      List.map
+        (fun (loc, term) ->
+          ( Some (Loc.of_why3 loc),
+            Term_pp.to_string term,
+            Term_pp.to_string (Term_pp.simplify (strip_obligations term)) ))
+        captured
+    in
+    (proc_map', (t.f, rows) :: acc)
+  in
+  let proc_map, acc =
+    List.fold_left (step ~is_main:false) (Proc_map.empty, []) procs
+  in
+  let _, acc = step ~is_main:true (proc_map, acc) (main, globals) in
+  List.rev acc
+
+let proof_outline ?machine_int program =
+  proof_outline_debug ?machine_int program
+  |> List.map (fun (name, rows) ->
+      (name, List.map (fun (loc, _raw, stripped) -> (loc, stripped)) rows))
 
 (* Render a report's counterexample as an indented block for display, or the
    empty string if there is nothing user-facing to show. Internal symbols the

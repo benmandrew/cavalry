@@ -50,6 +50,27 @@ val obligations_smtlib :
     The strings are solved client-side in a Z3-wasm worker; no prover is run
     here. *)
 
+val proof_outline :
+  ?machine_int:bool ->
+  (Triple.t * Vars.t) list ->
+  (string * (Ast.Loc.t option * string) list) list
+(** Per procedure ([main] under the name ["main"]), the WLP assertion the
+    calculus threads immediately before each statement, rendered in Cavalry
+    surface syntax (see {!Ast.Term_pp}) and ordered top-of-body to bottom. The
+    safety side-obligations (bounds, overflow, ...) are stripped out, leaving
+    the propagated postcondition assertion; they are reported separately by
+    {!obligations_smtlib}. Each entry pairs the statement's source location with
+    the assertion string. Discharges nothing. *)
+
+val proof_outline_debug :
+  ?machine_int:bool ->
+  (Triple.t * Vars.t) list ->
+  (string * (Ast.Loc.t option * string * string) list) list
+(** As {!proof_outline}, but each entry is [(loc, raw, stripped)]: the assertion
+    rendered both verbatim ([raw], with the safety side-obligations still glued
+    in) and with them stripped ([stripped], what {!proof_outline} returns). For
+    inspecting how much the stripping improves readability. *)
+
 (** Why a verification obligation failed. Recovered from the failing subgoal's
     explanation attribute; see {!expl_of_reason} for the human wording. *)
 type reason =

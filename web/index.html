@@ -86,11 +86,30 @@
       .pill.ok { color: var(--ok); border-color: var(--ok); }
       .pill.bad { color: var(--bad); border-color: var(--bad); }
       .pill.busy { color: var(--busy); border-color: var(--busy); }
+      /* Three columns on a wide screen: the editor, the proof outline, and the
+         detail for the selected step. Each column owns its own scroll; the page
+         body never scrolls. On a narrow screen they stack and the page scrolls. */
       main {
         flex: 1;
         display: grid;
-        grid-template-rows: 1fr auto;
+        grid-template-columns: minmax(200px, 4fr) 6px minmax(280px, 3fr) 6px minmax(220px, 3fr);
         min-height: 0;
+      }
+      main > * { min-width: 0; min-height: 0; }
+      /* Draggable dividers between the columns (JS adjusts the grid tracks). */
+      .resizer {
+        cursor: col-resize;
+        background: var(--border);
+        transition: background 0.1s;
+      }
+      .resizer:hover, .resizer.dragging { background: var(--accent); }
+      @media (max-width: 1024px) {
+        main {
+          grid-template-columns: 1fr;
+          grid-auto-rows: minmax(240px, auto);
+          overflow: auto;
+        }
+        .resizer { display: none; }
       }
       /* The editor is a transparent textarea laid over a highlighted <pre>, with
          a line-number gutter down the left. All three share the metrics above so
@@ -118,6 +137,20 @@
         user-select: none;
       }
       .code-scroll { position: relative; flex: 1; min-width: 0; }
+      /* A band marking the source line of the selected proof step. It sits behind
+         the (transparent-background) highlight layer and textarea, so the coloured
+         code shows through the tint. JS positions it and follows the scroll. */
+      #line-highlight {
+        position: absolute;
+        left: 0;
+        right: 0;
+        height: var(--lh);
+        background: color-mix(in srgb, var(--accent) 13%, transparent);
+        border-left: 2px solid var(--accent);
+        pointer-events: none;
+        display: none;
+        z-index: 0;
+      }
       .highlight,
       #editor {
         margin: 0;
@@ -151,48 +184,159 @@
         caret-color: var(--fg);
       }
       #editor::selection { background: color-mix(in srgb, var(--accent) 30%, transparent); }
-      #results {
-        border-top: 1px solid var(--border);
+      .loc { color: var(--accent); cursor: pointer; display: inline-block; margin-top: 4px; }
+
+      /* --- Proof-outline pane (centre column) ------------------------------ */
+      .proof {
+        border-left: 1px solid var(--border);
         background: var(--panel);
-        max-height: 42vh;
-        overflow: auto;
-        padding: 12px 18px;
-        font-size: 13px;
+        display: flex;
+        flex-direction: column;
+        min-height: 0;
       }
-      #results.stale { opacity: 0.5; }
-      .verdict { font-weight: 600; margin-bottom: 6px; }
-      .verdict.ok { color: var(--ok); }
-      .verdict.bad { color: var(--bad); }
-      .verdict.busy { color: var(--busy); }
-      .note { color: var(--muted); font-size: 12px; }
-      ul.findings { list-style: none; margin: 8px 0 0; padding: 0; }
-      ul.findings li {
-        padding: 6px 8px;
-        border-left: 3px solid var(--bad);
-        background: color-mix(in srgb, var(--bad) 8%, transparent);
-        margin-bottom: 6px;
-        border-radius: 0 4px 4px 0;
-        font-family: var(--mono);
+      .proof.stale .outline, .detail.stale { opacity: 0.45; }
+      .proof-head {
+        display: flex;
+        align-items: center;
+        gap: 10px;
+        padding: 8px 12px;
+        border-bottom: 1px solid var(--border);
+        flex-wrap: wrap;
+      }
+      .proc-tabs { display: flex; gap: 4px; flex-wrap: wrap; }
+      .proc-tab {
+        font: inherit;
         font-size: 12px;
-      }
-      ul.findings li.err { border-left-color: var(--busy); background: color-mix(in srgb, var(--busy) 10%, transparent); }
-      .counterexample {
-        margin: 6px 0 0;
+        font-family: var(--mono);
         color: var(--muted);
+        background: transparent;
+        border: 1px solid var(--border);
+        border-radius: 6px;
+        padding: 3px 9px;
+        cursor: pointer;
+        display: inline-flex;
+        align-items: center;
+        gap: 6px;
+      }
+      .proc-tab.active { color: var(--fg); border-color: var(--accent); background: color-mix(in srgb, var(--accent) 10%, transparent); }
+      .proc-tab .dot { width: 8px; height: 8px; border-radius: 50%; background: var(--border); flex: 0 0 auto; }
+      .proc-tab .dot.ok { background: var(--ok); }
+      .proc-tab .dot.bad { background: var(--bad); }
+      .proc-tab .dot.warn { background: var(--busy); }
+      .verdict-summary { margin-left: auto; font-size: 12px; font-weight: 600; white-space: nowrap; }
+      .verdict-summary.ok { color: var(--ok); }
+      .verdict-summary.bad { color: var(--bad); }
+      .verdict-summary.busy { color: var(--busy); }
+
+      .outline {
+        flex: 1;
+        overflow: auto;
+        padding: 10px 12px;
         font-family: var(--mono);
+        font-size: 12.5px;
+        line-height: 1.5;
+      }
+      /* One outline entry: the assertion that holds before a statement, then the
+         statement's source text. The active step (the stepper's cursor) is
+         highlighted; a proved/failed obligation on the line tints its rail. */
+      .ol-row { border-left: 3px solid transparent; padding: 2px 6px; border-radius: 0 4px 4px 0; cursor: pointer; }
+      .ol-row:hover { background: color-mix(in srgb, var(--fg) 5%, transparent); }
+      .ol-row.active { background: color-mix(in srgb, var(--accent) 14%, transparent); border-left-color: var(--accent); }
+      .ol-assert {
+        color: var(--muted);
+        white-space: pre-wrap;
+        overflow-wrap: anywhere;
+        display: flex;
+        gap: 6px;
+        align-items: baseline;
+        padding-left: calc(1.6em + 8px); /* align under the code, past the line number */
+      }
+      .ol-assert .brace { color: var(--accent); flex: 0 0 auto; }
+      .ol-assert.ok .brace { color: var(--ok); }
+      .ol-assert.bad .brace { color: var(--bad); }
+      .ol-assert.warn .brace { color: var(--busy); }
+      .ol-stmt { color: var(--fg); padding-left: 2px; display: flex; align-items: baseline; gap: 8px; }
+      /* The source line number, mirroring the editor gutter's theming so a reader
+         can tie an outline row back to the left pane. */
+      .ol-lineno {
+        flex: 0 0 auto;
+        min-width: 1.6em;
+        text-align: right;
+        color: var(--muted);
+        user-select: none;
+      }
+      .kw { color: var(--muted); font-style: italic; margin-left: 8px; font-size: 11px; }
+      .ol-bookend { color: var(--muted); font-style: italic; padding: 2px 6px; }
+
+      .stepper {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        padding: 8px 12px;
+        border-top: 1px solid var(--border);
+      }
+      .stepper button {
+        font: inherit;
         font-size: 12px;
-        white-space: pre;
-        overflow-x: auto;
+        color: var(--fg);
+        background: var(--bg);
+        border: 1px solid var(--border);
+        border-radius: 6px;
+        padding: 3px 10px;
+        cursor: pointer;
       }
-      .loc { color: var(--accent); cursor: pointer; }
-      .progress {
-        height: 4px;
-        background: var(--border);
-        border-radius: 2px;
-        overflow: hidden;
-        margin-top: 8px;
+      .stepper button:disabled { opacity: 0.4; cursor: default; }
+      .stepper input[type="range"] { flex: 1; accent-color: var(--accent); min-width: 60px; }
+      .step-label { font-size: 11px; color: var(--muted); font-family: var(--mono); white-space: nowrap; }
+
+      /* --- Detail pane (right column) -------------------------------------- */
+      .detail {
+        border-left: 1px solid var(--border);
+        background: var(--bg);
+        overflow: auto;
+        padding: 12px 14px;
+        font-size: 12.5px;
       }
-      .progress > div { height: 100%; background: var(--busy); width: 0; transition: width 0.1s linear; }
+      .detail h2 { font-size: 12px; text-transform: uppercase; letter-spacing: 0.04em; color: var(--muted); margin: 0 0 8px; font-weight: 600; }
+      .detail .placeholder { color: var(--muted); font-style: italic; }
+      .detail .field { margin-bottom: 12px; }
+      .detail .field > .label { font-size: 11px; color: var(--muted); margin-bottom: 3px; }
+      .detail .assertion { font-family: var(--mono); font-size: 12.5px; white-space: pre-wrap; overflow-wrap: anywhere; color: var(--fg); }
+      /* A WLP assertion decomposed into assume / implies / guarantees lists. */
+      .assertion-structured { font-family: var(--mono); font-size: 12.5px; }
+      .assert-quant { color: var(--muted); font-style: italic; margin-bottom: 4px; overflow-wrap: anywhere; }
+      .assert-tag { font-size: 10.5px; text-transform: uppercase; letter-spacing: 0.04em; color: var(--muted); margin: 2px 0; }
+      ul.assert-list { list-style: none; margin: 0 0 2px; padding: 0; }
+      ul.assert-list li {
+        position: relative;
+        padding: 2px 0 2px 16px;
+        color: var(--fg);
+        white-space: pre-wrap;
+        overflow-wrap: anywhere;
+      }
+      ul.assert-list li::before { content: "•"; position: absolute; left: 2px; color: var(--muted); }
+      .ob {
+        border: 1px solid var(--border);
+        border-radius: 6px;
+        padding: 7px 9px;
+        margin-bottom: 8px;
+        border-left-width: 3px;
+      }
+      .ob.ok { border-left-color: var(--ok); }
+      .ob.bad { border-left-color: var(--bad); }
+      .ob.warn { border-left-color: var(--busy); }
+      .ob.pending { border-left-color: var(--border); }
+      .ob .ob-head { display: flex; align-items: baseline; gap: 8px; }
+      .ob .ob-expl { font-size: 12px; }
+      .ob .ob-verdict { margin-left: auto; font-size: 11px; font-weight: 600; font-family: var(--mono); }
+      .ob.ok .ob-verdict { color: var(--ok); }
+      .ob.bad .ob-verdict { color: var(--bad); }
+      .ob.warn .ob-verdict { color: var(--busy); }
+      .ob.pending .ob-verdict { color: var(--muted); }
+      .ob details { margin-top: 6px; }
+      .ob summary { cursor: pointer; color: var(--accent); font-size: 11px; }
+      .ob pre { margin: 6px 0 0; white-space: pre; overflow-x: auto; font-family: var(--mono); font-size: 11px; color: var(--muted); background: var(--panel); padding: 6px 8px; border-radius: 4px; }
+      .ob .counterexample { margin: 6px 0 0; color: var(--muted); font-family: var(--mono); font-size: 11px; white-space: pre; overflow-x: auto; }
     </style>
   </head>
   <body>
@@ -207,13 +351,27 @@
       <div class="editor-wrap">
         <div id="gutter" class="gutter" aria-hidden="true"></div>
         <div class="code-scroll">
+          <div id="line-highlight" aria-hidden="true"></div>
           <pre id="highlight" class="highlight" aria-hidden="true"><code id="highlight-code"></code></pre>
           <textarea id="editor" spellcheck="false" autocomplete="off" autocapitalize="off" autocorrect="off" wrap="off"></textarea>
         </div>
       </div>
-      <section id="results">
-        <div class="verdict busy">Loading Z3…</div>
+      <div class="resizer" data-resizer="0" title="Drag to resize"></div>
+      <section class="proof">
+        <div class="proof-head">
+          <div id="proc-tabs" class="proc-tabs"></div>
+          <span id="verdict-summary" class="verdict-summary busy">Loading Z3…</span>
+        </div>
+        <div id="outline" class="outline"></div>
+        <div class="stepper">
+          <button id="step-prev" type="button" title="Step towards the precondition">◀</button>
+          <input id="step-range" type="range" min="0" max="0" value="0" aria-label="Proof step" />
+          <button id="step-next" type="button" title="Step towards the postcondition">▶</button>
+          <span id="step-label" class="step-label"></span>
+        </div>
       </section>
+      <div class="resizer" data-resizer="1" title="Drag to resize"></div>
+      <aside id="detail" class="detail"></aside>
     </main>
     <!-- Order matters: the OCaml pipeline and Z3's Emscripten module each set a
          global (cavalryObligations / initZ3); the z3-solver API bundle and the
