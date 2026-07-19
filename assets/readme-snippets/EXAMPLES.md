@@ -3,9 +3,9 @@
 Short, self-contained programs, each exercising one part of the language. Each
 is a real file in [`snippets/`](snippets); verify any of them with `dune exec --
 cav verify <file>` (see the [top-level README](../../README.md#usage) for setup).
-The three marked ★ also appear on the front page.
+The two marked ★ also appear on the front page.
 
-## A Hoare triple ★
+## A Hoare triple
 
 Verification rests on the Hoare triple `{P} c {Q}`: if precondition `P` holds
 before command `c` runs, postcondition `Q` holds afterwards. The simplest
@@ -35,7 +35,7 @@ iteration — proves termination, giving total correctness.
 </a>
 <!-- /snippet -->
 
-## Procedures and contracts ★
+## Procedures and contracts
 
 A procedure is verified once against its contract: `requires` and `ensures` are
 its pre- and postcondition, and `writes` frames the globals it may modify.
@@ -112,10 +112,11 @@ specification, and an `if` may drop its `else` when the missing branch is a no-o
 </a>
 <!-- /snippet -->
 
-## Recursion
+## Recursion ★
 
-Procedures may call themselves. A `variant` on the procedure — decreasing across
-each recursive call — proves the recursion terminates, just as it does for a loop.
+Procedures may call themselves, reasoning from their own contract at the
+recursive call. A `variant` on the procedure — decreasing across each recursive
+call — proves the recursion terminates, just as it does for a loop.
 
 <!-- snippet: recursive-procedure -->
 <a href="snippets/recursive-procedure.cav">
