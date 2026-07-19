@@ -36,35 +36,6 @@ WARMUP=5 MIN_RUNS=40 bash bench/run.sh   # more runs for tighter intervals
 `run.sh` checks its tools up front and fails with a clear message if one is
 missing.
 
-## Hosting alongside the API docs
-
-The server that builds and hosts the odoc API docs can host this report too and
-link it from them. odoc renders `doc/index.mld` to
-`_build/default/_doc/_html/cavalry/index.html`, which already carries a
-*Performance* link to `benchmark.html` in the same directory. After building the
-docs, run the benchmark and drop the standalone report next to that page:
-
-```bash
-dune build @doc                                    # render the odoc HTML tree
-bash bench/run.sh                                  # regenerate results/report_local.html
-cp bench/results/report_local.html \
-   _build/default/_doc/_html/cavalry/benchmark.html
-```
-
-Then host `_build/default/_doc/_html/` as usual. The report must land in the
-`cavalry/` directory: the *Performance* link is relative to it, and the page
-pulls its fonts from `../odoc.support/fonts/` so it matches the docs' Gruvbox
-theme. Opened from anywhere else those fonts 404 and fall back to the system
-serif/sans/mono, with the palette still intact. The server needs `hyperfine` on
-`PATH` on top of the OCaml toolchain.
-
-One caveat, stated plainly: a pulling build server is usually a shared virtual
-machine, a noisy place to benchmark. The *ratios* between variants stay
-meaningful, but the absolute millisecond figures and the tight confidence
-intervals wobble more than on a quiet machine. If that matters, run the
-benchmark on dedicated hardware and copy the resulting `report_local.html` into
-the deploy instead.
-
 ## What each file is
 
 | File | Role |
