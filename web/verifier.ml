@@ -92,8 +92,12 @@ let verify_json (src : string) : string =
       (* Two views of the same elaborated program: the obligations to solve, and
          the proof outline (the WLP assertion threaded before each statement) to
          display. Both key procedures by name, so the outline joins onto its
-         procedure below. *)
-      (Cavalry.Main.obligations_smtlib ast, Cavalry.Main.proof_outline ast)
+         procedure below. Bind in order -- rather than relying on tuple
+         evaluation order -- so [obligations_smtlib], which resets and mints the
+         browser counterexample handles, runs last and owns that state. *)
+      let outline = Cavalry.Main.proof_outline ast in
+      let procs = Cavalry.Main.obligations_smtlib ast in
+      (procs, outline)
     with
     | procs, outlines ->
         let obligation (expl, loc, smtlib, ce) : Yojson.Safe.t =
