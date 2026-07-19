@@ -4,7 +4,7 @@ Cavalry is an imperative programming language whose programs can be *verified*, 
 
 Programs are built from integers, booleans, bounded arrays, loops, and procedures that can return values, and their specifications quantify over program state with `forall` and `exists`. Verification covers not just partial correctness but termination too: loops and recursive procedures carry `variant` measures that prove they finish, giving total correctness. A verified program can then be compiled to a native executable.
 
-Cavalry also runs entirely [in the browser](https://benmandrew.com/cavalry-verifier/) — the whole pipeline, Why3 and Z3 included, compiled to JavaScript and WebAssembly with no server round-trip. For the theory behind Cavalry and Hoare logic, see [my article](https://www.benmandrew.com/articles/cavalry).
+Cavalry also runs [in the browser](https://benmandrew.com/cavalry-verifier/) — the whole pipeline, Why3 and Z3 included, compiled to JavaScript and WebAssembly with no server round-trip. For the theory behind Cavalry and Hoare logic, see [my article](https://www.benmandrew.com/articles/cavalry).
 
 ![Screenshot of the web UI](web/screenshot.png)
 
