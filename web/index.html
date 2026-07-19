@@ -294,6 +294,20 @@
       .detail .field { margin-bottom: 12px; }
       .detail .field > .label { font-size: 11px; color: var(--muted); margin-bottom: 3px; }
       .detail .assertion { font-family: var(--mono); font-size: 12.5px; white-space: pre-wrap; overflow-wrap: anywhere; color: var(--fg); }
+      /* A WLP assertion decomposed into assume / implies / guarantees lists. */
+      .assertion-structured { font-family: var(--mono); font-size: 12.5px; }
+      .assert-quant { color: var(--muted); font-style: italic; margin-bottom: 4px; overflow-wrap: anywhere; }
+      .assert-tag { font-size: 10.5px; text-transform: uppercase; letter-spacing: 0.04em; color: var(--muted); margin: 2px 0; }
+      .assert-implies { color: var(--accent); font-weight: 600; margin: 4px 0 4px 2px; }
+      ul.assert-list { list-style: none; margin: 0 0 2px; padding: 0; }
+      ul.assert-list li {
+        position: relative;
+        padding: 2px 0 2px 16px;
+        color: var(--fg);
+        white-space: pre-wrap;
+        overflow-wrap: anywhere;
+      }
+      ul.assert-list li::before { content: "•"; position: absolute; left: 2px; color: var(--muted); }
       .ob {
         border: 1px solid var(--border);
         border-radius: 6px;

@@ -423,12 +423,9 @@ function renderDetail() {
       })
     );
     detailEl.appendChild(
-      field("Assertion that must hold here", (el) => {
-        const a = document.createElement("div");
-        a.className = "assertion";
-        a.textContent = step.assertion;
-        el.appendChild(a);
-      })
+      field("Assertion that must hold here", (el) =>
+        el.appendChild(renderAssertion(step.assertion))
+      )
     );
   }
 
@@ -463,6 +460,118 @@ function field(label, fill) {
   f.appendChild(l);
   fill(f);
   return f;
+}
+
+// --- Structured assertion rendering -----------------------------------------
+// A WLP assertion is usually "[forall ys.] a1 && ... -> g1 && ..." -- a list of
+// assumptions implying a list of guarantees, sometimes under quantifiers. Split
+// it into those parts (respecting parentheses/brackets, so nested -> and && are
+// left whole) for a readable list rather than one dense line. Anything that does
+// not fit the shape falls back to the raw string.
+
+// Indices of every occurrence of [tok] in [s] at bracket depth 0.
+function topLevelSplits(s, tok) {
+  const idx = [];
+  let depth = 0;
+  for (let i = 0; i + tok.length <= s.length; i++) {
+    const c = s[i];
+    if (c === "(" || c === "[") depth++;
+    else if (c === ")" || c === "]") depth--;
+    else if (depth === 0 && s.startsWith(tok, i)) {
+      idx.push(i);
+      i += tok.length - 1;
+    }
+  }
+  return idx;
+}
+
+// Split [s] on top-level occurrences of [tok] into trimmed, non-empty parts.
+function splitTop(s, tok) {
+  const idx = topLevelSplits(s, tok);
+  const parts = [];
+  let start = 0;
+  for (const j of idx) {
+    parts.push(s.slice(start, j).trim());
+    start = j + tok.length;
+  }
+  parts.push(s.slice(start).trim());
+  return parts.filter((p) => p.length);
+}
+
+// Decompose an assertion into { quantifier, assumptions, guarantees }. The
+// printer emits " -> " and " && " with surrounding spaces, so matching those
+// tokens never collides with "-" (subtraction) or "!=" etc.
+function decomposeAssertion(s) {
+  s = s.trim();
+  let quantifier = "";
+  // Peel leading quantifiers: "forall y1, y2." / "exists z." (binder vars carry
+  // no "." of their own, so the first "." ends the binder list).
+  let m;
+  while ((m = /^(forall|exists)\s+[^.]*\.\s*/.exec(s))) {
+    quantifier += (quantifier ? " " : "") + m[0].trim();
+    s = s.slice(m[0].length);
+  }
+  const arrows = topLevelSplits(s, " -> ");
+  let assumptions = [];
+  let guarantees;
+  if (arrows.length) {
+    // Everything left of the first top-level -> is the assumption; the rest (a
+    // possibly-nested implication) is what must then hold.
+    assumptions = splitTop(s.slice(0, arrows[0]), " && ");
+    guarantees = splitTop(s.slice(arrows[0] + 4), " && ");
+  } else {
+    guarantees = splitTop(s, " && ");
+  }
+  return { quantifier, assumptions, guarantees };
+}
+
+function bulletList(items) {
+  const ul = document.createElement("ul");
+  ul.className = "assert-list";
+  for (const it of items) {
+    const li = document.createElement("li");
+    li.textContent = it;
+    ul.appendChild(li);
+  }
+  return ul;
+}
+
+// Build the structured DOM for an assertion (or a plain block if it is a single
+// atom with nothing to split).
+function renderAssertion(assertion) {
+  const wrap = document.createElement("div");
+  wrap.className = "assertion-structured";
+  const { quantifier, assumptions, guarantees } = decomposeAssertion(assertion);
+
+  // Nothing to structure: one guarantee, no assumptions, no quantifier -> plain.
+  if (!quantifier && !assumptions.length && guarantees.length <= 1) {
+    const a = document.createElement("div");
+    a.className = "assertion";
+    a.textContent = assertion;
+    return a;
+  }
+
+  if (quantifier) {
+    const q = document.createElement("div");
+    q.className = "assert-quant";
+    q.textContent = quantifier;
+    wrap.appendChild(q);
+  }
+  if (assumptions.length) {
+    const lbl = document.createElement("div");
+    lbl.className = "assert-tag";
+    lbl.textContent = "Assume";
+    wrap.append(lbl, bulletList(assumptions));
+    const imp = document.createElement("div");
+    imp.className = "assert-implies";
+    imp.textContent = "⟹";
+    wrap.appendChild(imp);
+  }
+  const lbl = document.createElement("div");
+  lbl.className = "assert-tag";
+  lbl.textContent = assumptions.length ? "Show" : "Must hold";
+  wrap.append(lbl, bulletList(guarantees));
+  return wrap;
 }
 
 function obligationCard(o) {
