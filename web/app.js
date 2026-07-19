@@ -1,13 +1,21 @@
 // Main thread: the editor, the debounce/generation logic, and rendering.
-// It owns no verification logic -- it ships source to the worker and paints
-// whatever verdict comes back, discarding anything stale.
+// It owns no verification logic -- it ships source to the OCaml pipeline and Z3,
+// then paints the proof outline, per-obligation verdicts, and the detail pane,
+// discarding anything stale.
 
 const editor = document.getElementById("editor");
 const statusPill = document.getElementById("status");
-const results = document.getElementById("results");
 const gutter = document.getElementById("gutter");
 const highlightCode = document.getElementById("highlight-code");
 const examplePicker = document.getElementById("example-picker");
+const procTabs = document.getElementById("proc-tabs");
+const outlineEl = document.getElementById("outline");
+const detailEl = document.getElementById("detail");
+const summaryEl = document.getElementById("verdict-summary");
+const stepRange = document.getElementById("step-range");
+const stepPrev = document.getElementById("step-prev");
+const stepNext = document.getElementById("step-next");
+const stepLabel = document.getElementById("step-label");
 
 // The example programs come from dist/examples.js (generated from the README
 // snippets). Fall back to a single built-in program if that bundle is missing,
@@ -114,14 +122,36 @@ editor.addEventListener("scroll", syncScroll);
 darkQuery.addEventListener("change", paintHighlight);
 refreshEditor();
 
+// Editor metrics, mirrored from the CSS custom properties, so the outline can
+// scroll the source to a given line without stealing focus (jumpTo, which
+// focuses and selects, is reserved for an explicit click on a location).
+const LINE_H = 21;
+const PAD_Y = 16;
+
+function revealLine(line) {
+  if (!line) return;
+  const top = PAD_Y + (line - 1) * LINE_H;
+  const view = editor.clientHeight;
+  if (top < editor.scrollTop + LINE_H || top > editor.scrollTop + view - LINE_H) {
+    editor.scrollTop = Math.max(0, top - view / 2);
+    syncScroll();
+  }
+}
+
 // gen: monotonic id for the latest request. currentGen: the gen we still want
-// rendered -- results older than it are dropped. lastGood: the last successful
-// verdict, kept on screen (dimmed) when the program becomes unparseable mid-edit
-// so the panel does not flash on every keystroke.
+// rendered -- results older than it are dropped.
 let gen = 0;
 let currentGen = 0;
-let lastGood = null;
 let solve = null; // set once Z3 has loaded
+
+// Proof-pane state: the parsed pipeline output (procedures + obligations +
+// outline), the last solve result (verdicts) or null while solving, the last
+// good parse kept on screen (dimmed) when the program becomes unparseable, and
+// the currently-selected procedure and step within it.
+let parsedNow = null;
+let lastGood = null;
+let activeProcIdx = 0;
+let activeStepIdx = 0;
 
 // Per-obligation solve budget. Matches the native CLI's default --timeout; a
 // solve that blows it is interrupted and reported as a "timeout" (see
@@ -131,6 +161,11 @@ const SOLVE_TIMEOUT_MS = 10000;
 function setPill(cls, text) {
   statusPill.className = "pill " + cls;
   statusPill.textContent = text;
+}
+
+function setSummary(cls, text) {
+  summaryEl.className = "verdict-summary " + cls;
+  summaryEl.textContent = text;
 }
 
 // A count-up clock shown in the status pill while a verification is in flight,
@@ -146,7 +181,6 @@ function paintBusy() {
   setPill("busy", `${busyLabel} ${secs}s`);
 }
 
-// Start (or restart -- a newer run supersedes the timer) the count-up.
 function startBusy() {
   busyStart = performance.now();
   busyLabel = "verifying…";
@@ -162,17 +196,459 @@ function stopBusy() {
   }
 }
 
-// Verify the current editor contents. Runs on the main thread: the OCaml
-// pipeline (cavalryObligations) is a fast synchronous call, and each Z3 solve is
-// awaited -- Z3 runs in its own worker threads, so awaiting yields the main
-// thread back to the event loop and typing stays responsive. A newer keystroke
-// bumps currentGen; in-flight runs see the mismatch (isStale) and bail.
+// --- Verdict helpers --------------------------------------------------------
+// An obligation's verdict is "unsat" (proved), a failing token, or undefined
+// (not yet solved). Map to a status class shared by tabs, outline rails, and the
+// detail pane.
+function statusOf(verdict) {
+  if (verdict === undefined || verdict === null) return "pending";
+  if (verdict === "unsat") return "ok";
+  if (verdict === "sat") return "bad";
+  return "warn"; // unknown / timeout
+}
+
+// Combine several statuses into the worst, for a line or a whole procedure.
+function worst(statuses) {
+  if (statuses.includes("bad")) return "bad";
+  if (statuses.includes("warn")) return "warn";
+  if (statuses.includes("pending")) return "pending";
+  return statuses.length ? "ok" : "none";
+}
+
+function verdictText(verdict) {
+  if (verdict === undefined || verdict === null) return "solving…";
+  if (verdict === "unsat") return "proved";
+  if (verdict === "timeout") return `timeout (${SOLVE_TIMEOUT_MS / 1000}s)`;
+  if (verdict === "sat") return "refuted";
+  return verdict; // unknown
+}
+
+// The trimmed source text of a 1-based line, for interleaving in the outline.
+function sourceLine(line) {
+  if (!line) return "";
+  const lines = editor.value.split("\n");
+  return (lines[line - 1] ?? "").trim();
+}
+
+// A coarse label for a statement, inferred from its source text -- purely a
+// reading aid next to the outline assertion.
+function inferKind(text) {
+  const t = text.trim();
+  if (/^while\b/.test(t)) return "while";
+  if (/^if\b/.test(t)) return "if";
+  if (/\barray\s*\(/.test(t) && t.includes(":=")) return "array alloc";
+  if (/^[A-Za-z_]\w*\s*\[.*\]\s*:=/.test(t)) return "array write";
+  if (t.includes(":=")) return "assignment";
+  if (/^[A-Za-z_]\w*\s*\(/.test(t)) return "call";
+  return "";
+}
+
+// --- Jumping ----------------------------------------------------------------
+function jumpTo(line, col) {
+  const lines = editor.value.split("\n");
+  let pos = 0;
+  for (let i = 0; i < line - 1 && i < lines.length; i++) pos += lines[i].length + 1;
+  pos += Math.max(0, col - 1);
+  editor.focus();
+  editor.setSelectionRange(pos, pos);
+  syncScroll();
+}
+
+// --- Steps ------------------------------------------------------------------
+// Build the ordered list of steps for a procedure: one per outline entry (the
+// assertion threaded before a statement), each with the obligations located on
+// its line. Any obligation with no location (a whole-procedure postcondition) or
+// whose line matches no statement is gathered into a trailing "postcondition"
+// step, so nothing Z3 checked is hidden.
+function stepsFor(proc) {
+  const outline = proc.outline || [];
+  const obs = proc.obligations || [];
+  const lineOf = (o) => (o.loc ? o.loc.line : null);
+  const outlineLines = new Set(outline.map((s) => (s.loc ? s.loc.line : null)));
+
+  const steps = outline.map((s) => ({
+    kind: "stmt",
+    loc: s.loc,
+    assertion: s.assertion,
+    obligations: obs.filter((o) => o.loc && s.loc && lineOf(o) === s.loc.line),
+  }));
+
+  const trailing = obs.filter((o) => !o.loc || !outlineLines.has(lineOf(o)));
+  if (trailing.length) {
+    steps.push({ kind: "post", loc: null, assertion: null, obligations: trailing });
+  }
+  return steps;
+}
+
+// --- Rendering: procedure tabs ---------------------------------------------
+function renderTabs() {
+  procTabs.replaceChildren();
+  if (!parsedNow || !parsedNow.ok) return;
+  parsedNow.procedures.forEach((proc, i) => {
+    const btn = document.createElement("button");
+    btn.className = "proc-tab" + (i === activeProcIdx ? " active" : "");
+    btn.type = "button";
+    const dot = document.createElement("span");
+    const st = worst((proc.obligations || []).map((o) => statusOf(o.verdict)));
+    dot.className = "dot" + (st === "none" ? "" : " " + st);
+    btn.appendChild(dot);
+    btn.appendChild(document.createTextNode(proc.name));
+    btn.onclick = () => selectProc(i);
+    procTabs.appendChild(btn);
+  });
+}
+
+// --- Rendering: the outline -------------------------------------------------
+function renderOutline() {
+  outlineEl.replaceChildren();
+  if (!parsedNow || !parsedNow.ok) return;
+  const proc = parsedNow.procedures[activeProcIdx];
+  if (!proc) return;
+  const steps = stepsFor(proc);
+
+  if (!steps.length) {
+    const p = document.createElement("div");
+    p.className = "ol-bookend";
+    p.textContent = "// no statements to outline";
+    outlineEl.appendChild(p);
+    return;
+  }
+
+  steps.forEach((step, i) => {
+    const row = document.createElement("div");
+    row.className = "ol-row" + (i === activeStepIdx ? " active" : "");
+    row.onclick = () => selectStep(i);
+
+    const lineStatus = worst(step.obligations.map((o) => statusOf(o.verdict)));
+
+    // The assertion line: "{ … }", brace tinted by any obligation on the line.
+    const assert = document.createElement("div");
+    assert.className = "ol-assert" + (lineStatus === "none" ? "" : " " + lineStatus);
+    const open = document.createElement("span");
+    open.className = "brace";
+    open.textContent = "{";
+    const body = document.createElement("span");
+    body.textContent =
+      step.kind === "post" ? "postcondition — whole procedure" : step.assertion;
+    const close = document.createElement("span");
+    close.className = "brace";
+    close.textContent = "}";
+    assert.append(open, body, close);
+    row.appendChild(assert);
+
+    // The statement line, from source, with an inferred kind label.
+    if (step.kind === "stmt") {
+      const stmt = document.createElement("div");
+      stmt.className = "ol-stmt";
+      stmt.textContent = sourceLine(step.loc && step.loc.line);
+      const kind = inferKind(stmt.textContent);
+      if (kind) {
+        const k = document.createElement("span");
+        k.className = "kw";
+        k.textContent = kind;
+        stmt.appendChild(k);
+      }
+      row.appendChild(stmt);
+    }
+    outlineEl.appendChild(row);
+  });
+}
+
+// --- Rendering: the detail pane for the active step ------------------------
+function renderDetail() {
+  detailEl.replaceChildren();
+  if (!parsedNow || !parsedNow.ok) return;
+  const proc = parsedNow.procedures[activeProcIdx];
+  if (!proc) return;
+  const steps = stepsFor(proc);
+  const step = steps[activeStepIdx];
+  if (!step) {
+    const p = document.createElement("div");
+    p.className = "placeholder";
+    p.textContent = "Select a step in the outline.";
+    detailEl.appendChild(p);
+    return;
+  }
+
+  const h = document.createElement("h2");
+  h.textContent = step.kind === "post" ? "Postcondition" : "Proof step";
+  detailEl.appendChild(h);
+
+  if (step.kind === "stmt") {
+    const stmtText = sourceLine(step.loc && step.loc.line);
+    detailEl.appendChild(
+      field("Statement" + (step.loc ? ` (line ${step.loc.line})` : ""), (el) => {
+        const code = document.createElement("span");
+        code.className = "assertion";
+        code.textContent = stmtText || "—";
+        el.appendChild(code);
+        const k = inferKind(stmtText);
+        if (k) {
+          const tag = document.createElement("span");
+          tag.className = "kw";
+          tag.textContent = k;
+          el.appendChild(tag);
+        }
+      })
+    );
+    detailEl.appendChild(
+      field("Assertion that must hold here", (el) => {
+        const a = document.createElement("div");
+        a.className = "assertion";
+        a.textContent = step.assertion;
+        el.appendChild(a);
+      })
+    );
+  }
+
+  // Obligations located on this step.
+  const obsWrap = document.createElement("div");
+  obsWrap.className = "field";
+  const lbl = document.createElement("div");
+  lbl.className = "label";
+  lbl.textContent = step.obligations.length
+    ? "Proof obligations checked here"
+    : "";
+  obsWrap.appendChild(lbl);
+
+  if (!step.obligations.length) {
+    const note = document.createElement("div");
+    note.className = "placeholder";
+    note.textContent =
+      "This step only propagates the assertion; Z3 checks no separate obligation here.";
+    obsWrap.appendChild(note);
+  } else {
+    for (const o of step.obligations) obsWrap.appendChild(obligationCard(o));
+  }
+  detailEl.appendChild(obsWrap);
+}
+
+function field(label, fill) {
+  const f = document.createElement("div");
+  f.className = "field";
+  const l = document.createElement("div");
+  l.className = "label";
+  l.textContent = label;
+  f.appendChild(l);
+  fill(f);
+  return f;
+}
+
+function obligationCard(o) {
+  const st = statusOf(o.verdict);
+  const card = document.createElement("div");
+  card.className = "ob " + st;
+
+  const head = document.createElement("div");
+  head.className = "ob-head";
+  const expl = document.createElement("span");
+  expl.className = "ob-expl";
+  expl.textContent = o.expl;
+  const v = document.createElement("span");
+  v.className = "ob-verdict";
+  v.textContent = verdictText(o.verdict);
+  head.append(expl, v);
+  card.appendChild(head);
+
+  if (o.loc) {
+    const loc = document.createElement("span");
+    loc.className = "loc";
+    loc.textContent = `line ${o.loc.line}:${o.loc.col}`;
+    loc.onclick = () => jumpTo(o.loc.line, o.loc.col);
+    card.appendChild(loc);
+  }
+
+  // The counterexample, when Z3 produced one for a failing obligation.
+  if (o.counterexample) {
+    const pre = document.createElement("pre");
+    pre.className = "counterexample";
+    pre.textContent = o.counterexample.replace(/\n$/, "");
+    card.appendChild(pre);
+  }
+
+  // The SMT-LIB2 sent to Z3, folded away by default.
+  if (o.smtlib) {
+    const det = document.createElement("details");
+    const sum = document.createElement("summary");
+    sum.textContent = "SMT-LIB2 sent to Z3";
+    const pre = document.createElement("pre");
+    pre.textContent = o.smtlib;
+    det.append(sum, pre);
+    card.appendChild(det);
+  }
+  return card;
+}
+
+// --- Stepper ----------------------------------------------------------------
+function renderStepper() {
+  const proc = parsedNow && parsedNow.ok && parsedNow.procedures[activeProcIdx];
+  const n = proc ? stepsFor(proc).length : 0;
+  stepRange.max = String(Math.max(0, n - 1));
+  stepRange.value = String(activeStepIdx);
+  stepRange.disabled = n <= 1;
+  stepPrev.disabled = activeStepIdx <= 0;
+  stepNext.disabled = activeStepIdx >= n - 1;
+  stepLabel.textContent = n ? `step ${activeStepIdx + 1} / ${n}` : "";
+}
+
+function selectStep(i) {
+  const proc = parsedNow && parsedNow.ok && parsedNow.procedures[activeProcIdx];
+  const n = proc ? stepsFor(proc).length : 0;
+  if (!n) return;
+  activeStepIdx = Math.max(0, Math.min(n - 1, i));
+  const steps = stepsFor(proc);
+  const step = steps[activeStepIdx];
+  if (step && step.loc) revealLine(step.loc.line);
+  // Re-mark the active row without a full rebuild.
+  for (const row of outlineEl.children) row.classList.remove("active");
+  const row = outlineEl.children[activeStepIdx];
+  if (row) row.classList.add("active");
+  renderStepper();
+  renderDetail();
+}
+
+function selectProc(i) {
+  activeProcIdx = i;
+  // Start each procedure at its postcondition end (the bottom), the natural
+  // origin of a backward WLP reading; the user steps up towards the precondition.
+  const proc = parsedNow.procedures[i];
+  activeStepIdx = Math.max(0, stepsFor(proc).length - 1);
+  renderTabs();
+  renderOutline();
+  renderStepper();
+  renderDetail();
+  const steps = stepsFor(proc);
+  const step = steps[activeStepIdx];
+  if (step && step.loc) revealLine(step.loc.line);
+}
+
+stepPrev.onclick = () => selectStep(activeStepIdx - 1);
+stepNext.onclick = () => selectStep(activeStepIdx + 1);
+stepRange.oninput = () => selectStep(Number(stepRange.value));
+
+// --- Top-level render for a parsed program ---------------------------------
+// Called synchronously once the OCaml pipeline returns, before Z3 has solved:
+// the outline is shown immediately with obligation verdicts pending, then
+// applyVerdicts fills them in.
+function renderParsed(parsed, { keepStep } = {}) {
+  parsedNow = parsed;
+  document.querySelector(".proof").classList.remove("stale");
+  detailEl.classList.remove("stale");
+
+  if (!parsed.ok) {
+    renderError(parsed);
+    return;
+  }
+  lastGood = parsed;
+  if (activeProcIdx >= parsed.procedures.length) activeProcIdx = 0;
+  const proc = parsed.procedures[activeProcIdx];
+  const n = stepsFor(proc).length;
+  if (!keepStep || activeStepIdx >= n) activeStepIdx = Math.max(0, n - 1);
+  renderTabs();
+  renderOutline();
+  renderStepper();
+  renderDetail();
+}
+
+// Attach each obligation's verdict (positional zip: solveObligations flattens
+// procedures then obligations in the same order the pipeline emitted them), then
+// recolour tabs, outline rails, and the detail pane.
+function applyVerdicts(result) {
+  if (!parsedNow || !parsedNow.ok) return;
+  let k = 0;
+  for (const proc of parsedNow.procedures) {
+    for (const o of proc.obligations) {
+      const r = result.obligations && result.obligations[k++];
+      if (r) {
+        o.verdict = r.verdict;
+        o.counterexample = r.counterexample;
+      }
+    }
+  }
+  // On a failure, jump the outline to the first refuted step so the reader lands
+  // on the problem rather than wherever they were reading.
+  if (!result.verified) {
+    for (let pi = 0; pi < parsedNow.procedures.length; pi++) {
+      const si = firstFailingStep(pi);
+      if (si >= 0) {
+        activeProcIdx = pi;
+        activeStepIdx = si;
+        break;
+      }
+    }
+  }
+
+  renderTabs();
+  renderOutline();
+  renderStepper();
+  renderDetail();
+  const proc = parsedNow.procedures[activeProcIdx];
+  const step = proc && stepsFor(proc)[activeStepIdx];
+  if (step && step.loc) revealLine(step.loc.line);
+
+  if (result.verified) {
+    setSummary("ok", `✓ ${result.total} obligation${result.total === 1 ? "" : "s"} proved`);
+    setPill("ok", "verified");
+  } else {
+    setSummary("bad", `✗ ${result.failures.length} of ${result.total} failed`);
+    setPill("bad", "not verified");
+  }
+}
+
+// The index of the first step in a procedure carrying a failed obligation, or -1.
+function firstFailingStep(procIdx) {
+  const steps = stepsFor(parsedNow.procedures[procIdx]);
+  for (let i = 0; i < steps.length; i++) {
+    if (steps[i].obligations.some((o) => o.verdict && o.verdict !== "unsat")) return i;
+  }
+  return -1;
+}
+
+// A parse/type error: keep the last good outline visible but dimmed, and put the
+// message (with a clickable location) at the top of the detail pane.
+function renderError(parsed) {
+  if (lastGood) {
+    parsedNow = lastGood;
+    renderTabs();
+    renderOutline();
+    renderStepper();
+    renderDetail();
+    document.querySelector(".proof").classList.add("stale");
+  } else {
+    outlineEl.replaceChildren();
+    detailEl.replaceChildren();
+  }
+  const kind = parsed.kind === "type" ? "Type error" : "Syntax error";
+  setSummary("busy", kind);
+  setPill("busy", parsed.kind === "type" ? "type error" : "syntax error");
+
+  const banner = document.createElement("div");
+  banner.className = "field";
+  const h = document.createElement("h2");
+  h.textContent = kind;
+  const msg = document.createElement("div");
+  msg.className = "assertion";
+  msg.textContent = parsed.error;
+  banner.append(h, msg);
+  if (parsed.loc) {
+    const loc = document.createElement("span");
+    loc.className = "loc";
+    loc.textContent = `line ${parsed.loc.line}:${parsed.loc.col}`;
+    loc.onclick = () => jumpTo(parsed.loc.line, parsed.loc.col);
+    banner.appendChild(loc);
+  }
+  detailEl.classList.remove("stale");
+  detailEl.prepend(banner);
+}
+
+// --- Verify loop ------------------------------------------------------------
 async function verifyNow() {
   if (!solve) return;
   gen += 1;
   const myGen = gen;
   currentGen = myGen;
   startBusy();
+  setSummary("busy", "verifying…");
   let parsed;
   try {
     parsed = JSON.parse(self.cavalryObligations(editor.value));
@@ -180,14 +656,23 @@ async function verifyNow() {
     if (myGen === currentGen) {
       stopBusy();
       setPill("bad", "error");
-      results.replaceChildren();
+      setSummary("bad", "internal error");
+      detailEl.replaceChildren();
       const v = document.createElement("div");
-      v.className = "verdict bad";
-      v.textContent = "Internal error: " + (e && e.message || e);
-      results.appendChild(v);
+      v.className = "placeholder";
+      v.textContent = "Internal error: " + ((e && e.message) || e);
+      detailEl.appendChild(v);
     }
     return;
   }
+  // Paint the outline immediately (verdicts pending) so it is visible while Z3
+  // works, keeping the reader's step position across a re-verify.
+  renderParsed(parsed, { keepStep: true });
+  if (!parsed.ok) {
+    stopBusy();
+    return;
+  }
+
   const result = await VerifyCore.solveObligations(parsed, solve, {
     isStale: () => myGen !== currentGen,
     onProgress: (done, total) => {
@@ -200,7 +685,8 @@ async function verifyNow() {
       self.cavalryRenderCounterexample(id, output, candidate),
   });
   if (myGen !== currentGen || result.stale) return; // superseded
-  render(myGen, result);
+  stopBusy();
+  applyVerdicts(result);
 }
 
 let debounceTimer = null;
@@ -210,103 +696,16 @@ editor.addEventListener("input", () => {
   debounceTimer = setTimeout(verifyNow, 300);
 });
 
-function jumpTo(line, col) {
-  const lines = editor.value.split("\n");
-  let pos = 0;
-  for (let i = 0; i < line - 1 && i < lines.length; i++) pos += lines[i].length + 1;
-  pos += Math.max(0, col - 1);
-  editor.focus();
-  editor.setSelectionRange(pos, pos);
-  syncScroll(); // focusing may scroll the textarea to the caret; follow it
-}
-
-function locSpan(loc) {
-  if (!loc) return "";
-  const s = document.createElement("span");
-  s.className = "loc";
-  s.textContent = `line ${loc.line}:${loc.col}`;
-  s.onclick = () => jumpTo(loc.line, loc.col);
-  return s;
-}
-
-function render(gen, result, { stale } = {}) {
-  stopBusy(); // a terminal verdict is about to own the pill
-  results.className = stale ? "stale" : "";
-  results.replaceChildren();
-
-  const verdict = document.createElement("div");
-  results.appendChild(verdict);
-
-  if (!result.ok) {
-    // A parse/type error. Keep the last good verdict dimmed above the error.
-    if (lastGood) render.appendLastGood(results);
-    verdict.className = "verdict busy";
-    verdict.textContent = result.kind === "type" ? "Type error" : "Syntax error";
-    const ul = document.createElement("ul");
-    ul.className = "findings";
-    const li = document.createElement("li");
-    li.className = "err";
-    li.append(result.error + "  ");
-    const ls = locSpan(result.loc);
-    if (ls) li.append(ls);
-    ul.appendChild(li);
-    results.appendChild(ul);
-    setPill("busy", result.kind === "type" ? "type error" : "syntax error");
-    return;
+// Paint the proof outline immediately from the synchronous OCaml pipeline --
+// it needs no prover -- so the reader sees the structure while Z3's wasm (~32
+// MB) is still loading; obligation verdicts fill in once solving runs.
+try {
+  if (self.cavalryObligations) {
+    renderParsed(JSON.parse(self.cavalryObligations(editor.value)), {});
   }
-
-  lastGood = { gen, result };
-  if (result.verified) {
-    verdict.className = "verdict ok";
-    verdict.textContent = "✓ Verified";
-    const note = document.createElement("div");
-    note.className = "note";
-    note.textContent = `${result.total} proof obligation${result.total === 1 ? "" : "s"} discharged by Z3.`;
-    results.appendChild(note);
-    setPill("ok", "verified");
-  } else {
-    verdict.className = "verdict bad";
-    verdict.textContent = `✗ Not verified — ${result.failures.length} of ${result.total} obligation${result.total === 1 ? "" : "s"} failed`;
-    const ul = document.createElement("ul");
-    ul.className = "findings";
-    for (const f of result.failures) {
-      const li = document.createElement("li");
-      const where = f.proc ? `${f.proc}: ` : "";
-      li.append(`${where}${f.expl} `);
-      const ls = locSpan(f.loc);
-      if (ls) li.append(ls);
-      const v = document.createElement("span");
-      v.className = "note";
-      v.textContent =
-        f.verdict === "timeout"
-          ? `  (timed out after ${SOLVE_TIMEOUT_MS / 1000}s)`
-          : `  (${f.verdict})`;
-      li.append(v);
-      // A counterexample block (variable = value lines), when Z3 produced one.
-      if (f.counterexample) {
-        const pre = document.createElement("pre");
-        pre.className = "counterexample";
-        pre.textContent = f.counterexample.replace(/\n$/, "");
-        li.append(pre);
-      }
-      ul.appendChild(li);
-    }
-    results.appendChild(ul);
-    setPill("bad", "not verified");
-  }
+} catch (_) {
+  /* leave the pane empty until the first real verify */
 }
-
-// Re-render the retained good verdict, dimmed, above a fresh error.
-render.appendLastGood = (root) => {
-  const d = document.createElement("div");
-  d.className = "note";
-  d.style.marginBottom = "8px";
-  const r = lastGood.result;
-  d.textContent = r.verified
-    ? `(last verified: ${r.total} obligations)`
-    : `(last result: ${r.failures.length}/${r.total} failed)`;
-  root.appendChild(d);
-};
 
 // Load Z3 once (its wasm is ~32 MB, so this takes a moment), then do a first
 // verification of the sample.
@@ -318,10 +717,11 @@ render.appendLastGood = (root) => {
   } catch (e) {
     stopBusy();
     setPill("bad", "Z3 failed");
-    results.replaceChildren();
+    setSummary("bad", "Z3 failed to load");
+    detailEl.replaceChildren();
     const v = document.createElement("div");
-    v.className = "verdict bad";
-    v.textContent = "Failed to load Z3: " + (e && e.message || e);
-    results.appendChild(v);
+    v.className = "placeholder";
+    v.textContent = "Failed to load Z3: " + ((e && e.message) || e);
+    detailEl.appendChild(v);
   }
 })();
