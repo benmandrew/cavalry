@@ -69,7 +69,10 @@ async function setEditor(page, text) {
   const page = await browser.newPage();
   await page.setViewport({ width: 1440, height: 900 }); // wide enough for the three-pane layout
   page.on("console", (m) => { if (m.type() === "error") console.log("  [console.error]", m.text()); });
-  page.on("pageerror", (e) => console.log("  [pageerror]", e.message));
+  // An uncaught page error (e.g. a render throwing) strands the UI; collect them
+  // and fail the run at the end so such a regression cannot pass silently.
+  const pageErrors = [];
+  page.on("pageerror", (e) => { console.log("  [pageerror]", e.message); pageErrors.push(e.message); });
 
   let failed = false;
   try {
@@ -180,6 +183,23 @@ async function setEditor(page, text) {
     const hasCe = /counterexample:/.test(fail) && /\bx = /.test(fail);
     console.log(`  ok: failure explanation shown${hasCe ? " + counterexample" : " (no CE witness this run)"}`);
 
+    // 2b. Structured assertion rendering: a statement threaded between two
+    // implication assertions has a top-level "->", so its detail renders the
+    // decomposed assume/show lists (a path that once threw on an undefined var
+    // and stranded the pill). Step to that row and confirm both blocks appear.
+    await setEditor(page, `{ x > 3 -> x > 0 }\ny := 1\n{ x > 3 -> x > 0 }`);
+    await waitPill(page, /^verified$/, "implication program verifies");
+    await waitDom(page, () => {
+      // Walk every step; the stmt row's detail must show Assume + Show.
+      const back = document.getElementById("step-prev");
+      for (let i = 0; i <= Number(document.getElementById("step-range").max) + 1; i++) {
+        const d = document.getElementById("detail").textContent;
+        if (/Assume/.test(d) && /Show/.test(d)) return true;
+        back.click();
+      }
+      return false;
+    }, "assume/show blocks render for a stmt-step implication");
+
     // 3. Fix it -> verified again.
     await setEditor(page, `{ x >= 0 }\ny := x + 1\n{ y > x }`);
     await waitPill(page, /^verified$/, "fixed -> verified");
@@ -191,6 +211,9 @@ async function setEditor(page, text) {
     // 5. Type error surfaces distinctly.
     await setEditor(page, `{ x >= 0 }\ny := x && 1\n{ y > x }`);
     await waitPill(page, /type error/, "type mismatch -> type error");
+
+    if (pageErrors.length)
+      throw new Error(`${pageErrors.length} uncaught page error(s): ${pageErrors.join(" | ")}`);
 
     console.log("\nALL BROWSER CHECKS PASSED");
   } catch (e) {

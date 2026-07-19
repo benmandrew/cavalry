@@ -74,8 +74,12 @@
         padding: 4px 8px;
         cursor: pointer;
       }
+      /* A fixed-width slot for the status pill so the example picker to its left
+         does not shift as the pill text changes (the live "verifying… N/M X.Xs"
+         ticker is the widest). The pill itself stays snug and right-aligned
+         within the slot; the reserve fits the longest realistic ticker. */
+      .pill-slot { min-width: 160px; text-align: right; }
       .pill {
-        margin-left: 12px;
         font-size: 12px;
         font-weight: 600;
         padding: 4px 10px;
@@ -86,6 +90,7 @@
       .pill.ok { color: var(--ok); border-color: var(--ok); }
       .pill.bad { color: var(--bad); border-color: var(--bad); }
       .pill.busy { color: var(--busy); border-color: var(--busy); }
+      .pill.warn { color: var(--busy); border-color: var(--busy); }
       /* Three columns on a wide screen: the editor, the proof outline, and the
          detail for the selected step. Each column owns its own scroll; the page
          body never scrolls. On a narrow screen they stack and the page scrolls. */
@@ -227,6 +232,24 @@
       .verdict-summary.ok { color: var(--ok); }
       .verdict-summary.bad { color: var(--bad); }
       .verdict-summary.busy { color: var(--busy); }
+      .verdict-summary.warn { color: var(--busy); }
+      /* Shown only when a solve came back inconclusive (timeout/unknown), to
+         re-run the prover -- see finishVerify. */
+      .retry-btn {
+        font: inherit;
+        font-size: 11px;
+        font-weight: 600;
+        color: var(--busy);
+        background: var(--bg);
+        border: 1px solid var(--busy);
+        border-radius: 6px;
+        padding: 2px 8px;
+        margin-left: 8px;
+        cursor: pointer;
+        white-space: nowrap;
+      }
+      .retry-btn:hover { background: var(--panel); }
+      .retry-btn[hidden] { display: none; }
 
       .outline {
         flex: 1;
@@ -345,7 +368,7 @@
       <label class="example-picker">Example
         <select id="example-picker"></select>
       </label>
-      <span id="status" class="pill busy">booting…</span>
+      <span class="pill-slot"><span id="status" class="pill busy">booting…</span></span>
     </header>
     <main>
       <div class="editor-wrap">
@@ -361,6 +384,7 @@
         <div class="proof-head">
           <div id="proc-tabs" class="proc-tabs"></div>
           <span id="verdict-summary" class="verdict-summary busy">Loading Z3…</span>
+          <button id="retry" class="retry-btn" type="button" hidden title="Re-run the prover on this program">↻ Retry</button>
         </div>
         <div id="outline" class="outline"></div>
         <div class="stepper">

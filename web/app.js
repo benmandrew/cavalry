@@ -12,6 +12,7 @@ const procTabs = document.getElementById("proc-tabs");
 const outlineEl = document.getElementById("outline");
 const detailEl = document.getElementById("detail");
 const summaryEl = document.getElementById("verdict-summary");
+const retryBtn = document.getElementById("retry");
 const stepRange = document.getElementById("step-range");
 const stepPrev = document.getElementById("step-prev");
 const stepNext = document.getElementById("step-next");
@@ -628,7 +629,6 @@ function renderAssertion(assertion) {
     lbl.className = "assert-tag";
     lbl.textContent = "Assume";
     wrap.append(lbl, bulletList(assumptions));
-    wrap.appendChild(imp);
   }
   const lbl = document.createElement("div");
   lbl.className = "assert-tag";
@@ -796,9 +796,24 @@ function finishVerify(result) {
   if (result.verified) {
     setSummary("ok", `✓ ${result.total} obligation${result.total === 1 ? "" : "s"} proved · ${t}`);
     setPill("ok", "verified");
-  } else {
-    setSummary("bad", `✗ ${result.failures.length} of ${result.total} failed · ${t}`);
+    return;
+  }
+  // A failure is either a refutation (Z3 said "sat" -- the obligation is really
+  // false) or an inconclusive goal (timeout/unknown -- Z3 reached no verdict,
+  // which does NOT mean the program is wrong). Reporting the latter as "not
+  // verified" reads as "invalid when valid", so distinguish them: only a "sat"
+  // is refuted. An inconclusive result is worth another try (Z3 is not fully
+  // deterministic, and a re-solve may land under the timeout), so offer Retry.
+  const refuted = result.failures.filter((o) => o.verdict === "sat").length;
+  const inconclusive = result.failures.length - refuted;
+  retryBtn.hidden = inconclusive === 0;
+  if (refuted > 0) {
+    setSummary("bad", `✗ ${refuted} of ${result.total} refuted${inconclusive ? `, ${inconclusive} inconclusive` : ""} · ${t}`);
     setPill("bad", "not verified");
+  } else {
+    // Nothing refuted; the prover just could not reach a verdict in time.
+    setSummary("warn", `? ${inconclusive} of ${result.total} inconclusive (timeout/unknown) · ${t}`);
+    setPill("warn", "inconclusive");
   }
 }
 
@@ -855,6 +870,7 @@ async function verifyNow() {
   const myGen = gen;
   currentGen = myGen;
   startBusy();
+  retryBtn.hidden = true; // a fresh run supersedes any offered retry
   setSummary("busy", "verifying…");
   let parsed;
   try {
@@ -872,47 +888,68 @@ async function verifyNow() {
     }
     return;
   }
-  // Paint the outline immediately (verdicts pending) so it is visible while Z3
-  // works, keeping the reader's step position across a re-verify.
-  renderParsed(parsed, { keepStep: true });
-  if (!parsed.ok) {
-    stopBusy();
+  // Everything from the first paint through the solve is guarded: a throw from a
+  // render (a DOM bug) or a rejected solve (e.g. a wasm OOM) must never leave the
+  // busy ticker running -- that is what strands the pill on "verifying… N.Ns"
+  // forever. On any failure we stop the clock and surface it, rather than hang.
+  let focused = false;
+  let result;
+  try {
+    // Paint the outline immediately (verdicts pending) so it is visible while Z3
+    // works, keeping the reader's step position across a re-verify.
+    renderParsed(parsed, { keepStep: true });
+    if (!parsed.ok) {
+      stopBusy();
+      return;
+    }
+
+    // Stream each verdict onto its obligation as it lands, colouring the outline
+    // and detail live. [focused] makes the outline jump to the first refuted step
+    // exactly once (not on every subsequent failure).
+    result = await VerifyCore.solveObligations(parsed, solve, {
+      isStale: () => myGen !== currentGen,
+      onProgress: (done, total) => {
+        if (myGen === currentGen) {
+          busyLabel = `verifying… ${done}/${total}`;
+          paintBusy();
+        }
+      },
+      onVerdict: (record, index) => {
+        if (myGen !== currentGen || !parsedNow._flat) return;
+        const o = parsedNow._flat[index];
+        if (o) {
+          o.verdict = record.verdict;
+          o.counterexample = record.counterexample;
+          o.ms = record.ms;
+        }
+        // A render throw here would otherwise abort the whole stream (and reject
+        // solveObligations); contain it so one bad verdict can't hang the run.
+        try {
+          const failed = record.verdict && record.verdict !== "unsat";
+          if (failed && !focused) {
+            focused = true;
+            focusFirstFailure();
+          } else {
+            renderTabs();
+            renderOutline();
+            renderDetail();
+          }
+        } catch (e) {
+          console.error("verdict render failed", e);
+        }
+      },
+      renderCounterexample: (id, output, candidate) =>
+        self.cavalryRenderCounterexample(id, output, candidate),
+    });
+  } catch (e) {
+    if (myGen === currentGen) {
+      stopBusy();
+      setPill("bad", "error");
+      setSummary("bad", "verification error");
+      console.error("verification failed", e);
+    }
     return;
   }
-
-  // Stream each verdict onto its obligation as it lands, colouring the outline
-  // and detail live. [focused] makes the outline jump to the first refuted step
-  // exactly once (not on every subsequent failure).
-  let focused = false;
-  const result = await VerifyCore.solveObligations(parsed, solve, {
-    isStale: () => myGen !== currentGen,
-    onProgress: (done, total) => {
-      if (myGen === currentGen) {
-        busyLabel = `verifying… ${done}/${total}`;
-        paintBusy();
-      }
-    },
-    onVerdict: (record, index) => {
-      if (myGen !== currentGen || !parsedNow._flat) return;
-      const o = parsedNow._flat[index];
-      if (o) {
-        o.verdict = record.verdict;
-        o.counterexample = record.counterexample;
-        o.ms = record.ms;
-      }
-      const failed = record.verdict && record.verdict !== "unsat";
-      if (failed && !focused) {
-        focused = true;
-        focusFirstFailure();
-      } else {
-        renderTabs();
-        renderOutline();
-        renderDetail();
-      }
-    },
-    renderCounterexample: (id, output, candidate) =>
-      self.cavalryRenderCounterexample(id, output, candidate),
-  });
   if (myGen !== currentGen || result.stale) return; // superseded
   stopBusy();
   finishVerify(result);
@@ -923,6 +960,13 @@ editor.addEventListener("input", () => {
   refreshEditor(); // highlight + gutter update immediately; verification waits
   clearTimeout(debounceTimer);
   debounceTimer = setTimeout(verifyNow, 300);
+});
+
+// Retry: re-run the prover on the unchanged program. Offered only after an
+// inconclusive result (see finishVerify); verifyNow re-parses and re-solves.
+retryBtn.addEventListener("click", () => {
+  clearTimeout(debounceTimer);
+  verifyNow();
 });
 
 // Paint the proof outline immediately from the synchronous OCaml pipeline --
