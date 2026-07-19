@@ -16,6 +16,11 @@ const stepRange = document.getElementById("step-range");
 const stepPrev = document.getElementById("step-prev");
 const stepNext = document.getElementById("step-next");
 const stepLabel = document.getElementById("step-label");
+const lineHighlight = document.getElementById("line-highlight");
+// The source line currently marked in the editor (the selected step's line), or
+// null. Declared up here because refreshEditor() -> syncScroll() reads it during
+// the initial paint, before the editor-metrics block below runs.
+let highlightedLine = null;
 
 // The example programs come from dist/examples.js (generated from the README
 // snippets). Fall back to a single built-in program if that bundle is missing,
@@ -110,6 +115,7 @@ function syncScroll() {
   hl.scrollTop = editor.scrollTop;
   hl.scrollLeft = editor.scrollLeft;
   gutter.scrollTop = editor.scrollTop;
+  positionEditorHighlight();
 }
 
 function refreshEditor() {
@@ -136,6 +142,23 @@ function revealLine(line) {
     editor.scrollTop = Math.max(0, top - view / 2);
     syncScroll();
   }
+}
+
+// The #line-highlight band is drawn behind the editor and repositioned on every
+// scroll to track [highlightedLine] (declared up top for the initial paint).
+function positionEditorHighlight() {
+  if (!highlightedLine) return;
+  lineHighlight.style.top = PAD_Y + (highlightedLine - 1) * LINE_H - editor.scrollTop + "px";
+}
+
+function setEditorHighlight(line) {
+  highlightedLine = line || null;
+  if (!highlightedLine) {
+    lineHighlight.style.display = "none";
+    return;
+  }
+  lineHighlight.style.display = "block";
+  positionEditorHighlight();
 }
 
 // gen: monotonic id for the latest request. currentGen: the gen we still want
@@ -336,12 +359,20 @@ function renderOutline() {
     assert.append(open, body, close);
     row.appendChild(assert);
 
-    // The statement line, from source, with an inferred kind label.
+    // The statement line: its source line number (gutter-themed), the source
+    // text, and an inferred kind label.
     if (step.kind === "stmt") {
+      const ln = step.loc && step.loc.line;
+      const src = sourceLine(ln);
       const stmt = document.createElement("div");
       stmt.className = "ol-stmt";
-      stmt.textContent = sourceLine(step.loc && step.loc.line);
-      const kind = inferKind(stmt.textContent);
+      const num = document.createElement("span");
+      num.className = "ol-lineno";
+      num.textContent = ln ? String(ln) : "";
+      const text = document.createElement("span");
+      text.textContent = src;
+      stmt.append(num, text);
+      const kind = inferKind(src);
       if (kind) {
         const k = document.createElement("span");
         k.className = "kw";
@@ -446,7 +477,8 @@ function obligationCard(o) {
   expl.textContent = o.expl;
   const v = document.createElement("span");
   v.className = "ob-verdict";
-  v.textContent = verdictText(o.verdict);
+  // The verdict, plus this obligation's Z3 solve time once it has landed.
+  v.textContent = verdictText(o.verdict) + (o.verdict && o.ms != null ? ` · ${o.ms} ms` : "");
   head.append(expl, v);
   card.appendChild(head);
 
@@ -498,7 +530,9 @@ function selectStep(i) {
   activeStepIdx = Math.max(0, Math.min(n - 1, i));
   const steps = stepsFor(proc);
   const step = steps[activeStepIdx];
-  if (step && step.loc) revealLine(step.loc.line);
+  const line = step && step.loc ? step.loc.line : null;
+  setEditorHighlight(line);
+  if (line) revealLine(line);
   // Re-mark the active row without a full rebuild.
   for (const row of outlineEl.children) row.classList.remove("active");
   const row = outlineEl.children[activeStepIdx];
@@ -519,7 +553,9 @@ function selectProc(i) {
   renderDetail();
   const steps = stepsFor(proc);
   const step = steps[activeStepIdx];
-  if (step && step.loc) revealLine(step.loc.line);
+  const line = step && step.loc ? step.loc.line : null;
+  setEditorHighlight(line);
+  if (line) revealLine(line);
 }
 
 stepPrev.onclick = () => selectStep(activeStepIdx - 1);
@@ -528,8 +564,8 @@ stepRange.oninput = () => selectStep(Number(stepRange.value));
 
 // --- Top-level render for a parsed program ---------------------------------
 // Called synchronously once the OCaml pipeline returns, before Z3 has solved:
-// the outline is shown immediately with obligation verdicts pending, then
-// applyVerdicts fills them in.
+// the outline is shown immediately with obligation verdicts pending; the
+// streamed onVerdict callback fills them in as each solve lands.
 function renderParsed(parsed, { keepStep } = {}) {
   parsedNow = parsed;
   document.querySelector(".proof").classList.remove("stale");
@@ -540,6 +576,12 @@ function renderParsed(parsed, { keepStep } = {}) {
     return;
   }
   lastGood = parsed;
+  // A flat list of every obligation, in the order solveObligations resolves
+  // them, so a streamed verdict updates the right object (which the outline and
+  // detail share by reference) via its index.
+  parsed._flat = [];
+  for (const p of parsed.procedures) for (const o of p.obligations) parsed._flat.push(o);
+
   if (activeProcIdx >= parsed.procedures.length) activeProcIdx = 0;
   const proc = parsed.procedures[activeProcIdx];
   const n = stepsFor(proc).length;
@@ -548,49 +590,42 @@ function renderParsed(parsed, { keepStep } = {}) {
   renderOutline();
   renderStepper();
   renderDetail();
+  const step = stepsFor(proc)[activeStepIdx];
+  setEditorHighlight(step && step.loc ? step.loc.line : null);
 }
 
-// Attach each obligation's verdict (positional zip: solveObligations flattens
-// procedures then obligations in the same order the pipeline emitted them), then
-// recolour tabs, outline rails, and the detail pane.
-function applyVerdicts(result) {
-  if (!parsedNow || !parsedNow.ok) return;
-  let k = 0;
-  for (const proc of parsedNow.procedures) {
-    for (const o of proc.obligations) {
-      const r = result.obligations && result.obligations[k++];
-      if (r) {
-        o.verdict = r.verdict;
-        o.counterexample = r.counterexample;
-      }
+// Jump the outline to the first refuted step, so a failure lands the reader on
+// the problem rather than wherever they were reading. Called once per run, when
+// the first failing verdict streams in.
+function focusFirstFailure() {
+  for (let pi = 0; pi < parsedNow.procedures.length; pi++) {
+    const si = firstFailingStep(pi);
+    if (si >= 0) {
+      activeProcIdx = pi;
+      activeStepIdx = si;
+      renderTabs();
+      renderOutline();
+      renderStepper();
+      renderDetail();
+      const step = stepsFor(parsedNow.procedures[pi])[si];
+      const line = step && step.loc ? step.loc.line : null;
+      setEditorHighlight(line);
+      if (line) revealLine(line);
+      return;
     }
   }
-  // On a failure, jump the outline to the first refuted step so the reader lands
-  // on the problem rather than wherever they were reading.
-  if (!result.verified) {
-    for (let pi = 0; pi < parsedNow.procedures.length; pi++) {
-      const si = firstFailingStep(pi);
-      if (si >= 0) {
-        activeProcIdx = pi;
-        activeStepIdx = si;
-        break;
-      }
-    }
-  }
+}
 
-  renderTabs();
-  renderOutline();
-  renderStepper();
-  renderDetail();
-  const proc = parsedNow.procedures[activeProcIdx];
-  const step = proc && stepsFor(proc)[activeStepIdx];
-  if (step && step.loc) revealLine(step.loc.line);
-
+// The final verdict summary, once every obligation has been solved. The total
+// time is the sum of the per-obligation Z3 solve times.
+function finishVerify(result) {
+  const totalMs = (result.obligations || []).reduce((s, o) => s + (o.ms || 0), 0);
+  const t = totalMs >= 1000 ? (totalMs / 1000).toFixed(2) + " s" : totalMs + " ms";
   if (result.verified) {
-    setSummary("ok", `✓ ${result.total} obligation${result.total === 1 ? "" : "s"} proved`);
+    setSummary("ok", `✓ ${result.total} obligation${result.total === 1 ? "" : "s"} proved · ${t}`);
     setPill("ok", "verified");
   } else {
-    setSummary("bad", `✗ ${result.failures.length} of ${result.total} failed`);
+    setSummary("bad", `✗ ${result.failures.length} of ${result.total} failed · ${t}`);
     setPill("bad", "not verified");
   }
 }
@@ -673,6 +708,10 @@ async function verifyNow() {
     return;
   }
 
+  // Stream each verdict onto its obligation as it lands, colouring the outline
+  // and detail live. [focused] makes the outline jump to the first refuted step
+  // exactly once (not on every subsequent failure).
+  let focused = false;
   const result = await VerifyCore.solveObligations(parsed, solve, {
     isStale: () => myGen !== currentGen,
     onProgress: (done, total) => {
@@ -681,12 +720,30 @@ async function verifyNow() {
         paintBusy();
       }
     },
+    onVerdict: (record, index) => {
+      if (myGen !== currentGen || !parsedNow._flat) return;
+      const o = parsedNow._flat[index];
+      if (o) {
+        o.verdict = record.verdict;
+        o.counterexample = record.counterexample;
+        o.ms = record.ms;
+      }
+      const failed = record.verdict && record.verdict !== "unsat";
+      if (failed && !focused) {
+        focused = true;
+        focusFirstFailure();
+      } else {
+        renderTabs();
+        renderOutline();
+        renderDetail();
+      }
+    },
     renderCounterexample: (id, output, candidate) =>
       self.cavalryRenderCounterexample(id, output, candidate),
   });
   if (myGen !== currentGen || result.stale) return; // superseded
   stopBusy();
-  applyVerdicts(result);
+  finishVerify(result);
 }
 
 let debounceTimer = null;

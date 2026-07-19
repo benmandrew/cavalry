@@ -129,6 +129,20 @@
         user-select: none;
       }
       .code-scroll { position: relative; flex: 1; min-width: 0; }
+      /* A band marking the source line of the selected proof step. It sits behind
+         the (transparent-background) highlight layer and textarea, so the coloured
+         code shows through the tint. JS positions it and follows the scroll. */
+      #line-highlight {
+        position: absolute;
+        left: 0;
+        right: 0;
+        height: var(--lh);
+        background: color-mix(in srgb, var(--accent) 13%, transparent);
+        border-left: 2px solid var(--accent);
+        pointer-events: none;
+        display: none;
+        z-index: 0;
+      }
       .highlight,
       #editor {
         margin: 0;
@@ -227,12 +241,22 @@
         display: flex;
         gap: 6px;
         align-items: baseline;
+        padding-left: calc(1.6em + 8px); /* align under the code, past the line number */
       }
       .ol-assert .brace { color: var(--accent); flex: 0 0 auto; }
       .ol-assert.ok .brace { color: var(--ok); }
       .ol-assert.bad .brace { color: var(--bad); }
       .ol-assert.warn .brace { color: var(--busy); }
-      .ol-stmt { color: var(--fg); padding-left: 2px; }
+      .ol-stmt { color: var(--fg); padding-left: 2px; display: flex; align-items: baseline; gap: 8px; }
+      /* The source line number, mirroring the editor gutter's theming so a reader
+         can tie an outline row back to the left pane. */
+      .ol-lineno {
+        flex: 0 0 auto;
+        min-width: 1.6em;
+        text-align: right;
+        color: var(--muted);
+        user-select: none;
+      }
       .kw { color: var(--muted); font-style: italic; margin-left: 8px; font-size: 11px; }
       .ol-bookend { color: var(--muted); font-style: italic; padding: 2px 6px; }
 
@@ -306,6 +330,7 @@
       <div class="editor-wrap">
         <div id="gutter" class="gutter" aria-hidden="true"></div>
         <div class="code-scroll">
+          <div id="line-highlight" aria-hidden="true"></div>
           <pre id="highlight" class="highlight" aria-hidden="true"><code id="highlight-code"></code></pre>
           <textarea id="editor" spellcheck="false" autocomplete="off" autocapitalize="off" autocorrect="off" wrap="off"></textarea>
         </div>
