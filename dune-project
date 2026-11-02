@@ -23,7 +23,7 @@
   core
   astring
   menhir
-  why3
+  (why3 (and (>= "1.9") (< "1.10")))
   zarith
   cmdliner
   ppx_deriving

@@ -61,9 +61,10 @@ let reason_of_expl s =
    present on every atom the split can isolate. *)
 let tag ?loc reason t =
   let attr = Why3.Ident.create_attribute ("expl:" ^ expl_of_reason reason) in
+  let locs = match loc with Some l -> [ l ] | None -> [] in
   let rec go t =
     let t = T.t_map go t in
-    T.t_attr_set ?loc (Why3.Ident.Sattr.add attr t.T.t_attrs) t
+    T.t_attr_set ~locs (Why3.Ident.Sattr.add attr t.T.t_attrs) t
   in
   go t
 

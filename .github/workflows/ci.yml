@@ -28,7 +28,7 @@ jobs:
           # dependency set (and thus the switch cache below) only changes when
           # this SHA or cavalry.opam does. Bump manually to pick up newer deps.
           opam-repositories: |
-            default: https://github.com/ocaml/opam-repository.git#d4a5573a48263007395b46a5dffbdcfbce894d0e
+            default: https://github.com/ocaml/opam-repository.git#fe13ab6fd38cfec5faa6b0c1b9791383242710b2
 
       # setup-ocaml's own cache only stores opam's download cache + repo
       # metadata, so 'opam install' still recompiles all ~90 deps (why3,
@@ -124,7 +124,7 @@ jobs:
           ocaml-compiler: "5.5.0"
           dune-cache: true
           opam-repositories: |
-            default: https://github.com/ocaml/opam-repository.git#d4a5573a48263007395b46a5dffbdcfbce894d0e
+            default: https://github.com/ocaml/opam-repository.git#fe13ab6fd38cfec5faa6b0c1b9791383242710b2
 
       # Distinct from the build job's cache: this switch also has the cavalry-web
       # toolchain (js_of_ocaml, crunch, ...), so the key hashes both opam files.
@@ -208,7 +208,7 @@ jobs:
           # Match the build job's pin so the resolved dependency set (and the
           # switch cache below) stays identical between the two jobs.
           opam-repositories: |
-            default: https://github.com/ocaml/opam-repository.git#d4a5573a48263007395b46a5dffbdcfbce894d0e
+            default: https://github.com/ocaml/opam-repository.git#fe13ab6fd38cfec5faa6b0c1b9791383242710b2
 
       # Same key as the build job's 5.5.0 leg, so whichever job populates the
       # switch first is reused by the other.

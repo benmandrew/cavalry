@@ -238,9 +238,9 @@ let prove timeout base_task vars t =
    (set by the caller on every node) while the [->]/hypotheses do not, so the
    first location found is the obligation's. *)
 let rec first_loc t =
-  match t.Term.t_loc with
-  | Some _ as l -> l
-  | None ->
+  match t.Term.t_locs with
+  | l :: _ -> Some l
+  | [] ->
       Term.t_fold
         (fun acc sub -> match acc with Some _ -> acc | None -> first_loc sub)
         None t
@@ -294,14 +294,23 @@ let skolemise f =
    variables named in [expose_names], dropping the WLP's internal havoc/variant
    vars (introduced existentially in the negation) and anything not exposed.
    Shared by the native and browser counterexample paths, which differ only in
-   how they obtain the [model]. *)
-let expose_model_elements expose_names model =
-  Model_parser.get_model_elements model
-  |> List.map ~f:(fun (e : Model_parser.model_element) ->
-      ( Model_parser.get_lsymbol_or_model_trace_name e,
-        e.Model_parser.me_concrete_value ))
-  |> List.filter ~f:(fun (n, _) -> Set.mem expose_names n)
-  |> List.dedup_and_sort ~compare:(fun (a, _) (b, _) -> String.compare a b)
+   how they obtain the [models]. Since Why3 1.9 the model parser leaves each
+   element's concrete value undefined; [Check_ce.last_nonempty_model] computes
+   them from the raw model terms, resolving symbols against the task's
+   [known_map]. It keeps only located elements, which the skolemised constants
+   are (see [skolemise]). *)
+let expose_model_elements ~known_map expose_names models =
+  match
+    Check_ce.last_nonempty_model ~env:(Lazy.force env) ~known_map models
+  with
+  | None -> []
+  | Some model ->
+      Model_parser.get_model_elements model
+      |> List.map ~f:(fun (e : Model_parser.model_element) ->
+          ( Model_parser.get_lsymbol_or_model_trace_name e,
+            e.Model_parser.me_concrete_value ))
+      |> List.filter ~f:(fun (n, _) -> Set.mem expose_names n)
+      |> List.dedup_and_sort ~compare:(fun (a, _) (b, _) -> String.compare a b)
 
 (* Best-effort counterexample for a failed obligation [f] (a split subgoal):
    skolemise its entry-state variables into model-reportable constants, ask Z3's
@@ -316,7 +325,7 @@ let expose_model_elements expose_names model =
 let counterexample timeout base_task expose f =
   match Lazy.force z3_ce with
   | None -> []
-  | Some (cp, driver) -> (
+  | Some (cp, driver) ->
       let expose_names =
         List.map ~f:(fun v -> v.Term.vs_name.Ident.id_string) expose
         |> String.Set.of_list
@@ -336,9 +345,8 @@ let counterexample timeout base_task expose f =
           ~limits driver task
         |> Call_provers.wait_on_call
       in
-      match r.Call_provers.pr_models with
-      | [] -> []
-      | (_, model) :: _ -> expose_model_elements expose_names model)
+      expose_model_elements ~known_map:(Task.task_known task) expose_names
+        r.Call_provers.pr_models
 
 (* {2 Browser counterexample path}
 
@@ -351,7 +359,8 @@ let counterexample timeout base_task expose f =
    names back to source symbols -- is retained across that async round-trip in
    [ce_state], keyed by an integer handle returned to JS with the SMT-LIB2. *)
 
-let ce_state : (int, Printer.printing_info * String.Set.t) Hashtbl.t =
+let ce_state :
+    (int, Printer.printing_info * Decl.known_map * String.Set.t) Hashtbl.t =
   Hashtbl.create (module Int)
 
 let ce_counter = ref 0
@@ -377,6 +386,7 @@ let smtlib_ce_of_obligation base_task expose f =
       let task = List.fold_left ~f:Task.add_param_decl ~init:base_task consts in
       let goal_id = Decl.create_prsymbol (Ident.id_fresh "goal") in
       let task = Task.add_prop_decl task Decl.Pgoal goal_id body in
+      let known_map = Task.task_known task in
       let task = Driver.prepare_task driver task in
       let buf = Buffer.create 1024 in
       let fmt = Format.formatter_of_buffer buf in
@@ -388,7 +398,7 @@ let smtlib_ce_of_obligation base_task expose f =
       in
       let id = !ce_counter in
       Int.incr ce_counter;
-      Hashtbl.set ce_state ~key:id ~data:(info, expose_names);
+      Hashtbl.set ce_state ~key:id ~data:(info, known_map, expose_names);
       Some (Buffer.contents buf, id)
 
 let smtv2_model_parser = lazy (Model_parser.lookup_model_parser "smtv2")
@@ -409,9 +419,11 @@ let model_sexp_of_output out =
 let browser_ce id output =
   match Hashtbl.find ce_state id with
   | None -> []
-  | Some (info, expose_names) ->
+  | Some (info, known_map, expose_names) ->
       let sexp = model_sexp_of_output output in
       if String.is_empty (String.strip sexp) then []
       else
         let model = (Lazy.force smtv2_model_parser) info sexp in
-        expose_model_elements expose_names model
+        (* The answer is ignored; [last_nonempty_model] only reads the model. *)
+        expose_model_elements ~known_map expose_names
+          [ (Call_provers.Unknown "", model) ]
