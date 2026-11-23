@@ -49,8 +49,12 @@
               export MACOSX_DEPLOYMENT_TARGET="$(sw_vers -productVersion | cut -d. -f1).0"
             fi
 
-            # Create the local opam switch on first entry.
-            [ -d _opam ] || opam switch create . 5.5.0 -y
+            # Create the local opam switch on first entry. --no-install stops
+            # opam pinning and installing cavalry itself here: once cavalry is
+            # installed, the `opam install --deps-only --with-doc` below is a
+            # silent no-op, so odoc and the with-test deps never arrive (and a
+            # stray odoc from another switch on PATH gets used instead).
+            [ -d _opam ] || opam switch create . 5.5.0 -y --no-install
 
             # Activate the switch *before* the steps below, so opam acts on it
             # rather than the global default and so its binaries (why3) are on
